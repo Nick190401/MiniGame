@@ -17,15 +17,25 @@ export class BattleScene extends Phaser.Scene {
 
   // UI references
   private enemySprite!: Phaser.GameObjects.Sprite;
+  private playerSprite!: Phaser.GameObjects.Sprite;
   private enemyHpBar!: Phaser.GameObjects.Rectangle;
+  private enemyHpBg!: Phaser.GameObjects.Rectangle;
   private playerHpBar!: Phaser.GameObjects.Rectangle;
+  private playerHpBg!: Phaser.GameObjects.Rectangle;
   private enemyHpText!: Phaser.GameObjects.Text;
   private playerHpText!: Phaser.GameObjects.Text;
-  private turnLabel!: Phaser.GameObjects.Text;
-  private attackButtons: Phaser.GameObjects.Container[] = [];
-  private messageText!: Phaser.GameObjects.Text;
   private enemyNameText!: Phaser.GameObjects.Text;
   private phaseText!: Phaser.GameObjects.Text;
+  private attackButtons: Phaser.GameObjects.Container[] = [];
+  private messageText!: Phaser.GameObjects.Text;
+
+  // Layout refs for animations
+  private battleH = 0;
+
+  // Typewriter state
+  private typewriterTimer?: Phaser.Time.TimerEvent;
+  private fullMessageText = '';
+  private messageReady = false;
 
   // State
   private turnState: TurnState = 'player-choose';
@@ -44,200 +54,286 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create(): void {
-    const W = this.scale.width;
-    const H = this.scale.height;
+    const W = this.scale.width;   // 640
+    const H = this.scale.height;  // 480
 
-    // ── Background ─────────────────────────────────────────────────────────
+    // ── Layout constants ──────────────────────────────────────────────────
+    const BATTLE_H   = Math.floor(H * 0.53);
+    this.battleH     = BATTLE_H;
+    const MSG_Y      = BATTLE_H;                // message box top
+    const MSG_H      = 68;                      // message box height
+    const MENU_Y     = MSG_Y + MSG_H + 4;       // attack grid top
+    const MENU_H     = H - MENU_Y - 4;          // remaining space for buttons
+
+    // ── Background ────────────────────────────────────────────────────────
     const bg = this.add.graphics();
-    bg.fillStyle(0x08000f, 0.97);
+    bg.fillStyle(0x10082a);
     bg.fillRect(0, 0, W, H);
 
-    // Animated scanlines
+    // Scanlines
     const scanlines = this.add.graphics();
-    scanlines.fillStyle(0x000000, 0.08);
+    scanlines.fillStyle(0x000000, 0.06);
     for (let y = 0; y < H; y += 4) {
       scanlines.fillRect(0, y, W, 2);
     }
 
-    // Border
+    // Outer gold border
     const border = this.add.graphics();
     border.lineStyle(3, 0xffd700);
-    border.strokeRect(4, 4, W - 8, H - 8);
-    border.lineStyle(1, 0x8800ff);
-    border.strokeRect(8, 8, W - 16, H - 16);
+    border.strokeRect(3, 3, W - 6, H - 6);
 
     if (this.isBoss) {
-      // Boss arena atmosphere
       const aura = this.add.graphics();
-      aura.fillStyle(0x330000, 0.3);
+      aura.fillStyle(0x330000, 0.25);
       aura.fillRect(0, 0, W, H);
     }
 
-    // ── Enemy display ───────────────────────────────────────────────────────
-    const enemyScale = this.isBoss ? 5 : 4;
-    this.enemySprite = this.add.sprite(W / 2, H * 0.28, this.enemyData.textureKey);
+    // ── Ground platforms (GBA Pokémon style) ──────────────────────────────
+    const ground = this.add.graphics();
+    // Enemy platform — ellipse, upper right
+    ground.fillStyle(0x282048, 0.6);
+    ground.fillEllipse(W * 0.70, BATTLE_H * 0.68, 180, 24);
+    ground.lineStyle(1, 0x3a3060, 0.5);
+    ground.strokeEllipse(W * 0.70, BATTLE_H * 0.68, 180, 24);
+    // Player platform — ellipse, lower left
+    ground.fillStyle(0x282048, 0.6);
+    ground.fillEllipse(W * 0.24, BATTLE_H * 0.92, 160, 20);
+    ground.lineStyle(1, 0x3a3060, 0.5);
+    ground.strokeEllipse(W * 0.24, BATTLE_H * 0.92, 160, 20);
+    ground.setDepth(2);
+
+    // ── Enemy sprite (upper right) — slides in from right ──────────────
+    const enemyScale = this.isBoss ? 6 : 5;
+    const enemySpriteY = BATTLE_H * 0.48;
+    const enemyFinalX = W * 0.70;
+    this.enemySprite = this.add.sprite(W + 60, enemySpriteY, this.enemyData.textureKey);
     this.enemySprite.setScale(enemyScale);
     this.enemySprite.setDepth(5);
 
-    // Enemy idle animation
     this.tweens.add({
       targets: this.enemySprite,
-      y: H * 0.28 - 6,
-      duration: this.isBoss ? 1800 : 1200,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+      x: enemyFinalX,
+      duration: 600,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        // Idle float after entry
+        this.tweens.add({
+          targets: this.enemySprite,
+          y: enemySpriteY - 5,
+          duration: this.isBoss ? 1800 : 1300,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      },
     });
 
+    // ── Player sprite — slides in from left ──────────────────────────────
+    const playerFinalX = W * 0.24;
+    this.playerSprite = this.add.sprite(-40, BATTLE_H * 0.72, 'player-up-0');
+    this.playerSprite.setScale(5);
+    this.playerSprite.setDepth(5);
+
+    this.tweens.add({
+      targets: this.playerSprite,
+      x: playerFinalX,
+      duration: 600,
+      ease: 'Back.easeOut',
+    });
+
+    // ── Enemy info box (top LEFT — Pokémon layout) ────────────────────────
+    const infoBoxX = W * 0.04;
+    const infoBoxY = BATTLE_H * 0.04;
+    const infoBoxW = 240;
+    const infoBoxH = this.isBoss ? 56 : 48;
+
+    const infoBg = this.add.graphics();
+    infoBg.fillStyle(0x0a0020, 0.92);
+    infoBg.fillRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH);
+    infoBg.lineStyle(2, this.isBoss ? 0xffd700 : 0x4080ff);
+    infoBg.strokeRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH);
+    infoBg.setDepth(8);
+
     // Enemy name
-    this.enemyNameText = this.add.text(W / 2, H * 0.06, this.enemyData.name.toUpperCase(), {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '10px',
-      color: this.isBoss ? '#ffd700' : '#f0f0f0',
-    }).setOrigin(0.5).setDepth(10);
+    this.enemyNameText = this.add.text(
+      infoBoxX + 10, infoBoxY + 7,
+      this.enemyData.name.toUpperCase(),
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px',
+        color: this.isBoss ? '#ffd700' : '#f0f0f0',
+      }
+    ).setDepth(10);
 
     if (this.isBoss) {
-      this.enemyNameText.setShadow(0, 0, '#ff0000', 8, true, true);
+      this.enemyNameText.setShadow(0, 0, '#ff0000', 6, true, true);
     }
 
     // Phase label (boss only)
-    this.phaseText = this.add.text(W / 2, H * 0.10, '', {
+    this.phaseText = this.add.text(infoBoxX + 10, infoBoxY + 19, '', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
+      fontSize: '6px',
       color: '#ff4444',
-    }).setOrigin(0.5).setDepth(10);
+    }).setDepth(10);
 
     if (this.isBoss) {
-      this.phaseText.setText('Phase I');
+      this.phaseText.setText('PHASE I');
     }
 
-    // ── Enemy HP bar ────────────────────────────────────────────────────────
-    const ehpBgX = W * 0.15;
-    const ehpBgY = H * 0.14;
-    const ehpW = W * 0.7;
-    const ehpH = 12;
-
-    this.add.text(ehpBgX, ehpBgY - 14, 'HP', {
+    // Enemy HP row
+    const ehpLabelY = this.isBoss ? infoBoxY + 30 : infoBoxY + 22;
+    this.add.text(infoBoxX + 10, ehpLabelY, 'HP', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
+      fontSize: '6px',
       color: '#aaaaaa',
     }).setDepth(10);
 
-    const ehpBg = this.add.rectangle(ehpBgX + ehpW / 2, ehpBgY + ehpH / 2, ehpW, ehpH, 0x220000);
-    ehpBg.setDepth(9);
-    this.add.rectangle(ehpBgX + ehpW / 2, ehpBgY + ehpH / 2, ehpW + 4, ehpH + 4, 0x000000)
-      .setDepth(8);
+    const ehpBarX = infoBoxX + 30;
+    const ehpBarY = ehpLabelY + 1;
+    const ehpBarW = infoBoxW - 44;
+    const ehpBarH = 7;
 
-    this.enemyHpBar = this.add.rectangle(ehpBgX, ehpBgY, ehpW, ehpH, 0xe03030);
-    this.enemyHpBar.setOrigin(0, 0);
-    this.enemyHpBar.setDepth(10);
+    this.enemyHpBg = this.add.rectangle(
+      ehpBarX + ehpBarW / 2, ehpBarY + ehpBarH / 2,
+      ehpBarW, ehpBarH, 0x202020
+    ).setDepth(9);
 
-    this.enemyHpText = this.add.text(ehpBgX + ehpW / 2, ehpBgY + ehpH / 2, `${this.currentEnemyHp}/${this.enemyData.maxHp}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#ffffff',
-    }).setOrigin(0.5).setDepth(11);
+    this.enemyHpBar = this.add.rectangle(
+      ehpBarX, ehpBarY,
+      ehpBarW, ehpBarH, 0x40c040
+    ).setOrigin(0, 0).setDepth(10);
 
-    // ── Player stats panel ──────────────────────────────────────────────────
+    this.enemyHpText = this.add.text(
+      infoBoxX + 10, ehpLabelY + 12,
+      `${this.currentEnemyHp}/${this.enemyData.maxHp}`,
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '5px',
+        color: '#888888',
+      }
+    ).setDepth(10);
+
+    // ── Player info box (bottom RIGHT — Pokémon layout) ───────────────────
     const store = useGameStore.getState();
-    const panelY = H * 0.60;
+    const phpBoxW = 220;
+    const phpBoxH = 52;
+    const phpBoxX = W - phpBoxW - W * 0.04;
+    const phpBoxY = BATTLE_H - phpBoxH - BATTLE_H * 0.08;
 
-    const playerPanel = this.add.graphics();
-    playerPanel.fillStyle(0x0d0025, 0.95);
-    playerPanel.fillRect(W * 0.05, panelY, W * 0.42, 70);
-    playerPanel.lineStyle(2, 0x4040a0);
-    playerPanel.strokeRect(W * 0.05, panelY, W * 0.42, 70);
-    playerPanel.setDepth(8);
+    const phpBg = this.add.graphics();
+    phpBg.fillStyle(0x0a0020, 0.92);
+    phpBg.fillRect(phpBoxX, phpBoxY, phpBoxW, phpBoxH);
+    phpBg.lineStyle(2, 0x4040a0);
+    phpBg.strokeRect(phpBoxX, phpBoxY, phpBoxW, phpBoxH);
+    phpBg.setDepth(8);
 
-    this.add.text(W * 0.08, panelY + 8, 'PLAYER', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
-      color: '#aaaaaa',
-    }).setDepth(10);
-
-    this.add.text(W * 0.08, panelY + 24, 'HP', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#e03030',
-    }).setDepth(10);
-
-    const phpW = W * 0.28;
-    const phpBg = this.add.rectangle(W * 0.15 + phpW / 2, panelY + 30, phpW, 10, 0x220000);
-    phpBg.setDepth(9);
-    this.playerHpBar = this.add.rectangle(W * 0.15, panelY + 25, phpW, 10, 0xe03030);
-    this.playerHpBar.setOrigin(0, 0);
-    this.playerHpBar.setDepth(10);
-
-    this.playerHpText = this.add.text(W * 0.15 + phpW / 2, panelY + 45, `${store.hp}/${store.maxHp}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#ffffff',
-    }).setOrigin(0.5).setDepth(11);
-
-    this.add.text(W * 0.08, panelY + 55, `LVL ${store.level}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
-      color: '#ffd700',
-    }).setDepth(10);
-
-    // ── Message text ────────────────────────────────────────────────────────
-    this.messageText = this.add.text(W * 0.55, panelY + 10, '', {
+    const pName = useGameStore.getState().playerName || 'PLAYER';
+    this.add.text(phpBoxX + 10, phpBoxY + 6, pName.toUpperCase(), {
       fontFamily: '"Press Start 2P"',
       fontSize: '7px',
       color: '#f0f0f0',
-      wordWrap: { width: W * 0.4 },
-      lineSpacing: 6,
     }).setDepth(10);
 
-    // ── Turn label ──────────────────────────────────────────────────────────
-    this.turnLabel = this.add.text(W / 2, H * 0.52, 'YOUR TURN', {
+    this.add.text(phpBoxX + phpBoxW - 10, phpBoxY + 6, `LV.${store.level}`, {
       fontFamily: '"Press Start 2P"',
-      fontSize: '8px',
+      fontSize: '6px',
       color: '#ffd700',
-    }).setOrigin(0.5).setDepth(10);
+    }).setOrigin(1, 0).setDepth(10);
 
-    // ── Attack buttons ──────────────────────────────────────────────────────
-    this.buildAttackMenu();
+    this.add.text(phpBoxX + 10, phpBoxY + 22, 'HP', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      color: '#aaaaaa',
+    }).setDepth(10);
 
-    // ── Start battle ────────────────────────────────────────────────────────
+    const phpBarX = phpBoxX + 30;
+    const phpBarY = phpBoxY + 23;
+    const phpBarW = phpBoxW - 44;
+    const phpBarH = 7;
+
+    this.playerHpBg = this.add.rectangle(
+      phpBarX + phpBarW / 2, phpBarY + phpBarH / 2,
+      phpBarW, phpBarH, 0x202020
+    ).setDepth(9);
+
+    const phpFrac = Math.max(0, store.hp / store.maxHp);
+    this.playerHpBar = this.add.rectangle(
+      phpBarX, phpBarY,
+      phpBarW * phpFrac, phpBarH, this.hpColor(phpFrac)
+    ).setOrigin(0, 0).setDepth(10);
+
+    this.playerHpText = this.add.text(
+      phpBoxX + 10, phpBoxY + 36,
+      `${store.hp}/${store.maxHp}`,
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '5px',
+        color: '#888888',
+      }
+    ).setDepth(10);
+
+    // ── Message box (full-width, GBA textbox style) ───────────────────────
+    const msgBg = this.add.graphics();
+    msgBg.fillStyle(0x08001a, 0.97);
+    msgBg.fillRect(6, MSG_Y, W - 12, MSG_H);
+    msgBg.lineStyle(2, 0xffd700, 0.8);
+    msgBg.strokeRect(6, MSG_Y, W - 12, MSG_H);
+    msgBg.setDepth(12);
+
+    this.messageText = this.add.text(18, MSG_Y + 12, '', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '7px',
+      color: '#f0f0f0',
+      wordWrap: { width: W - 44 },
+      lineSpacing: 8,
+    }).setDepth(14);
+
+    // ── Attack menu (2×2 grid) ────────────────────────────────────────────
+    this.buildAttackMenu(MENU_Y, MENU_H);
+
+    // ── Advance dialog on click/space/z ───────────────────────────────────
+    this.input.on('pointerdown', () => {
+      if (this.messageReady && this.turnState === 'player-choose') return;
+      if (!this.messageReady) this.skipTypewriter();
+    });
+    this.input.keyboard?.on('keydown-SPACE', () => { if (!this.messageReady) this.skipTypewriter(); });
+    this.input.keyboard?.on('keydown-Z', () => { if (!this.messageReady) this.skipTypewriter(); });
+
+    // ── Start ─────────────────────────────────────────────────────────────
     this.cameras.main.fadeIn(300);
     this.setMessage(this.isBoss
       ? 'THE GATEKEEPER\nblocks your path!'
-      : `A ${this.enemyData.name}\nappears!`);
+      : `A wild ${this.enemyData.name}\nappears!`);
 
-    this.time.delayedCall(1200, () => {
+    this.time.delayedCall(1400, () => {
       this.setTurnState('player-choose');
     });
   }
 
-  // ── UI builders ───────────────────────────────────────────────────────────
+  // ── Attack menu ───────────────────────────────────────────────────────────
 
-  private buildAttackMenu(): void {
+  private buildAttackMenu(menuY: number, menuH: number): void {
     const W = this.scale.width;
-    const H = this.scale.height;
     const store = useGameStore.getState();
-    const attacks = store.unlockedAttacks;
+    const unlockedIds = store.unlockedAttacks.map(a => a.id);
 
-    const cols = 2;
-    const rows = 2;
-    const btnW = W * 0.44;
-    const btnH = 38;
-    const startX = W * 0.05;
-    const startY = H * 0.76;
-    const gapX = W * 0.50;
-    const gapY = 44;
-
-    // All 4 attack slots
     const allAttackIds = ['bass-drop', 'echo-wave', 'hook-impact', 'reverb-strike'];
+    const cols = 2;
+    const gap = 6;
+    const padX = 10;
+    const btnW = (W - padX * 2 - gap) / 2;
+    const btnH = (menuH - gap) / 2;
+    const startX = padX;
+    const startY = menuY;
 
     for (let i = 0; i < 4; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const x = startX + col * gapX;
-      const y = startY + row * gapY;
+      const x = startX + col * (btnW + gap);
+      const y = startY + row * (btnH + gap);
       const attackId = allAttackIds[i];
       const attack = ATTACKS[attackId] as Attack;
-      const unlocked = attacks.some(a => a.id === attackId);
+      const unlocked = unlockedIds.includes(attackId);
 
       const container = this.buildAttackButton(x, y, btnW, btnH, attack, unlocked, i);
       this.attackButtons.push(container);
@@ -248,29 +344,45 @@ export class BattleScene extends Phaser.Scene {
     x: number, y: number, w: number, h: number,
     attack: Attack, unlocked: boolean, index: number
   ): Phaser.GameObjects.Container {
-    const bg = this.add.graphics();
     const alpha = unlocked ? 1 : 0.35;
+    const borderColor = unlocked ? attack.color : 0x222244;
+    const colorHex = '#' + attack.color.toString(16).padStart(6, '0');
 
-    bg.fillStyle(0x1a1a3a, alpha);
-    bg.fillRect(0, 0, w, h);
-    bg.lineStyle(2, unlocked ? attack.color : 0x333355);
-    bg.strokeRect(0, 0, w, h);
+    const drawBg = (g: Phaser.GameObjects.Graphics, fill: number, a: number, bColor: number, inner?: boolean) => {
+      g.clear();
+      g.fillStyle(fill, a);
+      g.fillRect(0, 0, w, h);
+      g.lineStyle(2, bColor);
+      g.strokeRect(0, 0, w, h);
+      if (inner) {
+        g.lineStyle(1, 0xffd700, 0.35);
+        g.strokeRect(2, 2, w - 4, h - 4);
+      }
+      // left color accent bar
+      if (unlocked) {
+        g.fillStyle(bColor, 0.6);
+        g.fillRect(0, 0, 3, h);
+      }
+    };
 
-    const nameText = this.add.text(8, 6, attack.name, {
+    const bg = this.add.graphics();
+    drawBg(bg, 0x0a001a, alpha, borderColor);
+
+    const nameText = this.add.text(12, Math.floor(h * 0.18), attack.name, {
       fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
-      color: unlocked ? '#' + attack.color.toString(16).padStart(6, '0') : '#444466',
+      fontSize: '8px',
+      color: unlocked ? colorHex : '#444466',
     });
 
-    const dmgText = this.add.text(8, 22, unlocked ? `DMG: ${attack.damage}` : '???', {
+    const dmgText = this.add.text(12, Math.floor(h * 0.60), unlocked ? `DMG: ${attack.damage}` : '???', {
       fontFamily: '"Press Start 2P"',
       fontSize: '6px',
-      color: unlocked ? '#888888' : '#333355',
+      color: unlocked ? '#999999' : '#333355',
     });
 
-    const lockText = unlocked ? null : this.add.text(w - 8, 6, `LVL ${attack.unlockLevel}`, {
+    const lockText = unlocked ? null : this.add.text(w - 10, Math.floor(h * 0.18), `LV.${attack.unlockLevel}`, {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '6px',
       color: '#555577',
     }).setOrigin(1, 0);
 
@@ -288,26 +400,16 @@ export class BattleScene extends Phaser.Scene {
 
       container.on('pointerover', () => {
         if (!this.inputBlocked) {
-          bg.clear();
-          bg.fillStyle(0x2a2a5a);
-          bg.fillRect(0, 0, w, h);
-          bg.lineStyle(2, attack.color);
-          bg.strokeRect(0, 0, w, h);
-          bg.lineStyle(1, 0xffd700, 0.3);
-          bg.strokeRect(2, 2, w - 4, h - 4);
+          drawBg(bg, 0x180838, 1, attack.color, true);
         }
       });
 
       container.on('pointerout', () => {
-        bg.clear();
-        bg.fillStyle(0x1a1a3a);
-        bg.fillRect(0, 0, w, h);
-        bg.lineStyle(2, attack.color);
-        bg.strokeRect(0, 0, w, h);
+        drawBg(bg, 0x0a001a, 1, attack.color);
       });
 
       container.on('pointerdown', () => {
-        if (this.turnState === 'player-choose' && !this.inputBlocked) {
+        if (this.turnState === 'player-choose' && !this.inputBlocked && this.messageReady) {
           this.executePlayerAttack(attack, index);
         }
       });
@@ -320,70 +422,55 @@ export class BattleScene extends Phaser.Scene {
 
   private setTurnState(state: TurnState): void {
     this.turnState = state;
+    this.inputBlocked = state !== 'player-choose';
 
-    switch (state) {
-      case 'player-choose':
-        this.inputBlocked = false;
-        this.turnLabel.setText('YOUR TURN');
-        this.turnLabel.setColor('#ffd700');
-        this.setMessage('Choose an attack:');
-        this.setAttackButtonsEnabled(true);
-        break;
-      case 'player-attack':
-      case 'enemy-attack':
-        this.inputBlocked = true;
-        this.setAttackButtonsEnabled(false);
-        break;
-      case 'battle-end':
-        this.inputBlocked = true;
-        this.setAttackButtonsEnabled(false);
-        break;
+    if (state === 'player-choose') {
+      this.setMessage('What will you do?');
+      this.setAttackButtonsEnabled(true);
+    } else {
+      this.setAttackButtonsEnabled(false);
     }
   }
 
   private setAttackButtonsEnabled(enabled: boolean): void {
-    this.attackButtons.forEach(btn => {
-      btn.setAlpha(enabled ? 1 : 0.6);
-    });
+    this.attackButtons.forEach(btn => btn.setAlpha(enabled ? 1 : 0.55));
   }
 
   private executePlayerAttack(attack: Attack, btnIndex: number): void {
     this.setTurnState('player-attack');
-    this.turnLabel.setText('ATTACKING...');
-    this.turnLabel.setColor('#4080ff');
 
     // Button flash
     const btn = this.attackButtons[btnIndex];
     this.tweens.add({
       targets: btn,
-      scaleX: 1.05,
-      scaleY: 1.05,
-      duration: 100,
+      scaleX: 1.06, scaleY: 1.06,
+      duration: 80,
       yoyo: true,
     });
 
     const damage = applyDamageVariance(attack.damage);
     this.setMessage(`${attack.name}!`);
 
-    // Attack animation
     this.playPlayerAttackAnimation(attack, () => {
-      // Apply damage
       this.currentEnemyHp = Math.max(0, this.currentEnemyHp - damage);
       this.updateEnemyHpBar();
+      this.showFloatingDamage(damage, this.enemySprite.x, this.enemySprite.y - 30, attack.color);
 
-      this.showFloatingDamage(damage, this.enemySprite.x, this.enemySprite.y - 20, attack.color);
-
-      // Enemy hit flash
+      // Enemy hit reaction: flash white + horizontal shake + slight knockback
+      const origX = this.enemySprite.x;
+      this.enemySprite.setTint(0xffffff);
+      this.time.delayedCall(60, () => this.enemySprite.clearTint());
       this.tweens.add({
         targets: this.enemySprite,
-        tint: 0xffffff,
-        duration: 80,
+        x: origX + 8,
+        duration: 40,
         yoyo: true,
-        repeat: 2,
-        onComplete: () => this.enemySprite.clearTint(),
+        repeat: 3,
+        ease: 'Sine.easeInOut',
+        onComplete: () => { this.enemySprite.x = origX; },
       });
 
-      // Check boss phase
+      // Check boss phase transition
       if (this.isBoss) {
         const hpFrac = this.currentEnemyHp / this.enemyData.maxHp;
         let newPhaseIdx = 0;
@@ -397,76 +484,79 @@ export class BattleScene extends Phaser.Scene {
         }
       }
 
-      // Check if enemy dead
       if (this.currentEnemyHp <= 0) {
         this.time.delayedCall(600, () => this.endBattle('win'));
         return;
       }
 
-      // Enemy turn
       this.time.delayedCall(700, () => this.executeEnemyAttack());
     });
   }
 
   private executeEnemyAttack(): void {
     this.setTurnState('enemy-attack');
-    this.turnLabel.setText('ENEMY TURN');
-    this.turnLabel.setColor('#e03030');
 
     const store = useGameStore.getState();
     const phaseMultiplier = this.isBoss ? BOSS_PHASES[this.bossPhaseIndex].attackMultiplier : 1;
     const attack = this.enemyData.attacks[Math.floor(Math.random() * this.enemyData.attacks.length)];
-    const rawDmg = Math.round(attack.damage * phaseMultiplier);
-    const damage = applyDamageVariance(rawDmg);
+    const rawDmg  = Math.round(attack.damage * phaseMultiplier);
+    const damage  = applyDamageVariance(rawDmg);
 
-    this.setMessage(`${this.enemyData.name} uses\n${attack.name}!`);
+    this.setMessage(`${this.enemyData.name}\nuses ${attack.name}!`);
 
-    // Camera shake for boss attacks
-    if (this.isBoss) {
-      this.cameras.main.shake(150, 0.005);
-    }
+    this.time.delayedCall(600, () => {
+      this.playEnemyAttackAnimation(() => {
+        store.takeDamage(damage);
+        EventBus.emit(EVENTS.HP_CHANGED, store.hp);
+        this.updatePlayerHpBar();
+        this.showFloatingDamage(damage, this.playerSprite.x, this.playerSprite.y - 30, 0xe03030);
 
-    this.time.delayedCall(800, () => {
-      store.takeDamage(damage);
-      EventBus.emit(EVENTS.HP_CHANGED, store.hp);
+        // Player hit reaction: shake + red flash
+        const origX = this.playerSprite.x;
+        this.playerSprite.setTint(0xff4444);
+        this.time.delayedCall(100, () => this.playerSprite.clearTint());
+        this.tweens.add({
+          targets: this.playerSprite,
+          x: origX - 6,
+          duration: 40,
+          yoyo: true,
+          repeat: 3,
+          ease: 'Sine.easeInOut',
+          onComplete: () => { this.playerSprite.x = origX; },
+        });
 
-      this.updatePlayerHpBar();
-      this.showFloatingDamage(damage, this.scale.width * 0.3, this.scale.height * 0.65, 0xe03030);
-
-      this.time.delayedCall(600, () => {
-        if (store.hp <= 0) {
-          this.endBattle('lose');
-        } else {
-          this.setTurnState('player-choose');
-        }
+        this.time.delayedCall(700, () => {
+          if (store.hp <= 0) {
+            this.endBattle('lose');
+          } else {
+            this.setTurnState('player-choose');
+          }
+        });
       });
     });
   }
 
   private triggerPhaseChange(phaseIdx: number): void {
     this.setTurnState('phase-change');
-    const phaseLabels = ['Phase I', 'Phase II', 'Phase III'];
-    const phaseColors = ['#ffd700', '#ff8800', '#ff0000'];
+    const phaseLabels  = ['PHASE I', 'PHASE II', 'PHASE III'];
+    const phaseColors  = ['#ffd700', '#ff8800', '#ff0000'];
+    const textureKeys  = ['boss-gatekeeper', 'boss-gatekeeper-phase2', 'boss-gatekeeper-phase3'];
+    const phaseMessages = [
+      '',
+      `${this.enemyData.name}\nenrages! PHASE II!`,
+      `THE GATEKEEPER\nFURY UNLEASHED!\nPHASE III!`,
+    ];
 
     this.cameras.main.flash(400, 150, 0, 200);
     this.cameras.main.shake(300, 0.008);
 
     this.phaseText.setText(phaseLabels[phaseIdx]);
     this.phaseText.setColor(phaseColors[phaseIdx]);
-
-    // Boss texture change
-    const textureKeys = ['boss-gatekeeper', 'boss-gatekeeper-phase2', 'boss-gatekeeper-phase3'];
     this.enemySprite.setTexture(textureKeys[phaseIdx]);
-
-    const phaseMessages = [
-      '',
-      `${this.enemyData.name} enrages!\nPhase II begins!`,
-      `THE GATEKEEPER\nfuriously awakens!\nPhase III!`,
-    ];
 
     this.setMessage(phaseMessages[phaseIdx]);
 
-    this.time.delayedCall(1500, () => {
+    this.time.delayedCall(1600, () => {
       if (this.currentEnemyHp <= 0) {
         this.endBattle('win');
       } else {
@@ -481,16 +571,28 @@ export class BattleScene extends Phaser.Scene {
     if (outcome === 'win') {
       this.setMessage(this.isBoss
         ? 'THE GATEKEEPER\nhas been silenced!'
-        : `${this.enemyData.name}\ndefeated!`);
+        : `${this.enemyData.name}\nwas defeated!`);
 
-      // Enemy death animation
+      // Defeat animation: blink → shrink-spin → burst particles
       this.tweens.add({
         targets: this.enemySprite,
         alpha: 0,
-        scaleX: this.enemySprite.scaleX * 1.5,
-        scaleY: this.enemySprite.scaleY * 1.5,
-        duration: 500,
-        ease: 'Power2',
+        duration: 120,
+        yoyo: true,
+        repeat: 3,
+        onComplete: () => {
+          // Shrink + spin out
+          this.tweens.add({
+            targets: this.enemySprite,
+            scaleX: 0,
+            scaleY: 0,
+            angle: 360,
+            duration: 500,
+            ease: 'Back.easeIn',
+          });
+          // Burst particles outward
+          this.spawnDefeatParticles(this.enemySprite.x, this.enemySprite.y);
+        },
       });
 
       if (!this.isBoss) {
@@ -506,22 +608,19 @@ export class BattleScene extends Phaser.Scene {
         if (store.level > prevLevel) {
           EventBus.emit(EVENTS.LEVEL_UP, store.level);
           this.time.delayedCall(500, () => {
-            this.setMessage(`${this.enemyData.name} defeated!\n${xpMsg}\nLEVEL UP → ${store.level}!`);
+            this.setMessage(`${this.enemyData.name} defeated!\n${xpMsg}\nLEVEL UP! → ${store.level}!`);
           });
         }
       }
 
-      this.time.delayedCall(1500, () => {
+      this.time.delayedCall(1600, () => {
         this.cameras.main.fadeOut(400);
         this.time.delayedCall(400, () => {
           this.scene.stop('BattleScene');
-          EventBus.emit(EVENTS.BATTLE_END, {
-            outcome: 'win',
-            enemyId: this.enemyData.id,
-            isBoss: this.isBoss,
-          });
+          EventBus.emit(EVENTS.BATTLE_END, { outcome: 'win', enemyId: this.enemyData.id, isBoss: this.isBoss });
         });
       });
+
     } else {
       this.setMessage('You were overcome\nby the silence...');
       this.cameras.main.shake(500, 0.01);
@@ -530,157 +629,550 @@ export class BattleScene extends Phaser.Scene {
         this.cameras.main.fadeOut(600);
         this.time.delayedCall(600, () => {
           this.scene.stop('BattleScene');
-          EventBus.emit(EVENTS.BATTLE_END, {
-            outcome: 'lose',
-            enemyId: this.enemyData.id,
-            isBoss: this.isBoss,
-          });
+          EventBus.emit(EVENTS.BATTLE_END, { outcome: 'lose', enemyId: this.enemyData.id, isBoss: this.isBoss });
         });
       });
     }
   }
 
-  // ── HP bars ───────────────────────────────────────────────────────────────
+  // ── HP bars (Pokémon pill style) ──────────────────────────────────────────
+
+  private hpColor(frac: number): number {
+    if (frac > 0.5) return 0x40c040;
+    if (frac > 0.25) return 0xe0c000;
+    return 0xe03030;
+  }
 
   private updateEnemyHpBar(): void {
-    const frac = Math.max(0, this.currentEnemyHp / this.enemyData.maxHp);
-    const W = this.scale.width;
-    const totalW = W * 0.7;
-    const color = frac > 0.5 ? 0x40c040 : frac > 0.25 ? 0xe0a030 : 0xe03030;
-
-    this.enemyHpBar.setSize(totalW * frac, 12);
-    this.enemyHpBar.setFillStyle(color);
+    const frac  = Math.max(0, this.currentEnemyHp / this.enemyData.maxHp);
+    const totalW = (this.enemyHpBg.width);
+    this.enemyHpBar.setSize(totalW * frac, 7);
+    this.enemyHpBar.setFillStyle(this.hpColor(frac));
     this.enemyHpText.setText(`${this.currentEnemyHp}/${this.enemyData.maxHp}`);
   }
 
   private updatePlayerHpBar(): void {
-    const store = useGameStore.getState();
-    const frac = Math.max(0, store.hp / store.maxHp);
-    const W = this.scale.width;
-    const totalW = W * 0.28;
-    const color = frac > 0.5 ? 0x40c040 : frac > 0.25 ? 0xe0a030 : 0xe03030;
-
-    this.playerHpBar.setSize(totalW * frac, 10);
-    this.playerHpBar.setFillStyle(color);
+    const store  = useGameStore.getState();
+    const frac   = Math.max(0, store.hp / store.maxHp);
+    const totalW = (this.playerHpBg.width);
+    this.playerHpBar.setSize(totalW * frac, 7);
+    this.playerHpBar.setFillStyle(this.hpColor(frac));
     this.playerHpText.setText(`${store.hp}/${store.maxHp}`);
   }
 
-  // ── Animations ────────────────────────────────────────────────────────────
+  // ── Message box typewriter ────────────────────────────────────────────────
+
+  private setMessage(text: string): void {
+    this.messageReady = false;
+    this.fullMessageText = text;
+    this.typewriterTimer?.remove();
+    this.messageText.setText('');
+
+    let charIndex = 0;
+    this.typewriterTimer = this.time.addEvent({
+      delay: 28,
+      repeat: text.length - 1,
+      callback: () => {
+        charIndex++;
+        this.messageText.setText(text.slice(0, charIndex));
+        if (charIndex >= text.length) {
+          this.messageReady = true;
+        }
+      },
+    });
+  }
+
+  private skipTypewriter(): void {
+    this.typewriterTimer?.remove();
+    this.messageText.setText(this.fullMessageText);
+    this.messageReady = true;
+  }
+
+  // ── Attack animations ─────────────────────────────────────────────────────
 
   private playPlayerAttackAnimation(attack: Attack, onComplete: () => void): void {
     const W = this.scale.width;
-    const H = this.scale.height;
     const color = attack.color;
+    const eX = this.enemySprite.x;
+    const eY = this.enemySprite.y;
+    const pX = this.playerSprite.x;
+    const pY = this.playerSprite.y;
 
-    const flash = this.add.graphics();
-    flash.setDepth(20);
-
-    // Different animation per attack
     switch (attack.id) {
+
+      // ── BASS DROP ─────────────────────────────────────────────────────
+      // Deep sonic shockwave: player stomps → bass rings travel to enemy
       case 'bass-drop': {
-        // Shockwave circle expanding up
-        const wave = this.add.graphics().setDepth(20);
-        let r = 10;
-        const expand = this.time.addEvent({
-          delay: 16,
-          repeat: 20,
-          callback: () => {
-            wave.clear();
-            wave.lineStyle(4, color, 1 - r / 220);
-            wave.strokeCircle(W / 2, H * 0.75, r);
-            r += 10;
-          },
-          callbackScope: this,
+        // Player wind-up: bob down then up
+        this.tweens.add({
+          targets: this.playerSprite,
+          y: pY + 4,
+          duration: 100,
+          yoyo: true,
+          ease: 'Quad.easeIn',
         });
-        this.cameras.main.shake(200, 0.006);
-        this.time.delayedCall(350, () => { wave.destroy(); onComplete(); });
+
+        this.time.delayedCall(120, () => {
+          // Shoot a projectile orb from player → enemy
+          const orb = this.add.graphics().setDepth(20);
+          const orbObj = { x: pX, y: pY - 10, r: 6 };
+          const orbTween = this.tweens.add({
+            targets: orbObj,
+            x: eX,
+            y: eY,
+            duration: 280,
+            ease: 'Quad.easeIn',
+            onUpdate: () => {
+              orb.clear();
+              // Trailing glow
+              orb.fillStyle(color, 0.2);
+              orb.fillCircle(orbObj.x, orbObj.y, 14);
+              orb.fillStyle(color, 0.6);
+              orb.fillCircle(orbObj.x, orbObj.y, 8);
+              orb.fillStyle(0xffffff, 0.9);
+              orb.fillCircle(orbObj.x, orbObj.y, 3);
+            },
+            onComplete: () => {
+              orb.destroy();
+              // Impact: concentric bass rings expanding at enemy
+              const rings = this.add.graphics().setDepth(20);
+              const ringState = { t: 0 };
+              const ringAnim = this.time.addEvent({
+                delay: 16,
+                repeat: 25,
+                callback: () => {
+                  ringState.t++;
+                  rings.clear();
+                  for (let i = 0; i < 3; i++) {
+                    const r = ringState.t * 7 - i * 16;
+                    if (r > 0 && r < 120) {
+                      const alpha = 1 - r / 120;
+                      rings.lineStyle(3 - i * 0.5, color, alpha);
+                      rings.strokeCircle(eX, eY, r);
+                    }
+                  }
+                },
+              });
+              // Vertical impact line below enemy
+              const impactLine = this.add.graphics().setDepth(19);
+              impactLine.fillStyle(color, 0.4);
+              impactLine.fillRect(eX - 2, eY + 10, 4, this.battleH - eY);
+              this.tweens.add({
+                targets: impactLine,
+                alpha: 0,
+                duration: 350,
+                onComplete: () => impactLine.destroy(),
+              });
+
+              this.cameras.main.shake(200, 0.007);
+              this.time.delayedCall(420, () => { rings.destroy(); onComplete(); });
+            },
+          });
+        });
         break;
       }
+
+      // ── ECHO WAVE ─────────────────────────────────────────────────────
+      // Two sonic crescents ripple across the battlefield
       case 'echo-wave': {
-        // Two horizontal waves
-        for (let j = 0; j < 2; j++) {
-          this.time.delayedCall(j * 200, () => {
-            const line = this.add.graphics().setDepth(20);
-            let progress = 0;
-            const anim = this.time.addEvent({
-              delay: 16,
-              repeat: 18,
-              callback: () => {
-                line.clear();
-                line.lineStyle(3, color, 0.9);
-                line.beginPath();
-                for (let x = W * 0.1; x < W * 0.9; x += 5) {
-                  const waveY = H * 0.45 + Math.sin((x * 0.05) + progress) * 15;
-                  x === W * 0.1 ? line.moveTo(x, waveY) : line.lineTo(x, waveY);
+        const fireWave = (index: number, onDone: () => void) => {
+          const wave = this.add.graphics().setDepth(20);
+          const amplitude = 12 + index * 6;
+          const thickness = 2 + index;
+          const waveState = { progress: 0, headX: pX };
+
+          this.tweens.add({
+            targets: waveState,
+            headX: eX + 20,
+            duration: 320,
+            ease: 'Sine.easeOut',
+            onUpdate: () => {
+              waveState.progress += 0.35;
+              wave.clear();
+
+              // Draw sine wave trail from player to head
+              wave.lineStyle(thickness, color, 0.85);
+              wave.beginPath();
+              const startX = Math.max(pX - 10, waveState.headX - 120);
+              let first = true;
+              for (let x = startX; x <= waveState.headX; x += 3) {
+                const distFromHead = waveState.headX - x;
+                const fade = Math.min(1, distFromHead / 60);
+                const waveY = eY + Math.sin(x * 0.06 + waveState.progress) * amplitude * (1 - fade * 0.5);
+                if (first) { wave.moveTo(x, waveY); first = false; }
+                else wave.lineTo(x, waveY);
+              }
+              wave.strokePath();
+
+              // Glowing head
+              wave.fillStyle(0xffffff, 0.8);
+              wave.fillCircle(waveState.headX, eY + Math.sin(waveState.headX * 0.06 + waveState.progress) * amplitude, 4);
+            },
+            onComplete: () => {
+              // Impact burst at enemy
+              const burst = this.add.graphics().setDepth(21);
+              burst.fillStyle(color, 0.7);
+              burst.fillCircle(eX, eY, 16);
+              burst.fillStyle(0xffffff, 0.5);
+              burst.fillCircle(eX, eY, 6);
+              this.tweens.add({
+                targets: burst,
+                alpha: 0,
+                scaleX: 2, scaleY: 2,
+                duration: 250,
+                onComplete: () => { burst.destroy(); wave.destroy(); onDone(); },
+              });
+            },
+          });
+        };
+
+        fireWave(0, () => {
+          this.time.delayedCall(80, () => {
+            fireWave(1, onComplete);
+          });
+        });
+        break;
+      }
+
+      // ── HOOK IMPACT ───────────────────────────────────────────────────
+      // Sharp melodic strike: quick slashes converge → star burst + sparks
+      case 'hook-impact': {
+        // Brief charge flash at player
+        const chargeFlash = this.add.graphics().setDepth(20);
+        chargeFlash.fillStyle(0xffffff, 0.6);
+        chargeFlash.fillCircle(pX, pY - 10, 10);
+        this.tweens.add({
+          targets: chargeFlash,
+          alpha: 0,
+          scaleX: 0.1, scaleY: 0.1,
+          duration: 120,
+          onComplete: () => chargeFlash.destroy(),
+        });
+
+        // Sequential slashes at enemy
+        const slashTimings = [140, 220, 300];
+        const slashAngles = [-35, 35, 0];
+        const slashLen = 50;
+
+        slashTimings.forEach((t, i) => {
+          this.time.delayedCall(t, () => {
+            const slash = this.add.graphics().setDepth(22);
+            const angle = slashAngles[i] * Math.PI / 180;
+            const x1 = eX - Math.cos(angle) * slashLen;
+            const y1 = eY - Math.sin(angle) * slashLen;
+            const x2 = eX + Math.cos(angle) * slashLen;
+            const y2 = eY + Math.sin(angle) * slashLen;
+
+            slash.lineStyle(4, color);
+            slash.lineBetween(x1, y1, x2, y2);
+            // Bright center line
+            slash.lineStyle(2, 0xffffff, 0.7);
+            slash.lineBetween(x1, y1, x2, y2);
+
+            this.tweens.add({
+              targets: slash,
+              alpha: 0,
+              duration: 250,
+              delay: 60,
+              onComplete: () => slash.destroy(),
+            });
+          });
+        });
+
+        // Impact star + sparks at convergence
+        this.time.delayedCall(340, () => {
+          this.cameras.main.shake(180, 0.008);
+
+          // Star burst
+          const star = this.add.graphics().setDepth(23);
+          for (let a = 0; a < 8; a++) {
+            const angle = (a / 8) * Math.PI * 2;
+            star.lineStyle(2, 0xffffff, 0.9);
+            star.lineBetween(
+              eX, eY,
+              eX + Math.cos(angle) * 20, eY + Math.sin(angle) * 20
+            );
+          }
+          this.tweens.add({
+            targets: star,
+            alpha: 0,
+            scaleX: 1.8, scaleY: 1.8,
+            duration: 300,
+            onComplete: () => star.destroy(),
+          });
+
+          // Sparks flying outward
+          for (let s = 0; s < 8; s++) {
+            const spark = this.add.graphics().setDepth(22);
+            spark.fillStyle(s % 2 === 0 ? color : 0xffffff);
+            spark.fillRect(-2, -2, 4, 4);
+            spark.setPosition(eX, eY);
+            const angle = (s / 8) * Math.PI * 2 + Math.random() * 0.4;
+            const dist = 30 + Math.random() * 25;
+            this.tweens.add({
+              targets: spark,
+              x: eX + Math.cos(angle) * dist,
+              y: eY + Math.sin(angle) * dist,
+              alpha: 0,
+              duration: 350,
+              ease: 'Quad.easeOut',
+              onComplete: () => spark.destroy(),
+            });
+          }
+
+          this.time.delayedCall(380, onComplete);
+        });
+        break;
+      }
+
+      // ── REVERB STRIKE ─────────────────────────────────────────────────
+      // Ultimate resonance: screen dims → pulsing rings from player →
+      // rings accelerate to enemy → massive explosion + screen flash
+      case 'reverb-strike': {
+        // Phase 1: Screen dims
+        const dimOverlay = this.add.graphics().setDepth(18);
+        dimOverlay.fillStyle(0x000000, 0);
+        dimOverlay.fillRect(0, 0, W, this.battleH + 10);
+        this.tweens.add({
+          targets: dimOverlay,
+          alpha: 0.45,
+          duration: 250,
+        });
+
+        // Phase 2: Pulsing rings radiate from player
+        this.time.delayedCall(250, () => {
+          const chargeRings = this.add.graphics().setDepth(20);
+          let chargeT = 0;
+          const chargeAnim = this.time.addEvent({
+            delay: 16,
+            repeat: 18,
+            callback: () => {
+              chargeT++;
+              chargeRings.clear();
+              for (let i = 0; i < 3; i++) {
+                const r = (chargeT * 4 + i * 12) % 50;
+                const alpha = 0.8 - r / 50;
+                chargeRings.lineStyle(2, color, alpha);
+                chargeRings.strokeCircle(pX, pY - 10, r);
+              }
+            },
+          });
+
+          // Phase 3: Beam shoots from player to enemy
+          this.time.delayedCall(320, () => {
+            chargeRings.destroy();
+
+            const beam = this.add.graphics().setDepth(21);
+            const beamState = { headX: pX, alpha: 1 };
+            this.tweens.add({
+              targets: beamState,
+              headX: eX,
+              duration: 200,
+              ease: 'Quad.easeIn',
+              onUpdate: () => {
+                beam.clear();
+                // Wide beam trail
+                beam.fillStyle(color, 0.3);
+                beam.fillRect(pX, pY - 18, beamState.headX - pX, 16);
+                // Core beam
+                beam.fillStyle(color, 0.7);
+                beam.fillRect(pX, pY - 13, beamState.headX - pX, 6);
+                // White center
+                beam.fillStyle(0xffffff, 0.5);
+                beam.fillRect(pX, pY - 11, beamState.headX - pX, 2);
+              },
+              onComplete: () => {
+                beam.destroy();
+
+                // Phase 4: Explosion at enemy
+                const explosion = this.add.graphics().setDepth(23);
+                const expState = { r: 5, alpha: 1 };
+                this.time.addEvent({
+                  delay: 16,
+                  repeat: 20,
+                  callback: () => {
+                    expState.r += 6;
+                    expState.alpha = Math.max(0, 1 - expState.r / 130);
+                    explosion.clear();
+                    // Outer ring
+                    explosion.lineStyle(4, color, expState.alpha);
+                    explosion.strokeCircle(eX, eY, expState.r);
+                    // Inner fill
+                    explosion.fillStyle(0xffffff, expState.alpha * 0.4);
+                    explosion.fillCircle(eX, eY, expState.r * 0.6);
+                    // Cross flare
+                    explosion.lineStyle(2, 0xffffff, expState.alpha * 0.6);
+                    explosion.lineBetween(eX - expState.r, eY, eX + expState.r, eY);
+                    explosion.lineBetween(eX, eY - expState.r, eX, eY + expState.r);
+                  },
+                });
+
+                // Scatter debris particles
+                for (let p = 0; p < 12; p++) {
+                  const particle = this.add.graphics().setDepth(22);
+                  particle.fillStyle(p % 3 === 0 ? 0xffffff : color);
+                  particle.fillRect(-1, -1, 3, 3);
+                  particle.setPosition(eX, eY);
+                  const angle = (p / 12) * Math.PI * 2;
+                  const dist = 40 + Math.random() * 40;
+                  this.tweens.add({
+                    targets: particle,
+                    x: eX + Math.cos(angle) * dist,
+                    y: eY + Math.sin(angle) * dist,
+                    alpha: 0,
+                    duration: 500,
+                    ease: 'Quad.easeOut',
+                    onComplete: () => particle.destroy(),
+                  });
                 }
-                line.strokePath();
-                progress += 0.4;
+
+                this.cameras.main.shake(350, 0.014);
+                this.cameras.main.flash(250,
+                  (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff
+                );
+
+                this.time.delayedCall(500, () => {
+                  explosion.destroy();
+                  this.tweens.add({
+                    targets: dimOverlay,
+                    alpha: 0,
+                    duration: 300,
+                    onComplete: () => { dimOverlay.destroy(); onComplete(); },
+                  });
+                });
               },
             });
-            this.time.delayedCall(300, () => { line.destroy(); if (j === 1) onComplete(); });
           });
-        }
-        break;
-      }
-      case 'hook-impact': {
-        // Sharp slash lines
-        const slashes = this.add.graphics().setDepth(20);
-        slashes.lineStyle(5, color);
-        slashes.lineBetween(W * 0.3, H * 0.15, W * 0.7, H * 0.42);
-        slashes.lineBetween(W * 0.35, H * 0.12, W * 0.65, H * 0.4);
-        this.cameras.main.shake(250, 0.008);
-        this.tweens.add({
-          targets: slashes,
-          alpha: 0,
-          duration: 400,
-          onComplete: () => { slashes.destroy(); onComplete(); },
         });
         break;
       }
-      case 'reverb-strike': {
-        // Full screen burst
-        flash.fillStyle(color, 0.6);
-        flash.fillRect(0, 0, W, H);
-        this.cameras.main.shake(400, 0.015);
-        this.cameras.main.flash(200,
-          (color >> 16) & 0xff,
-          (color >> 8) & 0xff,
-          color & 0xff
-        );
-        this.tweens.add({
-          targets: flash,
-          alpha: 0,
-          duration: 500,
-          onComplete: () => { flash.destroy(); onComplete(); },
-        });
-        break;
-      }
+
       default:
         this.time.delayedCall(300, onComplete);
     }
   }
 
-  private showFloatingDamage(damage: number, x: number, y: number, color: number): void {
-    const colorHex = '#' + color.toString(16).padStart(6, '0');
-    const dmgText = this.add.text(x, y, `-${damage}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '10px',
-      color: colorHex,
-    }).setDepth(25).setOrigin(0.5);
+  // ── Enemy attack animation ──────────────────────────────────────────────
+
+  private playEnemyAttackAnimation(onComplete: () => void): void {
+    const origX = this.enemySprite.x;
+    const origY = this.enemySprite.y;
+    const pX = this.playerSprite.x;
+    const pY = this.playerSprite.y;
+
+    // Enemy lunges toward player
+    const lungeX = origX - (origX - pX) * 0.35;
+    const lungeY = origY + (pY - origY) * 0.25;
 
     this.tweens.add({
-      targets: dmgText,
-      y: y - 35,
-      alpha: 0,
-      scaleX: 1.4,
-      scaleY: 1.4,
-      duration: 900,
-      ease: 'Power2',
-      onComplete: () => dmgText.destroy(),
+      targets: this.enemySprite,
+      x: lungeX,
+      y: lungeY,
+      scaleX: this.enemySprite.scaleX * 1.1,
+      scaleY: this.enemySprite.scaleY * 1.1,
+      duration: 160,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        // Impact flash at player
+        const impact = this.add.graphics().setDepth(20);
+        impact.fillStyle(0xff4444, 0.5);
+        impact.fillCircle(pX, pY, 24);
+        impact.fillStyle(0xffffff, 0.4);
+        impact.fillCircle(pX, pY, 10);
+        this.tweens.add({
+          targets: impact,
+          alpha: 0,
+          scaleX: 1.5, scaleY: 1.5,
+          duration: 250,
+          onComplete: () => impact.destroy(),
+        });
+
+        if (this.isBoss) this.cameras.main.shake(160, 0.006);
+
+        // Return to original position
+        this.tweens.add({
+          targets: this.enemySprite,
+          x: origX,
+          y: origY,
+          scaleX: this.enemySprite.scaleX / 1.1,
+          scaleY: this.enemySprite.scaleY / 1.1,
+          duration: 300,
+          ease: 'Quad.easeOut',
+          onComplete,
+        });
+      },
     });
   }
 
-  private setMessage(text: string): void {
-    this.messageText.setText(text);
+  // ── Defeat particles ────────────────────────────────────────────────────
+
+  private spawnDefeatParticles(x: number, y: number): void {
+    const colors = [0xffffff, 0xffd700, 0xff4444, 0x4080ff];
+    for (let i = 0; i < 16; i++) {
+      const particle = this.add.graphics().setDepth(25);
+      const c = colors[i % colors.length];
+      const size = 2 + Math.random() * 3;
+      particle.fillStyle(c, 0.9);
+      particle.fillRect(-size / 2, -size / 2, size, size);
+      particle.setPosition(x, y);
+
+      const angle = (i / 16) * Math.PI * 2 + Math.random() * 0.3;
+      const dist = 50 + Math.random() * 60;
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * dist,
+        y: y + Math.sin(angle) * dist - 20,
+        alpha: 0,
+        scaleX: 0.3,
+        scaleY: 0.3,
+        duration: 600 + Math.random() * 300,
+        ease: 'Quad.easeOut',
+        onComplete: () => particle.destroy(),
+      });
+    }
+  }
+
+  // ── Floating damage numbers ─────────────────────────────────────────────
+
+  private showFloatingDamage(damage: number, x: number, y: number, color: number): void {
+    const colorHex = '#' + color.toString(16).padStart(6, '0');
+
+    // Shadow text behind for depth
+    const shadow = this.add.text(x + 1, y + 1, `-${damage}`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '12px',
+      color: '#000000',
+    }).setDepth(24).setOrigin(0.5).setAlpha(0.5);
+
+    // Main damage number
+    const dmgText = this.add.text(x, y, `-${damage}`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '12px',
+      color: colorHex,
+    }).setDepth(25).setOrigin(0.5);
+
+    // Pop-in: start small, scale up, then float + fade
+    dmgText.setScale(0.3);
+    shadow.setScale(0.3);
+
+    this.tweens.add({
+      targets: [dmgText, shadow],
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 120,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: [dmgText, shadow],
+          y: y - 40,
+          scaleX: 1,
+          scaleY: 1,
+          alpha: 0,
+          duration: 800,
+          ease: 'Quad.easeOut',
+          onComplete: () => { dmgText.destroy(); shadow.destroy(); },
+        });
+      },
+    });
   }
 }

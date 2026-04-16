@@ -7,6 +7,20 @@ export class PreloadScene extends Phaser.Scene {
     super({ key: 'PreloadScene' });
   }
 
+  preload(): void {
+    // Load tileset images (Puny World CC0)
+    // Only tiles that work well as standalone repeating tiles.
+    // Buildings, trees, tall grass, water, cave tiles stay programmatic.
+    const tileImages = [
+      'tile-grass', 'tile-grass-2',
+      'tile-path', 'tile-path-2',
+      'tile-flower', 'tile-flower-2',
+    ];
+    tileImages.forEach(key => {
+      this.load.image(key, `assets/tiles/${key}.png`);
+    });
+  }
+
   create(): void {
     const { width, height } = this.scale;
 

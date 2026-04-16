@@ -1,9 +1,14 @@
+import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 
 export function StartScreen() {
   const setGamePhase = useGameStore(s => s.setGamePhase);
+  const setPlayerName = useGameStore(s => s.setPlayerName);
+  const [name, setName] = useState('');
 
   const handleStart = () => {
+    const trimmed = name.trim() || 'Sound Keeper';
+    setPlayerName(trimmed);
     setGamePhase('world');
   };
 
@@ -32,16 +37,16 @@ export function StartScreen() {
       </div>
 
       {/* Title container */}
-      <div className="relative z-10 flex flex-col items-center gap-6 px-8">
+      <div className="relative z-10 flex flex-col items-center gap-8 px-8 w-full" style={{ maxWidth: '700px' }}>
 
         {/* Pre-title */}
         <p
-          className="text-xs tracking-widest uppercase"
           style={{
             fontFamily: '"Press Start 2P"',
-            fontSize: '8px',
+            fontSize: 'clamp(9px, 1.4vw, 13px)',
             color: '#8844cc',
-            letterSpacing: '4px',
+            letterSpacing: '6px',
+            textTransform: 'uppercase',
           }}
         >
           A Musical Journey
@@ -52,10 +57,11 @@ export function StartScreen() {
           <h1
             style={{
               fontFamily: '"Press Start 2P"',
-              fontSize: 'clamp(24px, 6vw, 48px)',
+              fontSize: 'clamp(40px, 9vw, 88px)',
               color: '#ffd700',
-              textShadow: '3px 3px #b8860b, -2px -2px #ff0080, 0 0 40px rgba(255,215,0,0.3)',
-              lineHeight: 1.3,
+              textShadow: '4px 4px #b8860b, -3px -3px #ff0080, 0 0 60px rgba(255,215,0,0.4)',
+              lineHeight: 1.25,
+              letterSpacing: '2px',
             }}
           >
             SOUND
@@ -68,9 +74,9 @@ export function StartScreen() {
         <p
           style={{
             fontFamily: '"Press Start 2P"',
-            fontSize: 'clamp(6px, 1.5vw, 9px)',
+            fontSize: 'clamp(10px, 1.8vw, 16px)',
             color: '#00ccff',
-            textShadow: '0 0 10px #00ccff',
+            textShadow: '0 0 16px #00ccff',
             textAlign: 'center',
             lineHeight: 2,
           }}
@@ -79,20 +85,21 @@ export function StartScreen() {
         </p>
 
         {/* Decorative separator */}
-        <div className="flex items-center gap-3 w-full max-w-xs">
+        <div className="flex items-center gap-4 w-full max-w-lg">
           <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, transparent, #ffd700)' }} />
-          <span style={{ fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#ffd700' }}>♪</span>
+          <span style={{ fontFamily: '"Press Start 2P"', fontSize: 'clamp(12px, 2vw, 18px)', color: '#ffd700' }}>♪</span>
           <div className="flex-1 h-px" style={{ background: 'linear-gradient(to left, transparent, #ffd700)' }} />
         </div>
 
         {/* Lore text */}
         <div
-          className="text-center max-w-sm"
+          className="text-center"
           style={{
             fontFamily: '"Press Start 2P"',
-            fontSize: 'clamp(5px, 1.2vw, 7px)',
+            fontSize: 'clamp(8px, 1.3vw, 12px)',
             color: '#888899',
-            lineHeight: 2.2,
+            lineHeight: 2.4,
+            maxWidth: '480px',
           }}
         >
           A hidden song was lost<br />
@@ -102,23 +109,74 @@ export function StartScreen() {
           Claim what was silenced.
         </div>
 
+        {/* Name input */}
+        <div className="flex flex-col items-center gap-2 w-full" style={{ maxWidth: '320px' }}>
+          <label
+            style={{
+              fontFamily: '"Press Start 2P"',
+              fontSize: 'clamp(7px, 1.1vw, 10px)',
+              color: '#8888aa',
+              letterSpacing: '2px',
+            }}
+          >
+            ENTER YOUR NAME
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value.slice(0, 16))}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleStart(); }}
+            placeholder="Sound Keeper"
+            maxLength={16}
+            style={{
+              fontFamily: '"Press Start 2P"',
+              fontSize: 'clamp(10px, 1.6vw, 14px)',
+              color: '#ffd700',
+              background: '#0a0818',
+              border: '2px solid #4a3a6a',
+              padding: 'clamp(8px, 1.2vw, 12px) clamp(12px, 2vw, 20px)',
+              width: '100%',
+              textAlign: 'center',
+              outline: 'none',
+              caretColor: '#ffd700',
+              letterSpacing: '1px',
+              imageRendering: 'pixelated',
+              boxShadow: '0 0 12px rgba(138, 68, 204, 0.3) inset',
+            }}
+          />
+          <span
+            style={{
+              fontFamily: '"Press Start 2P"',
+              fontSize: 'clamp(6px, 0.9vw, 8px)',
+              color: '#44445a',
+            }}
+          >
+            {name.length}/16
+          </span>
+        </div>
+
         {/* Start button */}
         <button
-          className="btn-pixel btn-gold animate-float mt-4"
+          className="btn-pixel btn-gold animate-float"
           onClick={handleStart}
-          style={{ fontSize: 'clamp(7px, 1.5vw, 10px)' }}
+          style={{
+            fontSize: 'clamp(10px, 1.8vw, 16px)',
+            padding: 'clamp(14px, 2vw, 20px) clamp(28px, 4vw, 48px)',
+            marginTop: '8px',
+          }}
         >
           ▶ BEGIN JOURNEY
         </button>
 
         {/* Controls hint */}
         <div
-          className="text-center mt-2"
+          className="text-center"
           style={{
             fontFamily: '"Press Start 2P"',
-            fontSize: '6px',
+            fontSize: 'clamp(7px, 1vw, 10px)',
             color: '#444455',
-            lineHeight: 2,
+            lineHeight: 2.2,
+            marginTop: '4px',
           }}
         >
           WASD / Arrow Keys to move<br />
@@ -128,11 +186,12 @@ export function StartScreen() {
 
       {/* Bottom copyright */}
       <div
-        className="absolute bottom-4"
+        className="absolute bottom-5"
         style={{
           fontFamily: '"Press Start 2P"',
-          fontSize: '5px',
-          color: '#333344',
+          fontSize: 'clamp(6px, 0.9vw, 9px)',
+          color: '#33334a',
+          letterSpacing: '2px',
         }}
       >
         © SOUND QUEST — A Musical Experience

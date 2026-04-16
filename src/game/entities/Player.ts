@@ -70,12 +70,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // Flip for left direction
     this.setFlipX(this.lastDirection === 'left');
 
-    // Manual frame animation
+    // 4-frame walk cycle: 0 → 1 → 2 → 3 → 0 (stand → stride L → stand → stride R)
     if (this.moving) {
       this.frameTimer += delta;
-      if (this.frameTimer > 180) {
+      if (this.frameTimer > 140) {
         this.frameTimer = 0;
-        this.currentFrame = this.currentFrame === 0 ? 1 : 0;
+        this.currentFrame = (this.currentFrame + 1) % 4;
       }
       const dir = this.lastDirection === 'left' ? 'right' : this.lastDirection;
       this.setTexture(`player-${dir}-${this.currentFrame}`);

@@ -4,6 +4,9 @@ import { ATTACKS, getAttacksForLevel } from '../game/systems/AttackSystem';
 import { getLevelFromXP } from '../game/systems/XPSystem';
 
 interface GameState {
+  // Player identity
+  playerName: string;
+
   // Stats
   xp: number;
   level: number;
@@ -24,6 +27,7 @@ interface GameState {
   gamePhase: GamePhase;
 
   // Actions
+  setPlayerName: (name: string) => void;
   addXp: (amount: number) => void;
   takeDamage: (amount: number) => void;
   restoreHp: (amount: number) => void;
@@ -37,6 +41,7 @@ interface GameState {
 }
 
 const INITIAL_STATE = {
+  playerName: '',
   xp: 0,
   level: 1,
   hp: 30,
@@ -54,6 +59,10 @@ const INITIAL_STATE = {
 
 export const useGameStore = create<GameState>((set, get) => ({
   ...INITIAL_STATE,
+
+  setPlayerName: (name: string) => {
+    set({ playerName: name });
+  },
 
   addXp: (amount: number) => {
     const { xp, level } = get();
