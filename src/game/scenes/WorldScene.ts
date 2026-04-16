@@ -67,6 +67,10 @@ export class WorldScene extends Phaser.Scene {
   private readonly GRASS_STEP_MS = 450;
   private readonly ENCOUNTER_CHANCE = 0.22;
 
+  // Spawn point for respawning after death
+  private spawnX = 0;
+  private spawnY = 0;
+
   // "show only once" guard for dialogs keyed by string
   private shownOnce: Set<string> = new Set();
 
@@ -82,7 +86,9 @@ export class WorldScene extends Phaser.Scene {
     this.walls = mapResult.walls;
 
     // Spawn player
-    this.player = new Player(this, mapResult.spawnX, mapResult.spawnY);
+    this.spawnX = mapResult.spawnX;
+    this.spawnY = mapResult.spawnY;
+    this.player = new Player(this, this.spawnX, this.spawnY);
 
     this.cameras.main.startFollow(this.player, true, 1, 1);
     this.cameras.main.setZoom(2);
@@ -119,6 +125,7 @@ export class WorldScene extends Phaser.Scene {
     this.boss.setAlpha(0);
 
     EventBus.on(EVENTS.BATTLE_END, this.onBattleEnd, this);
+    EventBus.on(EVENTS.RESPAWN, this.onRespawn, this);
 
     // Interact key
     this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
@@ -796,14 +803,22 @@ export class WorldScene extends Phaser.Scene {
 
   private handlePlayerDeath(): void {
     this.player.freeze();
-    this.cameras.main.fade(1000, 0, 0, 0);
-    this.time.delayedCall(1200, () => {
-      useGameStore.getState().restoreHp(15);
-      this.cameras.main.resetFX();
-      this.player.unfreeze();
-      this.battleActive = false;
+    this.cameras.main.shake(300, 0.008);
+
+    this.time.delayedCall(400, () => {
+      this.scene.launch('DeathScene');
+      this.scene.pause();
     });
   }
+
+  private onRespawn = (): void => {
+    this.scene.resume();
+    this.cameras.main.resetFX();
+    this.player.setPosition(this.spawnX, this.spawnY);
+    this.player.unfreeze();
+    this.battleActive = false;
+    this.cameras.main.fadeIn(600, 0, 0, 0);
+  };
 
   // ── Dialog system ─────────────────────────────────────────────────────────
 

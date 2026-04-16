@@ -20,6 +20,7 @@ export const EVENTS = {
   GATE_BLOCKED: 'gate-blocked',
   GATE_OPEN: 'gate-open',
   PLAYER_DIED: 'player-died',
+  RESPAWN: 'respawn',
   SCENE_READY: 'scene-ready',
   HP_CHANGED: 'hp-changed',
 } as const;
