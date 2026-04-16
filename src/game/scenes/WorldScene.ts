@@ -505,6 +505,10 @@ export class WorldScene extends Phaser.Scene {
     this.scene.resume();
 
     if (result.outcome === 'lose') {
+      // Reset boss encounter flag so the player can retry
+      if (result.isBoss) {
+        this.bossEncounterStarted = false;
+      }
       this.handlePlayerDeath();
       return;
     }
@@ -778,6 +782,7 @@ export class WorldScene extends Phaser.Scene {
         () => {
           useGameStore.getState().unlockBonusSong();
           EventBus.emit(EVENTS.BONUS_SONG_UNLOCKED);
+          this.player.unfreeze();
         }
       );
     });

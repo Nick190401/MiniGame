@@ -8,6 +8,14 @@ import type { EnemyData, Attack } from '../../types/game.types';
 
 type TurnState = 'player-choose' | 'player-attack' | 'enemy-attack' | 'phase-change' | 'battle-end';
 
+// Attack‑type icons drawn as small pixel glyphs
+const ATTACK_ICONS: Record<string, string[]> = {
+  'bass-drop':    ['  ██  ', ' ████ ', '██████', '██████', ' ████ ', '  ██  '],
+  'echo-wave':    ['█     ', '██    ', '███   ', '███   ', '██    ', '█     '],
+  'hook-impact':  ['    ██', '   ██ ', '  ██  ', ' ██   ', '██    ', '██████'],
+  'reverb-strike':['██████', '█    █', '█ ██ █', '█ ██ █', '█    █', '██████'],
+};
+
 export class BattleScene extends Phaser.Scene {
   // Battle data
   private enemyData!: EnemyData;
@@ -18,19 +26,25 @@ export class BattleScene extends Phaser.Scene {
   // UI references
   private enemySprite!: Phaser.GameObjects.Sprite;
   private playerSprite!: Phaser.GameObjects.Sprite;
-  private enemyHpBar!: Phaser.GameObjects.Rectangle;
-  private enemyHpBg!: Phaser.GameObjects.Rectangle;
-  private playerHpBar!: Phaser.GameObjects.Rectangle;
-  private playerHpBg!: Phaser.GameObjects.Rectangle;
+  private enemyHpBar!: Phaser.GameObjects.Graphics;
+  private playerHpBar!: Phaser.GameObjects.Graphics;
   private enemyHpText!: Phaser.GameObjects.Text;
   private playerHpText!: Phaser.GameObjects.Text;
   private enemyNameText!: Phaser.GameObjects.Text;
   private phaseText!: Phaser.GameObjects.Text;
-  private attackButtons: Phaser.GameObjects.Container[] = [];
+  private attackButtons: { container: Phaser.GameObjects.Container; bg: Phaser.GameObjects.Graphics; attack: Attack; unlocked: boolean }[] = [];
   private messageText!: Phaser.GameObjects.Text;
+  private msgContinueIndicator!: Phaser.GameObjects.Text;
+
+  // HP bar layout
+  private ehpBarX = 0; private ehpBarY = 0; private ehpBarW = 0; private ehpBarH = 0;
+  private phpBarX = 0; private phpBarY = 0; private phpBarW = 0; private phpBarH = 0;
 
   // Layout refs for animations
   private battleH = 0;
+
+  // Ambient particles
+  private ambientParticles: Phaser.GameObjects.Graphics[] = [];
 
   // Typewriter state
   private typewriterTimer?: Phaser.Time.TimerEvent;
@@ -51,6 +65,7 @@ export class BattleScene extends Phaser.Scene {
     this.currentEnemyHp = this.enemyData.maxHp;
     this.bossPhaseIndex = 0;
     this.attackButtons = [];
+    this.ambientParticles = [];
   }
 
   create(): void {
@@ -60,27 +75,20 @@ export class BattleScene extends Phaser.Scene {
     // ── Layout constants ──────────────────────────────────────────────────
     const BATTLE_H   = Math.floor(H * 0.53);
     this.battleH     = BATTLE_H;
-    const MSG_Y      = BATTLE_H;                // message box top
-    const MSG_H      = 68;                      // message box height
-    const MENU_Y     = MSG_Y + MSG_H + 4;       // attack grid top
-    const MENU_H     = H - MENU_Y - 4;          // remaining space for buttons
+    const MSG_Y      = BATTLE_H;
+    const MSG_H      = 68;
+    const MENU_Y     = MSG_Y + MSG_H + 4;
+    const MENU_H     = H - MENU_Y - 4;
 
     // ── Background ────────────────────────────────────────────────────────
     const bg = this.add.graphics();
     bg.fillStyle(0x10082a);
     bg.fillRect(0, 0, W, H);
 
-    // Scanlines
-    const scanlines = this.add.graphics();
-    scanlines.fillStyle(0x000000, 0.06);
-    for (let y = 0; y < H; y += 4) {
-      scanlines.fillRect(0, y, W, 2);
-    }
-
-    // Outer gold border
-    const border = this.add.graphics();
-    border.lineStyle(3, 0xffd700);
-    border.strokeRect(3, 3, W - 6, H - 6);
+    // Subtle gradient overlay — darker at top, lighter at bottom of arena
+    const gradient = this.add.graphics();
+    gradient.fillGradientStyle(0x180830, 0x180830, 0x0a0420, 0x0a0420, 0.3, 0.3, 0, 0);
+    gradient.fillRect(0, 0, W, BATTLE_H);
 
     if (this.isBoss) {
       const aura = this.add.graphics();
@@ -88,19 +96,53 @@ export class BattleScene extends Phaser.Scene {
       aura.fillRect(0, 0, W, H);
     }
 
+    // Scanlines
+    const scanlines = this.add.graphics();
+    scanlines.fillStyle(0x000000, 0.05);
+    for (let y = 0; y < H; y += 4) {
+      scanlines.fillRect(0, y, W, 2);
+    }
+    scanlines.setDepth(30);
+
+    // ── Ambient floating particles ───────────────────────────────────────
+    for (let i = 0; i < 8; i++) {
+      const p = this.add.graphics().setDepth(3);
+      const c = this.isBoss ? [0xff2244, 0xff6644, 0xcc1133, 0xffaa44][i % 4] : [0x4080ff, 0x00ccff, 0x8844ff, 0x44ddff][i % 4];
+      p.fillStyle(c, 0.3);
+      p.fillCircle(0, 0, 1 + Math.random());
+      const sx = Math.random() * W;
+      const sy = Math.random() * BATTLE_H;
+      p.setPosition(sx, sy);
+      this.tweens.add({
+        targets: p,
+        x: sx + Phaser.Math.Between(-40, 40),
+        y: sy + Phaser.Math.Between(-30, 30),
+        alpha: { from: 0.15, to: 0.5 },
+        duration: 3000 + Math.random() * 2000,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 2000,
+      });
+      this.ambientParticles.push(p);
+    }
+
+    // Outer gold border
+    const border = this.add.graphics().setDepth(31);
+    border.lineStyle(3, 0xffd700);
+    border.strokeRect(3, 3, W - 6, H - 6);
+
     // ── Ground platforms (GBA Pokémon style) ──────────────────────────────
-    const ground = this.add.graphics();
+    const ground = this.add.graphics().setDepth(2);
     // Enemy platform — ellipse, upper right
-    ground.fillStyle(0x282048, 0.6);
-    ground.fillEllipse(W * 0.70, BATTLE_H * 0.68, 180, 24);
-    ground.lineStyle(1, 0x3a3060, 0.5);
-    ground.strokeEllipse(W * 0.70, BATTLE_H * 0.68, 180, 24);
+    ground.fillStyle(0x282048, 0.5);
+    ground.fillEllipse(W * 0.70, BATTLE_H * 0.70, 190, 28);
+    ground.lineStyle(1.5, 0x4040a0, 0.3);
+    ground.strokeEllipse(W * 0.70, BATTLE_H * 0.70, 190, 28);
     // Player platform — ellipse, lower left
-    ground.fillStyle(0x282048, 0.6);
-    ground.fillEllipse(W * 0.24, BATTLE_H * 0.92, 160, 20);
-    ground.lineStyle(1, 0x3a3060, 0.5);
-    ground.strokeEllipse(W * 0.24, BATTLE_H * 0.92, 160, 20);
-    ground.setDepth(2);
+    ground.fillStyle(0x282048, 0.5);
+    ground.fillEllipse(W * 0.24, BATTLE_H * 0.93, 170, 22);
+    ground.lineStyle(1.5, 0x4040a0, 0.3);
+    ground.strokeEllipse(W * 0.24, BATTLE_H * 0.93, 170, 22);
 
     // ── Enemy sprite (upper right) — slides in from right ──────────────
     const enemyScale = this.isBoss ? 6 : 5;
@@ -116,7 +158,6 @@ export class BattleScene extends Phaser.Scene {
       duration: 600,
       ease: 'Back.easeOut',
       onComplete: () => {
-        // Idle float after entry
         this.tweens.add({
           targets: this.enemySprite,
           y: enemySpriteY - 5,
@@ -142,151 +183,13 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // ── Enemy info box (top LEFT — Pokémon layout) ────────────────────────
-    const infoBoxX = W * 0.04;
-    const infoBoxY = BATTLE_H * 0.04;
-    const infoBoxW = 240;
-    const infoBoxH = this.isBoss ? 56 : 48;
-
-    const infoBg = this.add.graphics();
-    infoBg.fillStyle(0x0a0020, 0.92);
-    infoBg.fillRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH);
-    infoBg.lineStyle(2, this.isBoss ? 0xffd700 : 0x4080ff);
-    infoBg.strokeRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH);
-    infoBg.setDepth(8);
-
-    // Enemy name
-    this.enemyNameText = this.add.text(
-      infoBoxX + 10, infoBoxY + 7,
-      this.enemyData.name.toUpperCase(),
-      {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
-        color: this.isBoss ? '#ffd700' : '#f0f0f0',
-      }
-    ).setDepth(10);
-
-    if (this.isBoss) {
-      this.enemyNameText.setShadow(0, 0, '#ff0000', 6, true, true);
-    }
-
-    // Phase label (boss only)
-    this.phaseText = this.add.text(infoBoxX + 10, infoBoxY + 19, '', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#ff4444',
-    }).setDepth(10);
-
-    if (this.isBoss) {
-      this.phaseText.setText('PHASE I');
-    }
-
-    // Enemy HP row
-    const ehpLabelY = this.isBoss ? infoBoxY + 30 : infoBoxY + 22;
-    this.add.text(infoBoxX + 10, ehpLabelY, 'HP', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#aaaaaa',
-    }).setDepth(10);
-
-    const ehpBarX = infoBoxX + 30;
-    const ehpBarY = ehpLabelY + 1;
-    const ehpBarW = infoBoxW - 44;
-    const ehpBarH = 7;
-
-    this.enemyHpBg = this.add.rectangle(
-      ehpBarX + ehpBarW / 2, ehpBarY + ehpBarH / 2,
-      ehpBarW, ehpBarH, 0x202020
-    ).setDepth(9);
-
-    this.enemyHpBar = this.add.rectangle(
-      ehpBarX, ehpBarY,
-      ehpBarW, ehpBarH, 0x40c040
-    ).setOrigin(0, 0).setDepth(10);
-
-    this.enemyHpText = this.add.text(
-      infoBoxX + 10, ehpLabelY + 12,
-      `${this.currentEnemyHp}/${this.enemyData.maxHp}`,
-      {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#888888',
-      }
-    ).setDepth(10);
+    this.buildEnemyInfoBox(W, BATTLE_H);
 
     // ── Player info box (bottom RIGHT — Pokémon layout) ───────────────────
-    const store = useGameStore.getState();
-    const phpBoxW = 220;
-    const phpBoxH = 52;
-    const phpBoxX = W - phpBoxW - W * 0.04;
-    const phpBoxY = BATTLE_H - phpBoxH - BATTLE_H * 0.08;
-
-    const phpBg = this.add.graphics();
-    phpBg.fillStyle(0x0a0020, 0.92);
-    phpBg.fillRect(phpBoxX, phpBoxY, phpBoxW, phpBoxH);
-    phpBg.lineStyle(2, 0x4040a0);
-    phpBg.strokeRect(phpBoxX, phpBoxY, phpBoxW, phpBoxH);
-    phpBg.setDepth(8);
-
-    const pName = useGameStore.getState().playerName || 'PLAYER';
-    this.add.text(phpBoxX + 10, phpBoxY + 6, pName.toUpperCase(), {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
-      color: '#f0f0f0',
-    }).setDepth(10);
-
-    this.add.text(phpBoxX + phpBoxW - 10, phpBoxY + 6, `LV.${store.level}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#ffd700',
-    }).setOrigin(1, 0).setDepth(10);
-
-    this.add.text(phpBoxX + 10, phpBoxY + 22, 'HP', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#aaaaaa',
-    }).setDepth(10);
-
-    const phpBarX = phpBoxX + 30;
-    const phpBarY = phpBoxY + 23;
-    const phpBarW = phpBoxW - 44;
-    const phpBarH = 7;
-
-    this.playerHpBg = this.add.rectangle(
-      phpBarX + phpBarW / 2, phpBarY + phpBarH / 2,
-      phpBarW, phpBarH, 0x202020
-    ).setDepth(9);
-
-    const phpFrac = Math.max(0, store.hp / store.maxHp);
-    this.playerHpBar = this.add.rectangle(
-      phpBarX, phpBarY,
-      phpBarW * phpFrac, phpBarH, this.hpColor(phpFrac)
-    ).setOrigin(0, 0).setDepth(10);
-
-    this.playerHpText = this.add.text(
-      phpBoxX + 10, phpBoxY + 36,
-      `${store.hp}/${store.maxHp}`,
-      {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#888888',
-      }
-    ).setDepth(10);
+    this.buildPlayerInfoBox(W, BATTLE_H);
 
     // ── Message box (full-width, GBA textbox style) ───────────────────────
-    const msgBg = this.add.graphics();
-    msgBg.fillStyle(0x08001a, 0.97);
-    msgBg.fillRect(6, MSG_Y, W - 12, MSG_H);
-    msgBg.lineStyle(2, 0xffd700, 0.8);
-    msgBg.strokeRect(6, MSG_Y, W - 12, MSG_H);
-    msgBg.setDepth(12);
-
-    this.messageText = this.add.text(18, MSG_Y + 12, '', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
-      color: '#f0f0f0',
-      wordWrap: { width: W - 44 },
-      lineSpacing: 8,
-    }).setDepth(14);
+    this.buildMessageBox(W, MSG_Y, MSG_H);
 
     // ── Attack menu (2×2 grid) ────────────────────────────────────────────
     this.buildAttackMenu(MENU_Y, MENU_H);
@@ -310,7 +213,213 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  // ── Attack menu ───────────────────────────────────────────────────────────
+  // ── Info boxes ──────────────────────────────────────────────────────────────
+
+  private buildEnemyInfoBox(W: number, BATTLE_H: number): void {
+    const infoBoxX = W * 0.04;
+    const infoBoxY = BATTLE_H * 0.04;
+    const infoBoxW = 240;
+    const infoBoxH = this.isBoss ? 58 : 50;
+
+    const infoBg = this.add.graphics().setDepth(8);
+    infoBg.fillStyle(0x0a0020, 0.92);
+    infoBg.fillRoundedRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH, 6);
+    const borderColor = this.isBoss ? 0xffd700 : 0x4060a0;
+    infoBg.lineStyle(2, borderColor, 0.9);
+    infoBg.strokeRoundedRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH, 6);
+    // Inner highlight line
+    infoBg.lineStyle(1, borderColor, 0.15);
+    infoBg.strokeRoundedRect(infoBoxX + 2, infoBoxY + 2, infoBoxW - 4, infoBoxH - 4, 4);
+
+    // Enemy name
+    this.enemyNameText = this.add.text(
+      infoBoxX + 10, infoBoxY + 8,
+      this.enemyData.name.toUpperCase(),
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px',
+        color: this.isBoss ? '#ffd700' : '#f0f0f0',
+      }
+    ).setDepth(10);
+
+    if (this.isBoss) {
+      this.enemyNameText.setShadow(0, 0, '#ff0000', 6, true, true);
+    }
+
+    // Phase label (boss only)
+    this.phaseText = this.add.text(infoBoxX + 10, infoBoxY + 20, '', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      color: '#ff4444',
+    }).setDepth(10);
+
+    if (this.isBoss) {
+      this.phaseText.setText('PHASE I');
+    }
+
+    // Enemy HP row
+    const ehpLabelY = this.isBoss ? infoBoxY + 32 : infoBoxY + 22;
+    this.add.text(infoBoxX + 10, ehpLabelY, 'HP', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      color: '#aaaaaa',
+    }).setDepth(10);
+
+    this.ehpBarX = infoBoxX + 30;
+    this.ehpBarY = ehpLabelY;
+    this.ehpBarW = infoBoxW - 44;
+    this.ehpBarH = 8;
+
+    this.enemyHpBar = this.add.graphics().setDepth(10);
+    this.drawHpBar(this.enemyHpBar, this.ehpBarX, this.ehpBarY, this.ehpBarW, this.ehpBarH, 1);
+
+    const hpFracLabelY = ehpLabelY + 12;
+    this.enemyHpText = this.add.text(
+      infoBoxX + 10, hpFracLabelY,
+      `${this.currentEnemyHp}/${this.enemyData.maxHp}`,
+      { fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#888888' }
+    ).setDepth(10);
+  }
+
+  private buildPlayerInfoBox(W: number, BATTLE_H: number): void {
+    const store = useGameStore.getState();
+    const phpBoxW = 220;
+    const phpBoxH = 52;
+    const phpBoxX = W - phpBoxW - W * 0.04;
+    const phpBoxY = BATTLE_H - phpBoxH - BATTLE_H * 0.08;
+
+    const phpBg = this.add.graphics().setDepth(8);
+    phpBg.fillStyle(0x0a0020, 0.92);
+    phpBg.fillRoundedRect(phpBoxX, phpBoxY, phpBoxW, phpBoxH, 6);
+    phpBg.lineStyle(2, 0x4040a0, 0.8);
+    phpBg.strokeRoundedRect(phpBoxX, phpBoxY, phpBoxW, phpBoxH, 6);
+    phpBg.lineStyle(1, 0x4040a0, 0.15);
+    phpBg.strokeRoundedRect(phpBoxX + 2, phpBoxY + 2, phpBoxW - 4, phpBoxH - 4, 4);
+
+    const pName = store.playerName || 'PLAYER';
+    this.add.text(phpBoxX + 10, phpBoxY + 6, pName.toUpperCase(), {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '7px',
+      color: '#f0f0f0',
+    }).setDepth(10);
+
+    this.add.text(phpBoxX + phpBoxW - 10, phpBoxY + 6, `LV.${store.level}`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      color: '#ffd700',
+    }).setOrigin(1, 0).setDepth(10);
+
+    this.add.text(phpBoxX + 10, phpBoxY + 22, 'HP', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      color: '#aaaaaa',
+    }).setDepth(10);
+
+    this.phpBarX = phpBoxX + 30;
+    this.phpBarY = phpBoxY + 22;
+    this.phpBarW = phpBoxW - 44;
+    this.phpBarH = 8;
+
+    const phpFrac = Math.max(0, store.hp / store.maxHp);
+    this.playerHpBar = this.add.graphics().setDepth(10);
+    this.drawHpBar(this.playerHpBar, this.phpBarX, this.phpBarY, this.phpBarW, this.phpBarH, phpFrac);
+
+    this.playerHpText = this.add.text(
+      phpBoxX + 10, phpBoxY + 36,
+      `${store.hp}/${store.maxHp}`,
+      { fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#888888' }
+    ).setDepth(10);
+  }
+
+  // ── HP bar rendering (Pokémon style with rounded ends + gradient) ──────────
+
+  private hpColor(frac: number): number {
+    if (frac > 0.5) return 0x40c040;
+    if (frac > 0.25) return 0xe0c000;
+    return 0xe03030;
+  }
+
+  private hpColorBright(frac: number): number {
+    if (frac > 0.5) return 0x60e060;
+    if (frac > 0.25) return 0xf0d830;
+    return 0xf04040;
+  }
+
+  private drawHpBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, frac: number): void {
+    g.clear();
+    // Background
+    g.fillStyle(0x181818);
+    g.fillRoundedRect(x, y, w, h, 3);
+    // Dark border
+    g.lineStyle(1, 0x333333);
+    g.strokeRoundedRect(x, y, w, h, 3);
+
+    if (frac > 0) {
+      const fillW = Math.max(4, w * frac);
+      const color = this.hpColor(frac);
+      const bright = this.hpColorBright(frac);
+      // Main fill
+      g.fillStyle(color);
+      g.fillRoundedRect(x + 1, y + 1, fillW - 2, h - 2, 2);
+      // Top highlight (brighter)
+      g.fillStyle(bright, 0.5);
+      g.fillRoundedRect(x + 1, y + 1, fillW - 2, Math.floor(h / 2) - 1, { tl: 2, tr: 2, bl: 0, br: 0 });
+    }
+  }
+
+  private updateEnemyHpBar(): void {
+    const frac = Math.max(0, this.currentEnemyHp / this.enemyData.maxHp);
+    this.drawHpBar(this.enemyHpBar, this.ehpBarX, this.ehpBarY, this.ehpBarW, this.ehpBarH, frac);
+    this.enemyHpText.setText(`${this.currentEnemyHp}/${this.enemyData.maxHp}`);
+  }
+
+  private updatePlayerHpBar(): void {
+    const store = useGameStore.getState();
+    const frac = Math.max(0, store.hp / store.maxHp);
+    this.drawHpBar(this.playerHpBar, this.phpBarX, this.phpBarY, this.phpBarW, this.phpBarH, frac);
+    this.playerHpText.setText(`${store.hp}/${store.maxHp}`);
+  }
+
+  // ── Message box ─────────────────────────────────────────────────────────────
+
+  private buildMessageBox(W: number, MSG_Y: number, MSG_H: number): void {
+    const msgBg = this.add.graphics().setDepth(12);
+    // Dark fill with rounded corners
+    msgBg.fillStyle(0x06001a, 0.97);
+    msgBg.fillRoundedRect(6, MSG_Y, W - 12, MSG_H, 6);
+    // Gold border
+    msgBg.lineStyle(2, 0xffd700, 0.8);
+    msgBg.strokeRoundedRect(6, MSG_Y, W - 12, MSG_H, 6);
+    // Inner highlight
+    msgBg.lineStyle(1, 0xffd700, 0.12);
+    msgBg.strokeRoundedRect(8, MSG_Y + 2, W - 16, MSG_H - 4, 4);
+
+    this.messageText = this.add.text(20, MSG_Y + 14, '', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '7px',
+      color: '#f0f0f0',
+      wordWrap: { width: W - 48 },
+      lineSpacing: 8,
+    }).setDepth(14);
+
+    // Continue indicator (▼)
+    this.msgContinueIndicator = this.add.text(W - 24, MSG_Y + MSG_H - 14, '▼', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '7px',
+      color: '#ffd700',
+    }).setDepth(14).setAlpha(0);
+
+    this.tweens.add({
+      targets: this.msgContinueIndicator,
+      y: MSG_Y + MSG_H - 10,
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  // ── Attack menu ─────────────────────────────────────────────────────────────
 
   private buildAttackMenu(menuY: number, menuH: number): void {
     const W = this.scale.width;
@@ -319,8 +428,8 @@ export class BattleScene extends Phaser.Scene {
 
     const allAttackIds = ['bass-drop', 'echo-wave', 'hook-impact', 'reverb-strike'];
     const cols = 2;
-    const gap = 6;
-    const padX = 10;
+    const gap = 5;
+    const padX = 8;
     const btnW = (W - padX * 2 - gap) / 2;
     const btnH = (menuH - gap) / 2;
     const startX = padX;
@@ -335,62 +444,110 @@ export class BattleScene extends Phaser.Scene {
       const attack = ATTACKS[attackId] as Attack;
       const unlocked = unlockedIds.includes(attackId);
 
-      const container = this.buildAttackButton(x, y, btnW, btnH, attack, unlocked, i);
-      this.attackButtons.push(container);
+      this.buildAttackButton(x, y, btnW, btnH, attack, unlocked, i);
     }
   }
 
   private buildAttackButton(
     x: number, y: number, w: number, h: number,
     attack: Attack, unlocked: boolean, index: number
-  ): Phaser.GameObjects.Container {
-    const alpha = unlocked ? 1 : 0.35;
-    const borderColor = unlocked ? attack.color : 0x222244;
+  ): void {
     const colorHex = '#' + attack.color.toString(16).padStart(6, '0');
 
-    const drawBg = (g: Phaser.GameObjects.Graphics, fill: number, a: number, bColor: number, inner?: boolean) => {
+    const drawBtn = (g: Phaser.GameObjects.Graphics, hover: boolean) => {
       g.clear();
-      g.fillStyle(fill, a);
-      g.fillRect(0, 0, w, h);
-      g.lineStyle(2, bColor);
-      g.strokeRect(0, 0, w, h);
-      if (inner) {
-        g.lineStyle(1, 0xffd700, 0.35);
-        g.strokeRect(2, 2, w - 4, h - 4);
-      }
-      // left color accent bar
+      const baseAlpha = unlocked ? (hover ? 0.95 : 0.85) : 0.35;
+      const fillColor = unlocked ? (hover ? 0x1a0e40 : 0x0e0828) : 0x080414;
+      const bColor = unlocked ? attack.color : 0x222244;
+      const bAlpha = unlocked ? (hover ? 1 : 0.7) : 0.3;
+      const bWidth = hover ? 2.5 : 1.5;
+
+      // Main background
+      g.fillStyle(fillColor, baseAlpha);
+      g.fillRoundedRect(0, 0, w, h, 5);
+
+      // Border
+      g.lineStyle(bWidth, bColor, bAlpha);
+      g.strokeRoundedRect(0, 0, w, h, 5);
+
       if (unlocked) {
-        g.fillStyle(bColor, 0.6);
-        g.fillRect(0, 0, 3, h);
+        // Left accent bar
+        g.fillStyle(attack.color, hover ? 0.8 : 0.5);
+        g.fillRoundedRect(0, 0, 4, h, { tl: 5, bl: 5, tr: 0, br: 0 });
+
+        // Top-left color glow
+        g.fillStyle(attack.color, hover ? 0.12 : 0.05);
+        g.fillRoundedRect(0, 0, w * 0.5, h * 0.5, { tl: 5, tr: 0, bl: 0, br: 0 });
+
+        if (hover) {
+          // Inner glow line
+          g.lineStyle(1, bColor, 0.25);
+          g.strokeRoundedRect(2, 2, w - 4, h - 4, 3);
+        }
       }
     };
 
     const bg = this.add.graphics();
-    drawBg(bg, 0x0a001a, alpha, borderColor);
+    drawBtn(bg, false);
 
+    // Attack type icon (small pixel glyph)
+    const iconRows = ATTACK_ICONS[attack.id] || [];
+    const icon = this.add.graphics();
+    if (unlocked) {
+      const iconX = w - 34;
+      const iconY = Math.floor(h * 0.14);
+      const pixelSize = 2;
+      iconRows.forEach((row, ry) => {
+        [...row].forEach((ch, rx) => {
+          if (ch === '█') {
+            icon.fillStyle(attack.color, 0.4);
+            icon.fillRect(iconX + rx * pixelSize, iconY + ry * pixelSize, pixelSize, pixelSize);
+          }
+        });
+      });
+    }
+
+    // Attack name
     const nameText = this.add.text(12, Math.floor(h * 0.18), attack.name, {
       fontFamily: '"Press Start 2P"',
       fontSize: '8px',
-      color: unlocked ? colorHex : '#444466',
+      color: unlocked ? colorHex : '#333355',
     });
+    if (unlocked) {
+      nameText.setShadow(1, 1, '#000000', 2);
+    }
 
-    const dmgText = this.add.text(12, Math.floor(h * 0.60), unlocked ? `DMG: ${attack.damage}` : '???', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: unlocked ? '#999999' : '#333355',
-    });
+    // Damage + description
+    const subText = this.add.text(12, Math.floor(h * 0.55),
+      unlocked ? `DMG ${attack.damage}` : '???',
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '6px',
+        color: unlocked ? '#aaaaaa' : '#222244',
+      }
+    );
 
-    const lockText = unlocked ? null : this.add.text(w - 10, Math.floor(h * 0.18), `LV.${attack.unlockLevel}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#555577',
-    }).setOrigin(1, 0);
+    // Lock indicator or description
+    const extraText = unlocked
+      ? this.add.text(12, Math.floor(h * 0.78), attack.description.slice(0, 32), {
+          fontFamily: '"Press Start 2P"',
+          fontSize: '5px',
+          color: '#555577',
+          wordWrap: { width: w - 24 },
+        })
+      : this.add.text(w / 2, h / 2, `🔒 LV.${attack.unlockLevel}`, {
+          fontFamily: '"Press Start 2P"',
+          fontSize: '7px',
+          color: '#444466',
+        }).setOrigin(0.5);
 
-    const parts: Phaser.GameObjects.GameObject[] = [bg, nameText, dmgText];
-    if (lockText) parts.push(lockText);
+    const parts: Phaser.GameObjects.GameObject[] = [bg, icon, nameText, subText, extraText];
 
     const container = this.add.container(x, y, parts);
     container.setDepth(15);
+
+    const entry = { container, bg, attack, unlocked };
+    this.attackButtons.push(entry);
 
     if (unlocked) {
       container.setInteractive(
@@ -400,12 +557,14 @@ export class BattleScene extends Phaser.Scene {
 
       container.on('pointerover', () => {
         if (!this.inputBlocked) {
-          drawBg(bg, 0x180838, 1, attack.color, true);
+          drawBtn(bg, true);
+          nameText.setColor('#ffffff');
         }
       });
 
       container.on('pointerout', () => {
-        drawBg(bg, 0x0a001a, 1, attack.color);
+        drawBtn(bg, false);
+        nameText.setColor(colorHex);
       });
 
       container.on('pointerdown', () => {
@@ -414,8 +573,6 @@ export class BattleScene extends Phaser.Scene {
         }
       });
     }
-
-    return container;
   }
 
   // ── Battle logic ──────────────────────────────────────────────────────────
@@ -433,19 +590,29 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private setAttackButtonsEnabled(enabled: boolean): void {
-    this.attackButtons.forEach(btn => btn.setAlpha(enabled ? 1 : 0.55));
+    this.attackButtons.forEach(btn => {
+      btn.container.setAlpha(enabled ? 1 : 0.5);
+    });
   }
 
   private executePlayerAttack(attack: Attack, btnIndex: number): void {
     this.setTurnState('player-attack');
 
-    // Button flash
+    // Button press animation
     const btn = this.attackButtons[btnIndex];
     this.tweens.add({
-      targets: btn,
-      scaleX: 1.06, scaleY: 1.06,
-      duration: 80,
+      targets: btn.container,
+      scaleX: 0.95, scaleY: 0.95,
+      duration: 60,
       yoyo: true,
+      onYoyo: () => {
+        this.tweens.add({
+          targets: btn.container,
+          scaleX: 1.03, scaleY: 1.03,
+          duration: 80,
+          yoyo: true,
+        });
+      },
     });
 
     const damage = applyDamageVariance(attack.damage);
@@ -456,19 +623,22 @@ export class BattleScene extends Phaser.Scene {
       this.updateEnemyHpBar();
       this.showFloatingDamage(damage, this.enemySprite.x, this.enemySprite.y - 30, attack.color);
 
-      // Enemy hit reaction: flash white + horizontal shake + slight knockback
+      // Enemy hit reaction: flash white + horizontal shake
       const origX = this.enemySprite.x;
       this.enemySprite.setTint(0xffffff);
-      this.time.delayedCall(60, () => this.enemySprite.clearTint());
+      this.time.delayedCall(80, () => this.enemySprite.clearTint());
       this.tweens.add({
         targets: this.enemySprite,
-        x: origX + 8,
-        duration: 40,
+        x: origX + 10,
+        duration: 35,
         yoyo: true,
-        repeat: 3,
+        repeat: 4,
         ease: 'Sine.easeInOut',
         onComplete: () => { this.enemySprite.x = origX; },
       });
+
+      // Brief red flash on the screen
+      this.cameras.main.flash(100, 255, 255, 255, false);
 
       // Check boss phase transition
       if (this.isBoss) {
@@ -505,9 +675,10 @@ export class BattleScene extends Phaser.Scene {
     this.setMessage(`${this.enemyData.name}\nuses ${attack.name}!`);
 
     this.time.delayedCall(600, () => {
-      this.playEnemyAttackAnimation(() => {
+      this.playEnemyAttackAnimation(attack, () => {
         store.takeDamage(damage);
-        EventBus.emit(EVENTS.HP_CHANGED, store.hp);
+        const currentHp = useGameStore.getState().hp;
+        EventBus.emit(EVENTS.HP_CHANGED, currentHp);
         this.updatePlayerHpBar();
         this.showFloatingDamage(damage, this.playerSprite.x, this.playerSprite.y - 30, 0xe03030);
 
@@ -517,16 +688,19 @@ export class BattleScene extends Phaser.Scene {
         this.time.delayedCall(100, () => this.playerSprite.clearTint());
         this.tweens.add({
           targets: this.playerSprite,
-          x: origX - 6,
-          duration: 40,
+          x: origX - 8,
+          duration: 35,
           yoyo: true,
-          repeat: 3,
+          repeat: 4,
           ease: 'Sine.easeInOut',
           onComplete: () => { this.playerSprite.x = origX; },
         });
 
+        // Red screen flash on hit
+        this.cameras.main.flash(120, 180, 30, 30, false);
+
         this.time.delayedCall(700, () => {
-          if (store.hp <= 0) {
+          if (currentHp <= 0) {
             this.endBattle('lose');
           } else {
             this.setTurnState('player-choose');
@@ -553,6 +727,32 @@ export class BattleScene extends Phaser.Scene {
     this.phaseText.setText(phaseLabels[phaseIdx]);
     this.phaseText.setColor(phaseColors[phaseIdx]);
     this.enemySprite.setTexture(textureKeys[phaseIdx]);
+
+    // Phase change visual: big text overlay
+    const W = this.scale.width;
+    const phaseAnnounce = this.add.text(W / 2, this.battleH * 0.4, phaseLabels[phaseIdx], {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '16px',
+      color: phaseColors[phaseIdx],
+    }).setOrigin(0.5).setDepth(28).setAlpha(0).setScale(2);
+
+    this.tweens.add({
+      targets: phaseAnnounce,
+      alpha: 1,
+      scaleX: 1, scaleY: 1,
+      duration: 400,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: phaseAnnounce,
+          alpha: 0,
+          y: this.battleH * 0.3,
+          duration: 600,
+          delay: 600,
+          onComplete: () => phaseAnnounce.destroy(),
+        });
+      },
+    });
 
     this.setMessage(phaseMessages[phaseIdx]);
 
@@ -581,7 +781,6 @@ export class BattleScene extends Phaser.Scene {
         yoyo: true,
         repeat: 3,
         onComplete: () => {
-          // Shrink + spin out
           this.tweens.add({
             targets: this.enemySprite,
             scaleX: 0,
@@ -590,7 +789,6 @@ export class BattleScene extends Phaser.Scene {
             duration: 500,
             ease: 'Back.easeIn',
           });
-          // Burst particles outward
           this.spawnDefeatParticles(this.enemySprite.x, this.enemySprite.y);
         },
       });
@@ -625,6 +823,15 @@ export class BattleScene extends Phaser.Scene {
       this.setMessage('You were overcome\nby the silence...');
       this.cameras.main.shake(500, 0.01);
 
+      // Player sprite fades and drops
+      this.tweens.add({
+        targets: this.playerSprite,
+        alpha: 0,
+        y: this.playerSprite.y + 20,
+        duration: 800,
+        ease: 'Quad.easeIn',
+      });
+
       this.time.delayedCall(1800, () => {
         this.cameras.main.fadeOut(600);
         this.time.delayedCall(600, () => {
@@ -635,31 +842,6 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  // ── HP bars (Pokémon pill style) ──────────────────────────────────────────
-
-  private hpColor(frac: number): number {
-    if (frac > 0.5) return 0x40c040;
-    if (frac > 0.25) return 0xe0c000;
-    return 0xe03030;
-  }
-
-  private updateEnemyHpBar(): void {
-    const frac  = Math.max(0, this.currentEnemyHp / this.enemyData.maxHp);
-    const totalW = (this.enemyHpBg.width);
-    this.enemyHpBar.setSize(totalW * frac, 7);
-    this.enemyHpBar.setFillStyle(this.hpColor(frac));
-    this.enemyHpText.setText(`${this.currentEnemyHp}/${this.enemyData.maxHp}`);
-  }
-
-  private updatePlayerHpBar(): void {
-    const store  = useGameStore.getState();
-    const frac   = Math.max(0, store.hp / store.maxHp);
-    const totalW = (this.playerHpBg.width);
-    this.playerHpBar.setSize(totalW * frac, 7);
-    this.playerHpBar.setFillStyle(this.hpColor(frac));
-    this.playerHpText.setText(`${store.hp}/${store.maxHp}`);
-  }
-
   // ── Message box typewriter ────────────────────────────────────────────────
 
   private setMessage(text: string): void {
@@ -667,16 +849,20 @@ export class BattleScene extends Phaser.Scene {
     this.fullMessageText = text;
     this.typewriterTimer?.remove();
     this.messageText.setText('');
+    this.msgContinueIndicator.setAlpha(0);
 
     let charIndex = 0;
     this.typewriterTimer = this.time.addEvent({
-      delay: 28,
+      delay: 25,
       repeat: text.length - 1,
       callback: () => {
         charIndex++;
         this.messageText.setText(text.slice(0, charIndex));
         if (charIndex >= text.length) {
           this.messageReady = true;
+          if (this.turnState !== 'player-choose') {
+            this.msgContinueIndicator.setAlpha(0.8);
+          }
         }
       },
     });
@@ -688,7 +874,7 @@ export class BattleScene extends Phaser.Scene {
     this.messageReady = true;
   }
 
-  // ── Attack animations ─────────────────────────────────────────────────────
+  // ── Player attack animations ──────────────────────────────────────────────
 
   private playPlayerAttackAnimation(attack: Attack, onComplete: () => void): void {
     const W = this.scale.width;
@@ -701,233 +887,453 @@ export class BattleScene extends Phaser.Scene {
     switch (attack.id) {
 
       // ── BASS DROP ─────────────────────────────────────────────────────
-      // Deep sonic shockwave: player stomps → bass rings travel to enemy
+      // Heavy slam: player jumps up → slams down → ground crack travels →
+      // massive shockwave + vertical pillar at enemy
       case 'bass-drop': {
-        // Player wind-up: bob down then up
+        // Phase 1: Player jumps up (wind-up)
         this.tweens.add({
           targets: this.playerSprite,
-          y: pY + 4,
-          duration: 100,
-          yoyo: true,
-          ease: 'Quad.easeIn',
-        });
+          y: pY - 18,
+          scaleX: 5.3, scaleY: 5.3,
+          duration: 200,
+          ease: 'Quad.easeOut',
+          onComplete: () => {
+            // Phase 2: SLAM DOWN hard
+            this.tweens.add({
+              targets: this.playerSprite,
+              y: pY + 4,
+              scaleX: 4.7, scaleY: 4.7,
+              duration: 80,
+              ease: 'Quad.easeIn',
+              onComplete: () => {
+                // Reset player
+                this.tweens.add({ targets: this.playerSprite, y: pY, scaleX: 5, scaleY: 5, duration: 200 });
 
-        this.time.delayedCall(120, () => {
-          // Shoot a projectile orb from player → enemy
-          const orb = this.add.graphics().setDepth(20);
-          const orbObj = { x: pX, y: pY - 10, r: 6 };
-          const orbTween = this.tweens.add({
-            targets: orbObj,
-            x: eX,
-            y: eY,
-            duration: 280,
-            ease: 'Quad.easeIn',
-            onUpdate: () => {
-              orb.clear();
-              // Trailing glow
-              orb.fillStyle(color, 0.2);
-              orb.fillCircle(orbObj.x, orbObj.y, 14);
-              orb.fillStyle(color, 0.6);
-              orb.fillCircle(orbObj.x, orbObj.y, 8);
-              orb.fillStyle(0xffffff, 0.9);
-              orb.fillCircle(orbObj.x, orbObj.y, 3);
-            },
-            onComplete: () => {
-              orb.destroy();
-              // Impact: concentric bass rings expanding at enemy
-              const rings = this.add.graphics().setDepth(20);
-              const ringState = { t: 0 };
-              const ringAnim = this.time.addEvent({
-                delay: 16,
-                repeat: 25,
-                callback: () => {
-                  ringState.t++;
-                  rings.clear();
-                  for (let i = 0; i < 3; i++) {
-                    const r = ringState.t * 7 - i * 16;
-                    if (r > 0 && r < 120) {
-                      const alpha = 1 - r / 120;
-                      rings.lineStyle(3 - i * 0.5, color, alpha);
-                      rings.strokeCircle(eX, eY, r);
+                this.cameras.main.shake(300, 0.012);
+
+                // Ground crack line from player to enemy
+                const crack = this.add.graphics().setDepth(19);
+                const crackState = { headX: pX };
+                const crackY = this.battleH * 0.88;
+                this.tweens.add({
+                  targets: crackState,
+                  headX: eX,
+                  duration: 200,
+                  ease: 'Quad.easeIn',
+                  onUpdate: () => {
+                    crack.clear();
+                    // Jagged crack
+                    crack.lineStyle(3, color, 0.8);
+                    crack.beginPath();
+                    crack.moveTo(pX, crackY);
+                    const segs = 12;
+                    for (let i = 1; i <= segs; i++) {
+                      const fx = pX + (crackState.headX - pX) * (i / segs);
+                      if (fx > crackState.headX) break;
+                      const jy = crackY + ((i % 2 === 0 ? 1 : -1) * (3 + Math.random() * 4));
+                      crack.lineTo(fx, jy);
                     }
-                  }
-                },
-              });
-              // Vertical impact line below enemy
-              const impactLine = this.add.graphics().setDepth(19);
-              impactLine.fillStyle(color, 0.4);
-              impactLine.fillRect(eX - 2, eY + 10, 4, this.battleH - eY);
-              this.tweens.add({
-                targets: impactLine,
-                alpha: 0,
-                duration: 350,
-                onComplete: () => impactLine.destroy(),
-              });
+                    crack.strokePath();
+                    // Glow around crack
+                    crack.lineStyle(10, color, 0.1);
+                    crack.beginPath();
+                    crack.moveTo(pX, crackY);
+                    crack.lineTo(crackState.headX, crackY);
+                    crack.strokePath();
+                  },
+                  onComplete: () => {
+                    this.tweens.add({ targets: crack, alpha: 0, duration: 500, onComplete: () => crack.destroy() });
 
-              this.cameras.main.shake(200, 0.007);
-              this.time.delayedCall(420, () => { rings.destroy(); onComplete(); });
-            },
-          });
+                    // Phase 3: Vertical pillar of bass energy at enemy
+                    const pillar = this.add.graphics().setDepth(20);
+                    const pillarState = { h: 0, alpha: 1 };
+                    this.tweens.add({
+                      targets: pillarState,
+                      h: this.battleH,
+                      duration: 150,
+                      ease: 'Quad.easeOut',
+                      onUpdate: () => {
+                        pillar.clear();
+                        const topY = eY - pillarState.h / 2;
+                        // Wide glow
+                        pillar.fillStyle(color, 0.08);
+                        pillar.fillRect(eX - 30, topY, 60, pillarState.h);
+                        // Medium fill
+                        pillar.fillStyle(color, 0.25);
+                        pillar.fillRect(eX - 14, topY, 28, pillarState.h);
+                        // Core beam
+                        pillar.fillStyle(color, 0.6);
+                        pillar.fillRect(eX - 5, topY, 10, pillarState.h);
+                        // White center
+                        pillar.fillStyle(0xffffff, 0.5);
+                        pillar.fillRect(eX - 2, topY, 4, pillarState.h);
+                      },
+                    });
+
+                    // Shockwave rings at enemy
+                    for (let ring = 0; ring < 4; ring++) {
+                      const r = this.add.graphics().setDepth(21);
+                      r.lineStyle(3 - ring * 0.5, color, 0.7);
+                      r.strokeCircle(0, 0, 8);
+                      r.setPosition(eX, eY);
+                      r.setScale(0.5);
+                      this.tweens.add({
+                        targets: r,
+                        scaleX: 5 + ring * 1.5,
+                        scaleY: 3 + ring,
+                        alpha: 0,
+                        duration: 400 + ring * 80,
+                        delay: ring * 60,
+                        onComplete: () => r.destroy(),
+                      });
+                    }
+
+                    // Bass note symbol
+                    const note = this.add.text(eX, eY - 20, '♩', {
+                      fontFamily: 'serif', fontSize: '28px', color: '#ffffff',
+                    }).setOrigin(0.5).setDepth(22).setAlpha(0.9);
+                    this.tweens.add({
+                      targets: note,
+                      y: eY - 60, alpha: 0, scaleX: 2, scaleY: 2,
+                      duration: 500, ease: 'Quad.easeOut',
+                      onComplete: () => note.destroy(),
+                    });
+
+                    // Ground debris particles
+                    for (let d = 0; d < 8; d++) {
+                      const debris = this.add.graphics().setDepth(20);
+                      debris.fillStyle(d % 2 === 0 ? color : 0xffffff);
+                      debris.fillRect(-2, -2, 4, 3);
+                      debris.setPosition(eX + Phaser.Math.Between(-20, 20), eY + 15);
+                      this.tweens.add({
+                        targets: debris,
+                        y: eY - 20 - Math.random() * 40,
+                        x: debris.x + Phaser.Math.Between(-30, 30),
+                        alpha: 0,
+                        duration: 500,
+                        ease: 'Quad.easeOut',
+                        onComplete: () => debris.destroy(),
+                      });
+                    }
+
+                    this.time.delayedCall(450, () => {
+                      this.tweens.add({ targets: pillar, alpha: 0, duration: 200, onComplete: () => pillar.destroy() });
+                      onComplete();
+                    });
+                  },
+                });
+              },
+            });
+          },
         });
         break;
       }
 
       // ── ECHO WAVE ─────────────────────────────────────────────────────
-      // Two sonic crescents ripple across the battlefield
+      // Sonic crescents: player pushes forward → two arc-shaped sound waves
+      // sweep across the field → each explodes on impact with echo ripples
       case 'echo-wave': {
-        const fireWave = (index: number, onDone: () => void) => {
-          const wave = this.add.graphics().setDepth(20);
-          const amplitude = 12 + index * 6;
-          const thickness = 2 + index;
-          const waveState = { progress: 0, headX: pX };
+        // Player push motion
+        this.tweens.add({
+          targets: this.playerSprite,
+          x: pX + 12,
+          duration: 100,
+          yoyo: true,
+          ease: 'Quad.easeOut',
+        });
+
+        const fireCrescent = (index: number, onDone: () => void) => {
+          const crescent = this.add.graphics().setDepth(20 + index);
+          const trail = this.add.graphics().setDepth(19 + index);
+          const midY = (pY + eY) / 2;
+          const arcState = { progress: 0 };
+          const crescentScale = 1 + index * 0.4;
+
+          // Trailing particles
+          const trailDots: { x: number; y: number; alpha: number }[] = [];
 
           this.tweens.add({
-            targets: waveState,
-            headX: eX + 20,
-            duration: 320,
-            ease: 'Sine.easeOut',
+            targets: arcState,
+            progress: 1,
+            duration: 350 - index * 30,
+            ease: 'Quad.easeIn',
             onUpdate: () => {
-              waveState.progress += 0.35;
-              wave.clear();
+              const t = arcState.progress;
+              const headX = pX + (eX - pX) * t;
+              const headY = midY + Math.sin(t * Math.PI) * (-25 * crescentScale);
 
-              // Draw sine wave trail from player to head
-              wave.lineStyle(thickness, color, 0.85);
-              wave.beginPath();
-              const startX = Math.max(pX - 10, waveState.headX - 120);
-              let first = true;
-              for (let x = startX; x <= waveState.headX; x += 3) {
-                const distFromHead = waveState.headX - x;
-                const fade = Math.min(1, distFromHead / 60);
-                const waveY = eY + Math.sin(x * 0.06 + waveState.progress) * amplitude * (1 - fade * 0.5);
-                if (first) { wave.moveTo(x, waveY); first = false; }
-                else wave.lineTo(x, waveY);
+              crescent.clear();
+              trail.clear();
+
+              // Draw crescent arc (opening facing right)
+              const arcRadius = 18 * crescentScale;
+              crescent.lineStyle(4 * crescentScale, color, 0.9);
+              crescent.beginPath();
+              for (let a = -0.6; a <= 0.6; a += 0.08) {
+                const cx = headX + Math.cos(a + Math.PI) * arcRadius;
+                const cy = headY + Math.sin(a) * arcRadius * 1.6;
+                if (a === -0.6) crescent.moveTo(cx, cy);
+                else crescent.lineTo(cx, cy);
               }
-              wave.strokePath();
+              crescent.strokePath();
 
-              // Glowing head
-              wave.fillStyle(0xffffff, 0.8);
-              wave.fillCircle(waveState.headX, eY + Math.sin(waveState.headX * 0.06 + waveState.progress) * amplitude, 4);
+              // Inner bright crescent
+              crescent.lineStyle(1.5 * crescentScale, 0xffffff, 0.7);
+              crescent.beginPath();
+              for (let a = -0.4; a <= 0.4; a += 0.08) {
+                const cx = headX + Math.cos(a + Math.PI) * (arcRadius * 0.7);
+                const cy = headY + Math.sin(a) * arcRadius * 1.2;
+                if (a === -0.4) crescent.moveTo(cx, cy);
+                else crescent.lineTo(cx, cy);
+              }
+              crescent.strokePath();
+
+              // Outer glow
+              crescent.fillStyle(color, 0.08);
+              crescent.fillCircle(headX, headY, arcRadius * 2);
+
+              // Trail particles
+              if (Math.random() < 0.5) {
+                trailDots.push({ x: headX - 10 + Math.random() * 5, y: headY + (Math.random() - 0.5) * 16, alpha: 0.6 });
+              }
+              trailDots.forEach(dot => {
+                dot.alpha -= 0.04;
+                if (dot.alpha > 0) {
+                  trail.fillStyle(color, dot.alpha);
+                  trail.fillCircle(dot.x, dot.y, 2);
+                }
+              });
             },
             onComplete: () => {
+              crescent.destroy();
+              trail.destroy();
+
               // Impact burst at enemy
-              const burst = this.add.graphics().setDepth(21);
-              burst.fillStyle(color, 0.7);
-              burst.fillCircle(eX, eY, 16);
-              burst.fillStyle(0xffffff, 0.5);
-              burst.fillCircle(eX, eY, 6);
+              const impact = this.add.graphics().setDepth(22);
+              // Central flash
+              impact.fillStyle(0xffffff, 0.7);
+              impact.fillCircle(eX, eY, 10 * crescentScale);
+              impact.fillStyle(color, 0.5);
+              impact.fillCircle(eX, eY, 20 * crescentScale);
+
+              // Echo ripples expanding outward
+              for (let r = 0; r < 3; r++) {
+                const ripple = this.add.graphics().setDepth(21);
+                ripple.lineStyle(2, color, 0.6);
+                ripple.strokeCircle(0, 0, 8);
+                ripple.setPosition(eX, eY);
+                this.tweens.add({
+                  targets: ripple,
+                  scaleX: 3 + r, scaleY: 3 + r,
+                  alpha: 0,
+                  duration: 350,
+                  delay: r * 80,
+                  onComplete: () => ripple.destroy(),
+                });
+              }
+
+              // Musical note scatter
+              const noteChars = ['♪', '♫'];
+              for (let n = 0; n < 3; n++) {
+                const nt = this.add.text(eX, eY, noteChars[n % 2], {
+                  fontFamily: 'serif', fontSize: '10px',
+                  color: n === 0 ? '#ffffff' : '#' + color.toString(16).padStart(6, '0'),
+                }).setOrigin(0.5).setDepth(23);
+                const na = Math.random() * Math.PI * 2;
+                this.tweens.add({
+                  targets: nt,
+                  x: eX + Math.cos(na) * 30, y: eY + Math.sin(na) * 30 - 10,
+                  alpha: 0, duration: 400,
+                  onComplete: () => nt.destroy(),
+                });
+              }
+
               this.tweens.add({
-                targets: burst,
-                alpha: 0,
-                scaleX: 2, scaleY: 2,
-                duration: 250,
-                onComplete: () => { burst.destroy(); wave.destroy(); onDone(); },
+                targets: impact,
+                alpha: 0, scaleX: 2, scaleY: 2,
+                duration: 300,
+                onComplete: () => { impact.destroy(); onDone(); },
               });
+
+              if (index === 0) this.cameras.main.shake(120, 0.004);
+              else this.cameras.main.shake(200, 0.008);
             },
           });
         };
 
-        fireWave(0, () => {
-          this.time.delayedCall(80, () => {
-            fireWave(1, onComplete);
+        this.time.delayedCall(100, () => {
+          fireCrescent(0, () => {
+            this.time.delayedCall(120, () => {
+              fireCrescent(1, onComplete);
+            });
           });
         });
         break;
       }
 
       // ── HOOK IMPACT ───────────────────────────────────────────────────
-      // Sharp melodic strike: quick slashes converge → star burst + sparks
+      // Sharp melodic strike: player dashes with afterimage → freeze-frame →
+      // X-slash materializes → starburst explosion + sparks rain
       case 'hook-impact': {
-        // Brief charge flash at player
-        const chargeFlash = this.add.graphics().setDepth(20);
-        chargeFlash.fillStyle(0xffffff, 0.6);
-        chargeFlash.fillCircle(pX, pY - 10, 10);
+        // Phase 1: Screen briefly dims
+        const dim = this.add.graphics().setDepth(18);
+        dim.fillStyle(0x000000, 0.3);
+        dim.fillRect(0, 0, W, this.battleH + 10);
+        dim.setAlpha(0);
+        this.tweens.add({ targets: dim, alpha: 1, duration: 100 });
+
+        // Phase 2: Player dash with afterimages
+        const afterimages: Phaser.GameObjects.Sprite[] = [];
+        const dashTarget = eX - 40;
+
+        // Create afterimage trail
+        for (let i = 0; i < 4; i++) {
+          this.time.delayedCall(i * 30, () => {
+            const ghost = this.add.sprite(this.playerSprite.x, this.playerSprite.y, 'player-up-0');
+            ghost.setScale(5).setDepth(19).setAlpha(0.4 - i * 0.08).setTint(color);
+            afterimages.push(ghost);
+            this.tweens.add({ targets: ghost, alpha: 0, duration: 300, delay: 60, onComplete: () => ghost.destroy() });
+          });
+        }
+
+        // Dash player forward
         this.tweens.add({
-          targets: chargeFlash,
-          alpha: 0,
-          scaleX: 0.1, scaleY: 0.1,
+          targets: this.playerSprite,
+          x: dashTarget,
           duration: 120,
-          onComplete: () => chargeFlash.destroy(),
-        });
+          ease: 'Quad.easeIn',
+          onComplete: () => {
+            // Phase 3: Freeze-frame flash (white overlay blink)
+            this.cameras.main.flash(80, 255, 255, 255, false);
 
-        // Sequential slashes at enemy
-        const slashTimings = [140, 220, 300];
-        const slashAngles = [-35, 35, 0];
-        const slashLen = 50;
-
-        slashTimings.forEach((t, i) => {
-          this.time.delayedCall(t, () => {
-            const slash = this.add.graphics().setDepth(22);
-            const angle = slashAngles[i] * Math.PI / 180;
-            const x1 = eX - Math.cos(angle) * slashLen;
-            const y1 = eY - Math.sin(angle) * slashLen;
-            const x2 = eX + Math.cos(angle) * slashLen;
-            const y2 = eY + Math.sin(angle) * slashLen;
-
-            slash.lineStyle(4, color);
-            slash.lineBetween(x1, y1, x2, y2);
-            // Bright center line
-            slash.lineStyle(2, 0xffffff, 0.7);
-            slash.lineBetween(x1, y1, x2, y2);
+            // Phase 4: X-slash at enemy — animated drawing
+            const xSlash = this.add.graphics().setDepth(23);
+            const slashState = { t: 0 };
+            const slashLen = 55;
 
             this.tweens.add({
-              targets: slash,
-              alpha: 0,
-              duration: 250,
-              delay: 60,
-              onComplete: () => slash.destroy(),
-            });
-          });
-        });
-
-        // Impact star + sparks at convergence
-        this.time.delayedCall(340, () => {
-          this.cameras.main.shake(180, 0.008);
-
-          // Star burst
-          const star = this.add.graphics().setDepth(23);
-          for (let a = 0; a < 8; a++) {
-            const angle = (a / 8) * Math.PI * 2;
-            star.lineStyle(2, 0xffffff, 0.9);
-            star.lineBetween(
-              eX, eY,
-              eX + Math.cos(angle) * 20, eY + Math.sin(angle) * 20
-            );
-          }
-          this.tweens.add({
-            targets: star,
-            alpha: 0,
-            scaleX: 1.8, scaleY: 1.8,
-            duration: 300,
-            onComplete: () => star.destroy(),
-          });
-
-          // Sparks flying outward
-          for (let s = 0; s < 8; s++) {
-            const spark = this.add.graphics().setDepth(22);
-            spark.fillStyle(s % 2 === 0 ? color : 0xffffff);
-            spark.fillRect(-2, -2, 4, 4);
-            spark.setPosition(eX, eY);
-            const angle = (s / 8) * Math.PI * 2 + Math.random() * 0.4;
-            const dist = 30 + Math.random() * 25;
-            this.tweens.add({
-              targets: spark,
-              x: eX + Math.cos(angle) * dist,
-              y: eY + Math.sin(angle) * dist,
-              alpha: 0,
-              duration: 350,
+              targets: slashState,
+              t: 1,
+              duration: 120,
               ease: 'Quad.easeOut',
-              onComplete: () => spark.destroy(),
-            });
-          }
+              onUpdate: () => {
+                xSlash.clear();
+                const progress = slashState.t;
+                const len = slashLen * progress;
 
-          this.time.delayedCall(380, onComplete);
+                // Slash 1: top-left to bottom-right
+                // Glow
+                xSlash.lineStyle(12, color, 0.15 * progress);
+                xSlash.lineBetween(eX - len, eY - len, eX + len, eY + len);
+                // Main
+                xSlash.lineStyle(4, color, 0.9);
+                xSlash.lineBetween(eX - len, eY - len, eX + len, eY + len);
+                // White core
+                xSlash.lineStyle(1.5, 0xffffff, 0.8);
+                xSlash.lineBetween(eX - len, eY - len, eX + len, eY + len);
+
+                // Slash 2: top-right to bottom-left
+                xSlash.lineStyle(12, color, 0.15 * progress);
+                xSlash.lineBetween(eX + len, eY - len, eX - len, eY + len);
+                xSlash.lineStyle(4, color, 0.9);
+                xSlash.lineBetween(eX + len, eY - len, eX - len, eY + len);
+                xSlash.lineStyle(1.5, 0xffffff, 0.8);
+                xSlash.lineBetween(eX + len, eY - len, eX - len, eY + len);
+              },
+              onComplete: () => {
+                // Slash linger + fade
+                this.tweens.add({
+                  targets: xSlash,
+                  alpha: 0, duration: 350, delay: 100,
+                  onComplete: () => xSlash.destroy(),
+                });
+              },
+            });
+
+            // Phase 5: Impact — starburst + sparks (slight delay for drama)
+            this.time.delayedCall(100, () => {
+              this.cameras.main.shake(250, 0.012);
+
+              // Central starburst
+              const star = this.add.graphics().setDepth(24);
+              // 12-point star
+              for (let a = 0; a < 12; a++) {
+                const angle = (a / 12) * Math.PI * 2;
+                const len = a % 2 === 0 ? 30 : 16;
+                star.lineStyle(a % 2 === 0 ? 2.5 : 1.5, 0xffffff, 0.9);
+                star.lineBetween(eX, eY, eX + Math.cos(angle) * len, eY + Math.sin(angle) * len);
+              }
+              // Central flash layers
+              star.fillStyle(0xffffff, 0.9);
+              star.fillCircle(eX, eY, 10);
+              star.fillStyle(color, 0.6);
+              star.fillCircle(eX, eY, 18);
+              star.fillStyle(color, 0.2);
+              star.fillCircle(eX, eY, 30);
+
+              this.tweens.add({
+                targets: star,
+                alpha: 0, scaleX: 1.5, scaleY: 1.5,
+                duration: 400,
+                onComplete: () => star.destroy(),
+              });
+
+              // Spark shower (raining down from impact point)
+              for (let s = 0; s < 14; s++) {
+                const spark = this.add.graphics().setDepth(22);
+                const isWhite = s % 3 === 0;
+                spark.fillStyle(isWhite ? 0xffffff : color);
+                const size = 1.5 + Math.random() * 2;
+                spark.fillRect(-size / 2, -size / 2, size, size);
+                spark.setPosition(eX + Phaser.Math.Between(-15, 15), eY + Phaser.Math.Between(-15, 15));
+                const angle = (s / 14) * Math.PI * 2 + Math.random() * 0.5;
+                const dist = 30 + Math.random() * 40;
+                this.tweens.add({
+                  targets: spark,
+                  x: eX + Math.cos(angle) * dist,
+                  y: eY + Math.sin(angle) * dist + 15,
+                  alpha: 0,
+                  duration: 450 + Math.random() * 200,
+                  ease: 'Quad.easeOut',
+                  onComplete: () => spark.destroy(),
+                });
+              }
+
+              // Musical hook symbol
+              const hookNote = this.add.text(eX, eY - 8, '♯', {
+                fontFamily: 'serif', fontSize: '22px', color: '#ffffff',
+              }).setOrigin(0.5).setDepth(25).setAlpha(0.9);
+              this.tweens.add({
+                targets: hookNote,
+                y: eY - 50, alpha: 0, scaleX: 1.5, scaleY: 1.5,
+                duration: 500, ease: 'Quad.easeOut',
+                onComplete: () => hookNote.destroy(),
+              });
+            });
+
+            // Player returns
+            this.tweens.add({
+              targets: this.playerSprite,
+              x: pX,
+              duration: 300,
+              delay: 150,
+              ease: 'Quad.easeOut',
+            });
+
+            // Dim fades
+            this.tweens.add({
+              targets: dim,
+              alpha: 0, duration: 400, delay: 250,
+              onComplete: () => dim.destroy(),
+            });
+
+            this.time.delayedCall(500, onComplete);
+          },
         });
         break;
       }
 
       // ── REVERB STRIKE ─────────────────────────────────────────────────
-      // Ultimate resonance: screen dims → pulsing rings from player →
-      // rings accelerate to enemy → massive explosion + screen flash
       case 'reverb-strike': {
         // Phase 1: Screen dims
         const dimOverlay = this.add.graphics().setDepth(18);
@@ -935,23 +1341,37 @@ export class BattleScene extends Phaser.Scene {
         dimOverlay.fillRect(0, 0, W, this.battleH + 10);
         this.tweens.add({
           targets: dimOverlay,
-          alpha: 0.45,
-          duration: 250,
+          alpha: 0.5,
+          duration: 300,
+        });
+
+        // Player power-up glow
+        const playerGlow = this.add.graphics().setDepth(19);
+        playerGlow.fillStyle(color, 0.3);
+        playerGlow.fillCircle(pX, pY, 30);
+        playerGlow.fillStyle(0xffffff, 0.15);
+        playerGlow.fillCircle(pX, pY, 20);
+        this.tweens.add({
+          targets: playerGlow,
+          scaleX: 1.5, scaleY: 1.5,
+          alpha: 0,
+          duration: 500,
+          onComplete: () => playerGlow.destroy(),
         });
 
         // Phase 2: Pulsing rings radiate from player
-        this.time.delayedCall(250, () => {
+        this.time.delayedCall(280, () => {
           const chargeRings = this.add.graphics().setDepth(20);
           let chargeT = 0;
-          const chargeAnim = this.time.addEvent({
+          this.time.addEvent({
             delay: 16,
-            repeat: 18,
+            repeat: 20,
             callback: () => {
               chargeT++;
               chargeRings.clear();
-              for (let i = 0; i < 3; i++) {
-                const r = (chargeT * 4 + i * 12) % 50;
-                const alpha = 0.8 - r / 50;
+              for (let i = 0; i < 4; i++) {
+                const r = (chargeT * 3.5 + i * 10) % 50;
+                const alpha = 0.7 - r / 50;
                 chargeRings.lineStyle(2, color, alpha);
                 chargeRings.strokeCircle(pX, pY - 10, r);
               }
@@ -959,7 +1379,7 @@ export class BattleScene extends Phaser.Scene {
           });
 
           // Phase 3: Beam shoots from player to enemy
-          this.time.delayedCall(320, () => {
+          this.time.delayedCall(350, () => {
             chargeRings.destroy();
 
             const beam = this.add.graphics().setDepth(21);
@@ -967,18 +1387,21 @@ export class BattleScene extends Phaser.Scene {
             this.tweens.add({
               targets: beamState,
               headX: eX,
-              duration: 200,
+              duration: 180,
               ease: 'Quad.easeIn',
               onUpdate: () => {
                 beam.clear();
-                // Wide beam trail
-                beam.fillStyle(color, 0.3);
-                beam.fillRect(pX, pY - 18, beamState.headX - pX, 16);
+                // Wide glow trail
+                beam.fillStyle(color, 0.15);
+                beam.fillRect(pX, pY - 22, beamState.headX - pX, 24);
+                // Main beam body
+                beam.fillStyle(color, 0.6);
+                beam.fillRect(pX, pY - 15, beamState.headX - pX, 10);
                 // Core beam
-                beam.fillStyle(color, 0.7);
-                beam.fillRect(pX, pY - 13, beamState.headX - pX, 6);
+                beam.fillStyle(color, 0.85);
+                beam.fillRect(pX, pY - 12, beamState.headX - pX, 4);
                 // White center
-                beam.fillStyle(0xffffff, 0.5);
+                beam.fillStyle(0xffffff, 0.6);
                 beam.fillRect(pX, pY - 11, beamState.headX - pX, 2);
               },
               onComplete: () => {
@@ -989,49 +1412,57 @@ export class BattleScene extends Phaser.Scene {
                 const expState = { r: 5, alpha: 1 };
                 this.time.addEvent({
                   delay: 16,
-                  repeat: 20,
+                  repeat: 22,
                   callback: () => {
-                    expState.r += 6;
+                    expState.r += 5.5;
                     expState.alpha = Math.max(0, 1 - expState.r / 130);
                     explosion.clear();
+                    // Outer glow
+                    explosion.fillStyle(color, expState.alpha * 0.15);
+                    explosion.fillCircle(eX, eY, expState.r * 1.3);
                     // Outer ring
                     explosion.lineStyle(4, color, expState.alpha);
                     explosion.strokeCircle(eX, eY, expState.r);
                     // Inner fill
-                    explosion.fillStyle(0xffffff, expState.alpha * 0.4);
-                    explosion.fillCircle(eX, eY, expState.r * 0.6);
+                    explosion.fillStyle(0xffffff, expState.alpha * 0.35);
+                    explosion.fillCircle(eX, eY, expState.r * 0.5);
                     // Cross flare
                     explosion.lineStyle(2, 0xffffff, expState.alpha * 0.6);
                     explosion.lineBetween(eX - expState.r, eY, eX + expState.r, eY);
                     explosion.lineBetween(eX, eY - expState.r, eX, eY + expState.r);
+                    // Diagonal flare
+                    explosion.lineStyle(1, color, expState.alpha * 0.4);
+                    const d = expState.r * 0.7;
+                    explosion.lineBetween(eX - d, eY - d, eX + d, eY + d);
+                    explosion.lineBetween(eX + d, eY - d, eX - d, eY + d);
                   },
                 });
 
                 // Scatter debris particles
-                for (let p = 0; p < 12; p++) {
+                for (let p = 0; p < 16; p++) {
                   const particle = this.add.graphics().setDepth(22);
                   particle.fillStyle(p % 3 === 0 ? 0xffffff : color);
-                  particle.fillRect(-1, -1, 3, 3);
+                  particle.fillRect(-1.5, -1.5, 3, 3);
                   particle.setPosition(eX, eY);
-                  const angle = (p / 12) * Math.PI * 2;
-                  const dist = 40 + Math.random() * 40;
+                  const angle = (p / 16) * Math.PI * 2;
+                  const dist = 45 + Math.random() * 45;
                   this.tweens.add({
                     targets: particle,
                     x: eX + Math.cos(angle) * dist,
                     y: eY + Math.sin(angle) * dist,
                     alpha: 0,
-                    duration: 500,
+                    duration: 550,
                     ease: 'Quad.easeOut',
                     onComplete: () => particle.destroy(),
                   });
                 }
 
-                this.cameras.main.shake(350, 0.014);
-                this.cameras.main.flash(250,
+                this.cameras.main.shake(400, 0.016);
+                this.cameras.main.flash(300,
                   (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff
                 );
 
-                this.time.delayedCall(500, () => {
+                this.time.delayedCall(550, () => {
                   explosion.destroy();
                   this.tweens.add({
                     targets: dimOverlay,
@@ -1054,48 +1485,99 @@ export class BattleScene extends Phaser.Scene {
 
   // ── Enemy attack animation ──────────────────────────────────────────────
 
-  private playEnemyAttackAnimation(onComplete: () => void): void {
+  private playEnemyAttackAnimation(attack: { name: string; damage: number }, onComplete: () => void): void {
     const origX = this.enemySprite.x;
     const origY = this.enemySprite.y;
     const pX = this.playerSprite.x;
     const pY = this.playerSprite.y;
+    const origScaleX = this.enemySprite.scaleX;
+    const origScaleY = this.enemySprite.scaleY;
 
-    // Enemy lunges toward player
-    const lungeX = origX - (origX - pX) * 0.35;
-    const lungeY = origY + (pY - origY) * 0.25;
+    // Different attack styles based on enemy type
+    const enemyId = this.enemyData.id;
+
+    if (enemyId === 'static-noise' || attack.name.toLowerCase().includes('static')) {
+      // Electric attack — zap bolts
+      this.playZapAttack(origX, origY, pX, pY, onComplete);
+    } else if (enemyId === 'broken-signal' || attack.name.toLowerCase().includes('glitch')) {
+      // Glitch attack — screen corruption effect
+      this.playGlitchAttack(origX, origY, pX, pY, onComplete);
+    } else if (enemyId === 'silence' || attack.name.toLowerCase().includes('void')) {
+      // Void attack — dark wave
+      this.playVoidAttack(origX, origY, pX, pY, onComplete);
+    } else {
+      // Default / boss — enhanced lunge
+      this.playLungeAttack(origX, origY, pX, pY, origScaleX, origScaleY, onComplete);
+    }
+  }
+
+  private playLungeAttack(origX: number, origY: number, pX: number, pY: number, origScaleX: number, origScaleY: number, onComplete: () => void): void {
+    const lungeX = origX - (origX - pX) * 0.4;
+    const lungeY = origY + (pY - origY) * 0.3;
+
+    // Charge glow before lunge
+    const chargeGlow = this.add.graphics().setDepth(19);
+    chargeGlow.fillStyle(0xff4444, 0.3);
+    chargeGlow.fillCircle(origX, origY, 25);
+    this.tweens.add({
+      targets: chargeGlow,
+      alpha: 0,
+      scaleX: 0.3, scaleY: 0.3,
+      duration: 160,
+      onComplete: () => chargeGlow.destroy(),
+    });
 
     this.tweens.add({
       targets: this.enemySprite,
       x: lungeX,
       y: lungeY,
-      scaleX: this.enemySprite.scaleX * 1.1,
-      scaleY: this.enemySprite.scaleY * 1.1,
-      duration: 160,
+      scaleX: origScaleX * 1.12,
+      scaleY: origScaleY * 1.12,
+      duration: 140,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        // Impact flash at player
+        // Impact flash at player — multiple layers
         const impact = this.add.graphics().setDepth(20);
-        impact.fillStyle(0xff4444, 0.5);
-        impact.fillCircle(pX, pY, 24);
-        impact.fillStyle(0xffffff, 0.4);
-        impact.fillCircle(pX, pY, 10);
+        impact.fillStyle(0xff4444, 0.15);
+        impact.fillCircle(pX, pY, 40);
+        impact.fillStyle(0xff4444, 0.4);
+        impact.fillCircle(pX, pY, 22);
+        impact.fillStyle(0xffffff, 0.5);
+        impact.fillCircle(pX, pY, 8);
         this.tweens.add({
           targets: impact,
           alpha: 0,
-          scaleX: 1.5, scaleY: 1.5,
-          duration: 250,
+          scaleX: 1.6, scaleY: 1.6,
+          duration: 280,
           onComplete: () => impact.destroy(),
         });
 
-        if (this.isBoss) this.cameras.main.shake(160, 0.006);
+        // Impact sparks
+        for (let i = 0; i < 6; i++) {
+          const spark = this.add.graphics().setDepth(20);
+          spark.fillStyle(i % 2 === 0 ? 0xffffff : 0xff6644);
+          spark.fillRect(-1, -1, 2, 2);
+          spark.setPosition(pX, pY);
+          const angle = Math.random() * Math.PI * 2;
+          this.tweens.add({
+            targets: spark,
+            x: pX + Math.cos(angle) * (20 + Math.random() * 20),
+            y: pY + Math.sin(angle) * (20 + Math.random() * 20),
+            alpha: 0,
+            duration: 300,
+            onComplete: () => spark.destroy(),
+          });
+        }
+
+        if (this.isBoss) this.cameras.main.shake(180, 0.007);
 
         // Return to original position
         this.tweens.add({
           targets: this.enemySprite,
           x: origX,
           y: origY,
-          scaleX: this.enemySprite.scaleX / 1.1,
-          scaleY: this.enemySprite.scaleY / 1.1,
+          scaleX: origScaleX,
+          scaleY: origScaleY,
           duration: 300,
           ease: 'Quad.easeOut',
           onComplete,
@@ -1104,11 +1586,167 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  private playZapAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
+    // Lightning bolt zigzag from enemy to player
+    const bolt = this.add.graphics().setDepth(22);
+    const segments = 8;
+    const dx = (pX - origX) / segments;
+    const dy = (pY - origY) / segments;
+
+    let frame = 0;
+    const boltAnim = this.time.addEvent({
+      delay: 16,
+      repeat: 18,
+      callback: () => {
+        frame++;
+        bolt.clear();
+
+        // Draw zigzag bolt
+        bolt.lineStyle(3, 0x00ddff, 0.9);
+        bolt.beginPath();
+        bolt.moveTo(origX, origY);
+        for (let i = 1; i <= Math.min(frame, segments); i++) {
+          const jitter = (Math.random() - 0.5) * 30;
+          const bx = origX + dx * i + (i < segments ? jitter : 0);
+          const by = origY + dy * i + (i < segments ? jitter * 0.5 : 0);
+          bolt.lineTo(bx, by);
+        }
+        bolt.strokePath();
+
+        // Glow bolt
+        bolt.lineStyle(8, 0x00ddff, 0.12);
+        bolt.beginPath();
+        bolt.moveTo(origX, origY);
+        for (let i = 1; i <= Math.min(frame, segments); i++) {
+          const jitter = (Math.random() - 0.5) * 30;
+          bolt.lineTo(origX + dx * i + (i < segments ? jitter : 0), origY + dy * i + (i < segments ? jitter * 0.5 : 0));
+        }
+        bolt.strokePath();
+      },
+    });
+
+    this.time.delayedCall(320, () => {
+      bolt.destroy();
+      // Impact flash
+      const flash = this.add.graphics().setDepth(21);
+      flash.fillStyle(0x00ddff, 0.5);
+      flash.fillCircle(pX, pY, 20);
+      flash.fillStyle(0xffffff, 0.6);
+      flash.fillCircle(pX, pY, 8);
+      this.tweens.add({
+        targets: flash,
+        alpha: 0,
+        scaleX: 1.8, scaleY: 1.8,
+        duration: 250,
+        onComplete: () => { flash.destroy(); onComplete(); },
+      });
+    });
+  }
+
+  private playGlitchAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
+    // Screen glitch — red bars flash across
+    const glitch = this.add.graphics().setDepth(22);
+    let frame = 0;
+    const W = this.scale.width;
+
+    this.time.addEvent({
+      delay: 40,
+      repeat: 10,
+      callback: () => {
+        frame++;
+        glitch.clear();
+        // Random horizontal bars
+        for (let i = 0; i < 4; i++) {
+          const barY = Phaser.Math.Between(20, this.battleH - 20);
+          const barH = Phaser.Math.Between(2, 8);
+          glitch.fillStyle(0xcc1111, 0.3 + Math.random() * 0.3);
+          glitch.fillRect(0, barY, W, barH);
+        }
+      },
+    });
+
+    // Projectile shards fly toward player
+    this.time.delayedCall(200, () => {
+      for (let i = 0; i < 5; i++) {
+        const shard = this.add.graphics().setDepth(21);
+        shard.fillStyle(0xcc1111, 0.8);
+        shard.fillRect(-3, -3, 6, 6);
+        shard.setPosition(origX + Phaser.Math.Between(-20, 20), origY + Phaser.Math.Between(-20, 20));
+        this.tweens.add({
+          targets: shard,
+          x: pX + Phaser.Math.Between(-15, 15),
+          y: pY + Phaser.Math.Between(-15, 15),
+          duration: 200 + i * 40,
+          ease: 'Quad.easeIn',
+          onComplete: () => shard.destroy(),
+        });
+      }
+    });
+
+    this.time.delayedCall(480, () => {
+      glitch.destroy();
+      // Impact
+      const impact = this.add.graphics().setDepth(21);
+      impact.fillStyle(0xcc1111, 0.5);
+      impact.fillCircle(pX, pY, 18);
+      this.tweens.add({
+        targets: impact,
+        alpha: 0,
+        scaleX: 2, scaleY: 2,
+        duration: 250,
+        onComplete: () => { impact.destroy(); onComplete(); },
+      });
+    });
+  }
+
+  private playVoidAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
+    // Dark wave expanding from enemy toward player
+    const wave = this.add.graphics().setDepth(21);
+    const waveState = { r: 10 };
+    const maxR = Math.sqrt((pX - origX) ** 2 + (pY - origY) ** 2) + 30;
+
+    this.time.addEvent({
+      delay: 16,
+      repeat: 30,
+      callback: () => {
+        waveState.r += 8;
+        wave.clear();
+        const alpha = Math.max(0, 1 - waveState.r / maxR);
+        // Dark expanding ring
+        wave.lineStyle(6, 0x440066, alpha * 0.6);
+        wave.strokeCircle(origX, origY, waveState.r);
+        wave.lineStyle(2, 0xcc44ff, alpha * 0.4);
+        wave.strokeCircle(origX, origY, waveState.r);
+        // Inner void fill
+        wave.fillStyle(0x220033, alpha * 0.1);
+        wave.fillCircle(origX, origY, waveState.r);
+      },
+    });
+
+    this.time.delayedCall(500, () => {
+      wave.destroy();
+      // Impact — dark implosion at player
+      const implosion = this.add.graphics().setDepth(21);
+      implosion.fillStyle(0x440066, 0.6);
+      implosion.fillCircle(pX, pY, 25);
+      implosion.fillStyle(0x000000, 0.4);
+      implosion.fillCircle(pX, pY, 12);
+      this.tweens.add({
+        targets: implosion,
+        scaleX: 0.1, scaleY: 0.1,
+        alpha: 0,
+        duration: 300,
+        ease: 'Quad.easeIn',
+        onComplete: () => { implosion.destroy(); onComplete(); },
+      });
+    });
+  }
+
   // ── Defeat particles ────────────────────────────────────────────────────
 
   private spawnDefeatParticles(x: number, y: number): void {
     const colors = [0xffffff, 0xffd700, 0xff4444, 0x4080ff];
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 18; i++) {
       const particle = this.add.graphics().setDepth(25);
       const c = colors[i % colors.length];
       const size = 2 + Math.random() * 3;
@@ -1116,16 +1754,16 @@ export class BattleScene extends Phaser.Scene {
       particle.fillRect(-size / 2, -size / 2, size, size);
       particle.setPosition(x, y);
 
-      const angle = (i / 16) * Math.PI * 2 + Math.random() * 0.3;
-      const dist = 50 + Math.random() * 60;
+      const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
+      const dist = 55 + Math.random() * 65;
       this.tweens.add({
         targets: particle,
         x: x + Math.cos(angle) * dist,
         y: y + Math.sin(angle) * dist - 20,
         alpha: 0,
-        scaleX: 0.3,
-        scaleY: 0.3,
-        duration: 600 + Math.random() * 300,
+        scaleX: 0.2,
+        scaleY: 0.2,
+        duration: 650 + Math.random() * 350,
         ease: 'Quad.easeOut',
         onComplete: () => particle.destroy(),
       });
@@ -1142,7 +1780,7 @@ export class BattleScene extends Phaser.Scene {
       fontFamily: '"Press Start 2P"',
       fontSize: '12px',
       color: '#000000',
-    }).setDepth(24).setOrigin(0.5).setAlpha(0.5);
+    }).setDepth(24).setOrigin(0.5).setAlpha(0.6);
 
     // Main damage number
     const dmgText = this.add.text(x, y, `-${damage}`, {
@@ -1157,18 +1795,18 @@ export class BattleScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: [dmgText, shadow],
-      scaleX: 1.2,
-      scaleY: 1.2,
-      duration: 120,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      duration: 100,
       ease: 'Back.easeOut',
       onComplete: () => {
         this.tweens.add({
           targets: [dmgText, shadow],
-          y: y - 40,
+          y: y - 45,
           scaleX: 1,
           scaleY: 1,
           alpha: 0,
-          duration: 800,
+          duration: 850,
           ease: 'Quad.easeOut',
           onComplete: () => { dmgText.destroy(); shadow.destroy(); },
         });
