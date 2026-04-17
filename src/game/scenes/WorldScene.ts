@@ -303,9 +303,34 @@ export class WorldScene extends Phaser.Scene {
   private spawnFragments(mapResult: ReturnType<typeof MapBuilder.build>): void {
     const positions = [mapResult.fragment1Pos, mapResult.fragment2Pos, mapResult.fragment3Pos];
     positions.forEach((pos) => {
-      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment').setDepth(4);
-      this.tweens.add({ targets: frag, y: pos.y - 5, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      this.tweens.add({ targets: frag, alpha: 0.6, duration: 700, yoyo: true, repeat: -1 });
+      // Ground glow beneath (visible through grass) — draw at (0,0) so tweens work from center
+      const glow = this.add.graphics().setDepth(9);
+      glow.setPosition(pos.x, pos.y);
+      glow.fillStyle(0x4080ff, 0.15);
+      glow.fillCircle(0, 0, 12);
+      glow.fillStyle(0x80c0ff, 0.2);
+      glow.fillCircle(0, 0, 7);
+      this.tweens.add({ targets: glow, alpha: 0.3, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+      // Pulsing ring — draw centered at (0,0) so scale works from center
+      const ring = this.add.graphics().setDepth(9);
+      ring.setPosition(pos.x, pos.y);
+      ring.lineStyle(1, 0x4080ff, 0.3);
+      ring.strokeCircle(0, 0, 10);
+      this.tweens.add({
+        targets: ring, alpha: 0, scaleX: 1.8, scaleY: 1.8,
+        duration: 1800, repeat: -1,
+        onRepeat: () => { ring.setAlpha(0.4); ring.setScale(1); },
+      });
+
+      // Crystal sprite — high depth so visible above tall grass
+      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment').setDepth(10).setScale(1.3);
+      // Float animation
+      this.tweens.add({ targets: frag, y: pos.y - 6, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+      // Store glow refs on the sprite for cleanup
+      (frag as any)._glowFx = [glow, ring];
+
       this.fragments.push(frag);
     });
   }
@@ -442,13 +467,68 @@ export class WorldScene extends Phaser.Scene {
     const idx = this.fragments.indexOf(sprite);
     if (idx !== -1) this.fragments.splice(idx, 1);
 
-    const pickup = this.add.text(sprite.x, sprite.y - 10, '+10 XP', {
-      fontFamily: '"Press Start 2P"', fontSize: '7px', color: '#4080ff',
-      stroke: '#000000', strokeThickness: 3,
-    }).setDepth(10).setOrigin(0.5);
-    this.tweens.add({ targets: pickup, y: sprite.y - 30, alpha: 0, duration: 800, onComplete: () => pickup.destroy() });
+    const cx = sprite.x;
+    const cy = sprite.y;
 
-    sprite.destroy();
+    // Destroy glow effects
+    const glowFx = (sprite as any)._glowFx as Phaser.GameObjects.GameObject[] | undefined;
+    if (glowFx) {
+      glowFx.forEach(fx => { this.tweens.add({ targets: fx, alpha: 0, duration: 300, onComplete: () => fx.destroy() }); });
+    }
+
+    // Flash burst
+    const flash = this.add.graphics().setDepth(12);
+    flash.fillStyle(0x4080ff, 0.5);
+    flash.fillCircle(cx, cy, 14);
+    flash.fillStyle(0xffffff, 0.6);
+    flash.fillCircle(cx, cy, 6);
+    this.tweens.add({
+      targets: flash, alpha: 0, scaleX: 2.5, scaleY: 2.5,
+      duration: 350, onComplete: () => flash.destroy(),
+    });
+
+    // Sparkle particles
+    for (let i = 0; i < 6; i++) {
+      const spark = this.add.graphics().setDepth(12);
+      spark.fillStyle(i % 2 === 0 ? 0x80c0ff : 0xffffff);
+      spark.fillRect(-1, -1, 2, 2);
+      spark.setPosition(cx, cy);
+      const angle = (i / 6) * Math.PI * 2;
+      this.tweens.add({
+        targets: spark,
+        x: cx + Math.cos(angle) * 18, y: cy + Math.sin(angle) * 18,
+        alpha: 0, duration: 350, ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy(),
+      });
+    }
+
+    // Crystal scales up and fades
+    this.tweens.add({
+      targets: sprite, scaleX: 3, scaleY: 3, alpha: 0,
+      duration: 300, ease: 'Quad.easeOut',
+      onComplete: () => sprite.destroy(),
+    });
+
+    // XP text
+    const pickup = this.add.text(cx, cy - 10, '+10 XP', {
+      fontFamily: '"Press Start 2P"', fontSize: '7px', color: '#80c0ff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setDepth(12).setOrigin(0.5).setScale(0.5);
+    this.tweens.add({
+      targets: pickup, scaleX: 1.1, scaleY: 1.1, duration: 120, ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({ targets: pickup, y: cy - 30, alpha: 0, duration: 700, onComplete: () => pickup.destroy() });
+      },
+    });
+
+    // Musical note rising
+    const note = this.add.text(cx + 8, cy, '♪', {
+      fontFamily: 'serif', fontSize: '10px', color: '#4080ff',
+    }).setDepth(12).setOrigin(0.5).setAlpha(0.9);
+    this.tweens.add({
+      targets: note, y: cy - 25, alpha: 0, duration: 600,
+      ease: 'Quad.easeOut', onComplete: () => note.destroy(),
+    });
 
     const store = useGameStore.getState();
     const prevLevel = store.level;
@@ -458,6 +538,11 @@ export class WorldScene extends Phaser.Scene {
       EventBus.emit(EVENTS.LEVEL_UP, store.level);
       this.showLevelUpEffect(store.level);
     }
+  }
+
+  public forceEncounter(enemyId: string): void {
+    const def = ENEMY_DEFINITIONS.find(e => e.id === enemyId) ?? ENEMY_DEFINITIONS[0];
+    this.startRandomEncounter(def);
   }
 
   private startRandomEncounter(data: EnemyData): void {
@@ -821,7 +906,17 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.resetFX();
     this.player.setPosition(this.spawnX, this.spawnY);
     this.player.unfreeze();
+
+    // Reset all blocking state flags
     this.battleActive = false;
+    this.bossEncounterStarted = false;
+    this.dialogActive = false;
+    this.worldFrozen = false;
+    this.isTyping = false;
+    if (this.currentTypeTimer) { this.currentTypeTimer.destroy(); this.currentTypeTimer = undefined; }
+    this.dialogQueue = [];
+    if (this.dialogBox) { this.dialogBox.setVisible(false); }
+
     this.cameras.main.fadeIn(600, 0, 0, 0);
   };
 

@@ -19,6 +19,10 @@ export class PreloadScene extends Phaser.Scene {
     tileImages.forEach(key => {
       this.load.image(key, `assets/tiles/${key}.png`);
     });
+
+    // Character art (used in battle scene)
+    this.load.image('player-battle', 'assets/player_model.PNG');
+    this.load.image('silence-battle', 'assets/silence_model.PNG');
   }
 
   create(): void {

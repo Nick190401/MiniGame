@@ -145,10 +145,15 @@ export class BattleScene extends Phaser.Scene {
     ground.strokeEllipse(W * 0.24, BATTLE_H * 0.93, 170, 22);
 
     // ── Enemy sprite (upper right) — slides in from right ──────────────
-    const enemyScale = this.isBoss ? 6 : 5;
     const enemySpriteY = BATTLE_H * 0.48;
     const enemyFinalX = W * 0.70;
-    this.enemySprite = this.add.sprite(W + 60, enemySpriteY, this.enemyData.textureKey);
+
+    // Use high-res battle art when available, otherwise pixel sprite
+    const hasBattleArt = this.enemyData.id === 'silence' && this.textures.exists('silence-battle');
+    const enemyTexture = hasBattleArt ? 'silence-battle' : this.enemyData.textureKey;
+    const enemyScale = hasBattleArt ? 0.09 : (this.isBoss ? 6 : 5);
+
+    this.enemySprite = this.add.sprite(W + 60, enemySpriteY, enemyTexture);
     this.enemySprite.setScale(enemyScale);
     this.enemySprite.setDepth(5);
 
@@ -166,13 +171,18 @@ export class BattleScene extends Phaser.Scene {
           repeat: -1,
           ease: 'Sine.easeInOut',
         });
+
+        // Silence-specific ambient particles (purple squares + cyan glow)
+        if (hasBattleArt) {
+          this.spawnSilenceParticles(enemyFinalX, enemySpriteY, BATTLE_H);
+        }
       },
     });
 
     // ── Player sprite — slides in from left ──────────────────────────────
     const playerFinalX = W * 0.24;
-    this.playerSprite = this.add.sprite(-40, BATTLE_H * 0.72, 'player-up-0');
-    this.playerSprite.setScale(5);
+    this.playerSprite = this.add.sprite(-40, BATTLE_H * 0.72, 'player-battle');
+    this.playerSprite.setScale(0.07);
     this.playerSprite.setDepth(5);
 
     this.tweens.add({
@@ -894,7 +904,7 @@ export class BattleScene extends Phaser.Scene {
         this.tweens.add({
           targets: this.playerSprite,
           y: pY - 18,
-          scaleX: 5.3, scaleY: 5.3,
+          scaleX: 0.075, scaleY: 0.075,
           duration: 200,
           ease: 'Quad.easeOut',
           onComplete: () => {
@@ -902,12 +912,12 @@ export class BattleScene extends Phaser.Scene {
             this.tweens.add({
               targets: this.playerSprite,
               y: pY + 4,
-              scaleX: 4.7, scaleY: 4.7,
+              scaleX: 0.065, scaleY: 0.065,
               duration: 80,
               ease: 'Quad.easeIn',
               onComplete: () => {
                 // Reset player
-                this.tweens.add({ targets: this.playerSprite, y: pY, scaleX: 5, scaleY: 5, duration: 200 });
+                this.tweens.add({ targets: this.playerSprite, y: pY, scaleX: 0.07, scaleY: 0.07, duration: 200 });
 
                 this.cameras.main.shake(300, 0.012);
 
@@ -1189,8 +1199,8 @@ export class BattleScene extends Phaser.Scene {
         // Create afterimage trail
         for (let i = 0; i < 4; i++) {
           this.time.delayedCall(i * 30, () => {
-            const ghost = this.add.sprite(this.playerSprite.x, this.playerSprite.y, 'player-up-0');
-            ghost.setScale(5).setDepth(19).setAlpha(0.4 - i * 0.08).setTint(color);
+            const ghost = this.add.sprite(this.playerSprite.x, this.playerSprite.y, 'player-battle');
+            ghost.setScale(0.07).setDepth(19).setAlpha(0.4 - i * 0.08).setTint(color);
             afterimages.push(ghost);
             this.tweens.add({ targets: ghost, alpha: 0, duration: 300, delay: 60, onComplete: () => ghost.destroy() });
           });
@@ -1743,6 +1753,105 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // ── Defeat particles ────────────────────────────────────────────────────
+
+  // ── Silence enemy ambient effects ──────────────────────────────────────
+
+  private spawnSilenceParticles(cx: number, cy: number, battleH: number): void {
+    // 1) Orbiting purple/magenta pixel squares — matches the model's floating fragments
+    for (let i = 0; i < 10; i++) {
+      const sq = this.add.graphics().setDepth(6);
+      const color = [0xaa44ff, 0xcc44ff, 0x8833dd, 0xff44cc][i % 4];
+      const size = 3 + Math.random() * 4;
+      sq.fillStyle(color, 0.8);
+      sq.fillRect(-size / 2, -size / 2, size, size);
+
+      const angle = (i / 10) * Math.PI * 2;
+      const radius = 40 + Math.random() * 30;
+      const speed = 4000 + Math.random() * 3000;
+      sq.setPosition(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius * 0.6);
+
+      // Orbit around the enemy
+      this.tweens.add({
+        targets: sq,
+        angle: 360,
+        duration: speed,
+        repeat: -1,
+      });
+      // Drift in/out
+      this.tweens.add({
+        targets: sq,
+        x: { from: sq.x - 15, to: sq.x + 15 },
+        y: { from: sq.y - 10, to: sq.y + 10 },
+        alpha: { from: 0.4, to: 0.9 },
+        duration: 1800 + Math.random() * 1200,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 2000,
+      });
+    }
+
+    // 2) Cyan glow pulse at enemy core
+    const glow = this.add.graphics().setDepth(4);
+    glow.setPosition(cx, cy);
+    glow.fillStyle(0x00ffcc, 0.12);
+    glow.fillCircle(0, 0, 50);
+    glow.fillStyle(0x00eeff, 0.08);
+    glow.fillCircle(0, 0, 35);
+    this.tweens.add({
+      targets: glow,
+      scaleX: 1.3, scaleY: 1.3,
+      alpha: 0.04,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // 3) Rising cyan sparks from the body
+    this.time.addEvent({
+      delay: 300,
+      repeat: -1,
+      callback: () => {
+        if (!this.enemySprite?.active) return;
+        const spark = this.add.graphics().setDepth(7);
+        const sc = [0x00ffcc, 0x00ddff, 0x44ffff][Math.floor(Math.random() * 3)];
+        spark.fillStyle(sc, 0.7);
+        spark.fillCircle(0, 0, 1 + Math.random());
+        spark.setPosition(
+          this.enemySprite.x + Phaser.Math.Between(-25, 25),
+          this.enemySprite.y + Phaser.Math.Between(-15, 30)
+        );
+        this.tweens.add({
+          targets: spark,
+          y: spark.y - 40 - Math.random() * 30,
+          x: spark.x + Phaser.Math.Between(-12, 12),
+          alpha: 0,
+          duration: 800 + Math.random() * 500,
+          ease: 'Quad.easeOut',
+          onComplete: () => spark.destroy(),
+        });
+      },
+    });
+
+    // 4) Dark mist / smoke at the base
+    const mistY = cy + 55;
+    for (let i = 0; i < 4; i++) {
+      const mist = this.add.graphics().setDepth(3);
+      mist.fillStyle(0x201830, 0.3);
+      mist.fillEllipse(0, 0, 30 + Math.random() * 20, 8 + Math.random() * 4);
+      mist.setPosition(cx + Phaser.Math.Between(-35, 35), mistY + Phaser.Math.Between(-5, 5));
+      this.tweens.add({
+        targets: mist,
+        x: mist.x + Phaser.Math.Between(-20, 20),
+        alpha: { from: 0.15, to: 0.35 },
+        scaleX: { from: 0.8, to: 1.3 },
+        duration: 2500 + Math.random() * 1500,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 1500,
+      });
+    }
+  }
 
   private spawnDefeatParticles(x: number, y: number): void {
     const colors = [0xffffff, 0xffd700, 0xff4444, 0x4080ff];

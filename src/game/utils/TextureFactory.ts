@@ -28,258 +28,258 @@ export class TextureFactory {
     const SCALE = 1;
 
     const pal: Record<string, number> = {
-      // Hair — auburn, 4 shades (light from above, gradient top→bottom)
-      H: 0x4a1808,  // darkest (outline, underside)
-      h: 0x7a2818,  // dark (main mass)
-      a: 0xb04828,  // mid (edge highlights, curved surface)
-      r: 0xd86840,  // bright (tips, top rim light)
+      // Cap — black snapback with green "MR" text
+      C: 0x181820,  // cap black
+      c: 0x282830,  // cap brim edge
+      M: 0x50b848,  // cap text green
+      // Hair — brown, peeks under cap
+      H: 0x3a2818,  // dark
+      h: 0x5a3828,  // mid
       // Skin
-      S: 0xf8d0a0,  // light
-      s: 0xd8a878,  // shadow (chin edge, nape)
-      // Eyes — large 2×2 for expressiveness
-      E: 0x181020,  // pupil (near-black)
-      W: 0xf0f0f8,  // eye white
-      // Headphones — signature accessory (Sound Keeper!)
-      P: 0x404858,  // frame (dark metal)
-      p: 0x6878a0,  // cushion (blue-gray)
-      // Jacket — teal, the character's signature colour
-      J: 0x1a6858,  // dark
-      j: 0x288878,  // mid / base
-      K: 0x40b898,  // highlight stripe
-      // Undershirt
-      T: 0x181828,  // very dark (visible at V-neck opening)
-      // Belt / gold accent
-      G: 0xd0a030,  // buckle + headphone LED indicator
-      // Pants
-      L: 0x242038,  // dark
-      l: 0x343050,  // inner highlight
-      // Boots
-      O: 0x382418,  // dark leather
-      o: 0x503828,  // highlight
+      S: 0xf8c888,  // light
+      s: 0xd8a868,  // shadow
+      // Eyes — green
+      E: 0x208838,
+      // Hoodie — yellow/cream
+      Y: 0xe8d880,  // main
+      y: 0xc8b860,  // shadow
+      // Vest — black puffer
+      V: 0x1a1a24,  // main
+      v: 0x2a2a38,  // highlight seam
+      // Green — sleeves + treble clef on vest
+      N: 0x48a840,  // note symbol
+      G: 0x48a840,  // sleeve bright
+      g: 0x388830,  // sleeve dark
+      // Pants — olive-green cargo
+      P: 0x509040,  // main
+      p: 0x408030,  // shadow
+      K: 0x607040,  // pocket detail
+      // Shoes — white + green accent
+      O: 0xe8e8e8,  // white
+      o: 0xb8b8b8,  // gray
+      A: 0x48a848,  // accent green
     };
 
     // ── DOWN — front view, 4-frame walk cycle ───────────────────────────
     //  Sequence: 0 (stand) → 1 (left stride + bob) → 2 (stand) → 3 (right stride + bob)
-    //  Body drops 1px on stride frames for natural walk bounce
     const down0 = [
-      '....rahr........',  // hair tips (asymmetric spikes)
-      '...rahhhar......',  // hair crown
-      '..ahhhhhha......',  // hair wide
-      '..HhhhhhhH......',  // hair base
-      '..SWWSSWWS......',  // face + 2×2 eye whites
-      '..SWESSEWS......',  // face + pupils
+      '....CCCC........',  // cap crown
+      '...CCCMCC.......',  // cap front with MR
+      '..cCCCCCCc......',  // brim overhang (snapback)
+      '..hhSSSShh......',  // hair + forehead
+      '..hSESSESh......',  // face + green eyes
       '...sSSSSs.......',  // chin
-      '...PpGppP.......',  // headphones + amber LED
-      '..jJJJJJJj......',  // jacket shoulders
-      '..jJKJTJKj......',  // jacket body
-      '...jJGGJj.......',  // belt
-      '...LL..LL.......',  // legs neutral
-      '...Ll..lL.......',
-      '...Oo..oO.......',  // boots even
+      '..YYVVVVYY......',  // hoodie collar + vest shoulders
+      '..GVVNVVG.......',  // green sleeves + vest + note
+      '..gVVvVVg.......',  // lower vest
+      '...yVVVy........',  // hoodie waist
+      '...PPPPP........',  // pants waist
+      '...PP..PP.......',  // legs
+      '...Pp..pP.......',  // cargo detail
+      '...OA..AO.......',  // sneakers
       '................',
       '................',
     ];
     const down1 = [                    // left stride — body drops 1px
       '................',
-      '....rahr........',
-      '...rahhhar......',
-      '..ahhhhhha......',
-      '..HhhhhhhH......',
-      '..SWWSSWWS......',
-      '..SWESSEWS......',
+      '....CCCC........',
+      '...CCCMCC.......',
+      '..cCCCCCCc......',
+      '..hhSSSShh......',
+      '..hSESSESh......',
       '...sSSSSs.......',
-      '...PpGppP.......',
-      '..jJJJJJJj......',
-      '..jJKJTJKj......',
-      '...jJGGJj.......',
-      '..LL....LL......',  // left leg swings wide-left
-      '..Ll.....L......',  // left leg detail, right pulled in
-      '..Oo....oO......',  // left boot extended
+      '..YYVVVVYY......',
+      '..GVVNVVG.......',
+      '..gVVvVVg.......',
+      '...yVVVy........',
+      '..PP....PP......',  // left leg wide
+      '..Pp.....P......',
+      '..OA....AO......',  // sneakers spread
+      '................',
       '................',
     ];
     const down2 = [                    // stand (same as 0 — pass-through)
-      '....rahr........',
-      '...rahhhar......',
-      '..ahhhhhha......',
-      '..HhhhhhhH......',
-      '..SWWSSWWS......',
-      '..SWESSEWS......',
+      '....CCCC........',
+      '...CCCMCC.......',
+      '..cCCCCCCc......',
+      '..hhSSSShh......',
+      '..hSESSESh......',
       '...sSSSSs.......',
-      '...PpGppP.......',
-      '..jJJJJJJj......',
-      '..jJKJTJKj......',
-      '...jJGGJj.......',
-      '...LL..LL.......',
-      '...Ll..lL.......',
-      '...Oo..oO.......',
+      '..YYVVVVYY......',
+      '..GVVNVVG.......',
+      '..gVVvVVg.......',
+      '...yVVVy........',
+      '...PPPPP........',
+      '...PP..PP.......',
+      '...Pp..pP.......',
+      '...OA..AO.......',
       '................',
       '................',
     ];
     const down3 = [                    // right stride — body drops 1px
       '................',
-      '....rahr........',
-      '...rahhhar......',
-      '..ahhhhhha......',
-      '..HhhhhhhH......',
-      '..SWWSSWWS......',
-      '..SWESSEWS......',
+      '....CCCC........',
+      '...CCCMCC.......',
+      '..cCCCCCCc......',
+      '..hhSSSShh......',
+      '..hSESSESh......',
       '...sSSSSs.......',
-      '...PpGppP.......',
-      '..jJJJJJJj......',
-      '..jJKJTJKj......',
-      '...jJGGJj.......',
-      '...LL....LL.....',  // right leg swings wide-right
-      '...L.....lL.....',  // right leg detail, left pulled in
-      '...Oo....oO.....',  // right boot extended
+      '..YYVVVVYY......',
+      '..GVVNVVG.......',
+      '..gVVvVVg.......',
+      '...yVVVy........',
+      '....PP....PP....',  // right leg wide
+      '....P.....pP....',
+      '....OA....AO....',  // sneakers spread
+      '................',
       '................',
     ];
 
     // ── UP — back view, 4-frame walk cycle ────────────────────────────
     const up0 = [
-      '....rahr........',
-      '...rahhhar......',
-      '..ahhhhhha......',
-      '..HhhhhhhH......',
-      '..hhaahahh......',  // back-of-head texture
-      '...hHHHHh.......',  // nape
-      '...PppppP.......',  // headphone band
-      '..jJJJJJJj......',  // jacket back
-      '..jJJjjJJj......',  // center seam
-      '..jJjJJjJj......',  // side folds
-      '...jJJJJj.......',
-      '...LL..LL.......',
-      '...Ll..lL.......',
-      '...Oo..oO.......',
+      '....CCCC........',  // cap back
+      '...CCCCCCC......',  // cap (no MR from back)
+      '..cCCCCCCc......',  // brim
+      '..hhHHHHhh......',  // hair back of head
+      '..hhhhhhhh......',  // hair lower
+      '...HhhhhH.......',  // nape
+      '..YYVVVVYY......',  // hoodie + vest back
+      '..GVVVVVG.......',  // sleeves + vest
+      '..gVVvVVg.......',  // vest seam
+      '...gVVVg........',  // waist
+      '...PPPPP........',  // pants
+      '...PP..PP.......',
+      '...Pp..pP.......',
+      '...OA..AO.......',
       '................',
       '................',
     ];
     const up1 = [                      // left stride + bob
       '................',
-      '....rahr........',
-      '...rahhhar......',
-      '..ahhhhhha......',
-      '..HhhhhhhH......',
-      '..hhaahahh......',
-      '...hHHHHh.......',
-      '...PppppP.......',
-      '..jJJJJJJj......',
-      '..jJJjjJJj......',
-      '..jJjJJjJj......',
-      '...jJJJJj.......',
-      '..LL....LL......',
-      '..Ll.....L......',
-      '..Oo....oO......',
+      '....CCCC........',
+      '...CCCCCCC......',
+      '..cCCCCCCc......',
+      '..hhHHHHhh......',
+      '..hhhhhhhh......',
+      '...HhhhhH.......',
+      '..YYVVVVYY......',
+      '..GVVVVVG.......',
+      '..gVVvVVg.......',
+      '...gVVVg........',
+      '..PP....PP......',
+      '..Pp.....P......',
+      '..OA....AO......',
+      '................',
       '................',
     ];
     const up2 = [                      // stand (pass-through)
-      '....rahr........',
-      '...rahhhar......',
-      '..ahhhhhha......',
-      '..HhhhhhhH......',
-      '..hhaahahh......',
-      '...hHHHHh.......',
-      '...PppppP.......',
-      '..jJJJJJJj......',
-      '..jJJjjJJj......',
-      '..jJjJJjJj......',
-      '...jJJJJj.......',
-      '...LL..LL.......',
-      '...Ll..lL.......',
-      '...Oo..oO.......',
+      '....CCCC........',
+      '...CCCCCCC......',
+      '..cCCCCCCc......',
+      '..hhHHHHhh......',
+      '..hhhhhhhh......',
+      '...HhhhhH.......',
+      '..YYVVVVYY......',
+      '..GVVVVVG.......',
+      '..gVVvVVg.......',
+      '...gVVVg........',
+      '...PPPPP........',
+      '...PP..PP.......',
+      '...Pp..pP.......',
+      '...OA..AO.......',
       '................',
       '................',
     ];
     const up3 = [                      // right stride + bob
       '................',
-      '....rahr........',
-      '...rahhhar......',
-      '..ahhhhhha......',
-      '..HhhhhhhH......',
-      '..hhaahahh......',
-      '...hHHHHh.......',
-      '...PppppP.......',
-      '..jJJJJJJj......',
-      '..jJJjjJJj......',
-      '..jJjJJjJj......',
-      '...jJJJJj.......',
-      '...LL....LL.....',
-      '...L.....lL.....',
-      '...Oo....oO.....',
+      '....CCCC........',
+      '...CCCCCCC......',
+      '..cCCCCCCc......',
+      '..hhHHHHhh......',
+      '..hhhhhhhh......',
+      '...HhhhhH.......',
+      '..YYVVVVYY......',
+      '..GVVVVVG.......',
+      '..gVVvVVg.......',
+      '...gVVVg........',
+      '....PP....PP....',
+      '....P.....pP....',
+      '....OA....AO....',
+      '................',
       '................',
     ];
 
     // ── RIGHT — side profile, 4-frame walk cycle (flipX → left) ──────
-    //  0: stand, 1: stride A (legs apart), 2: legs cross, 3: stride B
     const right0 = [
-      '.....rah........',
-      '....ahhhh.......',
-      '...Hhhhhha......',
-      '...hhhhha.......',
-      '....SSWWS.......',
-      '....SSWES.......',
-      '.....Sss........',
-      '....PppP........',
-      '...jJJJJj.......',
-      '...jJJKJj.......',
-      '....jGJj........',
-      '....LLL.........',  // legs together
-      '....LlL.........',
-      '....OoO.........',
+      '.....CCC........',  // cap side
+      '....CCCCM.......',  // cap with M visible
+      '...cCCCCCc......',  // brim
+      '...hhSSShh......',  // hair + face profile
+      '....hSESh.......',  // one eye visible
+      '.....sSs........',  // chin
+      '...YYVVYY.......',  // hoodie + vest side
+      '....GVNVG.......',  // sleeve + vest + note
+      '...gVvVg........',  // lower body
+      '....yVy.........',  // waist
+      '....PPP.........',  // pants together
+      '....PpP.........',  // pants mid
+      '....pKp.........',  // cargo pocket
+      '....OAO.........',  // shoe
       '................',
       '................',
     ];
     const right1 = [                   // stride A — legs apart + bob
       '................',
-      '.....rah........',
-      '....ahhhh.......',
-      '...Hhhhhha......',
-      '...hhhhha.......',
-      '....SSWWS.......',
-      '....SSWES.......',
-      '.....Sss........',
-      '....PppP........',
-      '...jJJJJj.......',
-      '...jJJKJj.......',
-      '....jGJj........',
-      '...L...L........',  // back leg + front leg spread
-      '...l...l........',
-      '...O...O........',  // boots far apart
+      '.....CCC........',
+      '....CCCCM.......',
+      '...cCCCCCc......',
+      '...hhSSShh......',
+      '....hSESh.......',
+      '.....sSs........',
+      '...YYVVYY.......',
+      '....GVNVG.......',
+      '...gVvVg........',
+      '....yVy.........',
+      '...P...P........',  // legs spread
+      '...p...p........',
+      '...O...A........',  // shoes far apart
+      '................',
       '................',
     ];
     const right2 = [                   // legs crossing (pass-through)
-      '.....rah........',
-      '....ahhhh.......',
-      '...Hhhhhha......',
-      '...hhhhha.......',
-      '....SSWWS.......',
-      '....SSWES.......',
-      '.....Sss........',
-      '....PppP........',
-      '...jJJJJj.......',
-      '...jJJKJj.......',
-      '....jGJj........',
-      '....LL..........',  // legs close together, shifted
-      '....lL..........',
-      '....oO..........',
+      '.....CCC........',
+      '....CCCCM.......',
+      '...cCCCCCc......',
+      '...hhSSShh......',
+      '....hSESh.......',
+      '.....sSs........',
+      '...YYVVYY.......',
+      '....GVNVG.......',
+      '...gVvVg........',
+      '....yVy.........',
+      '....PP..........',  // legs together shifted
+      '....Pp..........',
+      '....OA..........',
+      '................',
       '................',
       '................',
     ];
     const right3 = [                   // stride B — legs apart opposite + bob
       '................',
-      '.....rah........',
-      '....ahhhh.......',
-      '...Hhhhhha......',
-      '...hhhhha.......',
-      '....SSWWS.......',
-      '....SSWES.......',
-      '.....Sss........',
-      '....PppP........',
-      '...jJJJJj.......',
-      '...jJJKJj.......',
-      '....jGJj........',
-      '....L..L........',  // legs apart (slightly different spacing)
-      '....l..l........',
-      '....O..O........',  // boots apart
+      '.....CCC........',
+      '....CCCCM.......',
+      '...cCCCCCc......',
+      '...hhSSShh......',
+      '....hSESh.......',
+      '.....sSs........',
+      '...YYVVYY.......',
+      '....GVNVG.......',
+      '...gVvVg........',
+      '....yVy.........',
+      '....P..P........',  // legs apart
+      '....p..p........',
+      '....O..A........',  // shoes apart
+      '................',
       '................',
     ];
 
@@ -733,28 +733,54 @@ export class TextureFactory {
       '.rr..thk..rr....',
     ].map(r => r.slice(0, 16)), trunkPal);
 
-    // ── Tall grass — distinct blade shapes ───────────────────────────────────
-    const tallPal: Record<string, number> = {
-      B: 0x2a6818, b: 0x387828, m: 0x489838, t: 0x60b048, h: 0x78c860, d: 0x1e5010,
+    // ── Tall grass — Pokémon GBA style: base + overlay ─────────────────────
+    // Dense tufts covering most of the tile, grass peeks through gaps
+    const tgPal: Record<string, number> = {
+      // tuft: dark base → mid → upper → light tip → bright highlight
+      D: 0x1e4c10, d: 0x2a5c18, m: 0x347020, b: 0x408028, t: 0x4c9430,
+      h: 0x5caa40, H: 0x6cbc50, L: 0x7ccc60,
+      // grass peeking through
+      g: 0x78b858, l: 0x88cc68,
     };
+    // Full tile (below player) — dense overlapping tufts
     makePixelTile('tile-tall-grass', [
-      'tBh.tBh.tBh.tBh.',
-      'mBb.mBb.mBb.mBb.',
-      'bBd.bBd.bBd.bBd.',
-      'bBd.bBd.bBd.bBd.',
-      '.tBh.tBh.tBh.tBh',
-      '.mBb.mBb.mBb.mBb',
-      '.bBd.bBd.bBd.bBd',
-      '.bBd.bBd.bBd.bBd',
-      'tBh.tBh.tBh.tBh.',
-      'mBb.mBb.mBb.mBb.',
-      'bBd.bBd.bBd.bBd.',
-      'bBd.bBd.bBd.bBd.',
-      '.tBh.tBh.tBh.tBh',
-      '.mBb.mBb.mBb.mBb',
-      '.bBd.bBd.bBd.bBd',
-      '.bBd.bBd.bBd.bBd',
-    ].map(r => r.slice(0, 16)), tallPal);
+      'hLgHh.hLgHh.hLgH',
+      'thmbt.thmbt.thmb',
+      'mbDdm.mbDdm.mbDd',
+      'dDDDb.dDDDb.dDDD',
+      'DDDDd.DDDDd.DDDD',
+      'mDDmglmDDmglmDDm',
+      'bmbg.hLgbmbg.hLg',
+      'glg.thmbtglg.thm',
+      'gHh.mbDdmgHh.mbD',
+      'Hh.ldDDDbHh.ldDD',
+      'h.glDDDDdh.glDDD',
+      '.hLgmDDmgl.hLgmD',
+      'thmbtbmbg.hthmbt',
+      'mbDdmglg.tHmbDdm',
+      'dDDDbgHh.mbdDDDb',
+      'DDDDdHh.ldDDDDDd',
+    ].map(r => r.slice(0, 16)), tgPal);
+
+    // Overlay (above player) — upper portions of tufts only
+    makePixelTile('tile-tall-grass-top', [
+      'hLgHh.hLgHh.hLgH',
+      'thmbt.thmbt.thmb',
+      'mbDdm.mbDdm.mbDd',
+      'dDDDb.dDDDb.dDDD',
+      '................',
+      '................',
+      '.....hLg.....hLg',
+      '....thmbt....thm',
+      '....mbDdm....mbD',
+      '...ldDDDb...ldDD',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+    ].map(r => r.slice(0, 16)), tgPal);
 
     // ── Water — deep blue with foam and waves ────────────────────────────────
     const waterPal: Record<string, number> = {
@@ -803,231 +829,253 @@ export class TextureFactory {
       g.fillStyle(0x68a848); g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
     });
 
-    // ── Building wall — warm wood planks (Echo Village) ──────────────────────
+    // ── Building wall — cream/tan plaster (Echo Village, Pokémon style) ─────
     const woodPal: Record<string, number> = {
-      P: 0x9a7050, p: 0x8a6040, H: 0xb08058, h: 0xa87848,
-      g: 0x684828, n: 0x584020, k: 0x785838,
+      W: 0xf0dcc0, w: 0xe8d0b0, // main wall cream
+      H: 0xf8e8d0, h: 0xe0c8a8, // highlight / shadow
+      B: 0xc8a880, b: 0xb89870, // baseboard
+      L: 0xd8c0a0,              // line accent
     };
     makePixelTile('tile-building-wall', [
-      'PHhPPHhPPPHhPPPH',
-      'PPPPpPPPPPPPpPPP',
-      'PPHhPPPPPHhPPPPP',
-      'gggggggggggggggg',
-      'pPPPHhPPpPPPHhPP',
-      'PPnPPPPPPPPPPPnP',
-      'pPPPPPHhPPPPPPPP',
-      'gggggggggggggggg',
-      'PPHhPPPPkHhPPPPP',
-      'PPPPPnPPPPPPpPPP',
-      'PPHhPPPPPHhPPPPP',
-      'gggggggggggggggg',
-      'pPPPPHhPpPPPPHhP',
-      'PPPPPPPPPPnPPPPP',
-      'pPPHhPPPPPPPHhPP',
-      'gggggggggggggggg',
+      'WWWWWWWWWWWWWWWw',
+      'WHWwWWWHWwWWWHWw',
+      'WwWWWWWwWWWWWwWW',
+      'WWWWHWWWWWHWWwWW',
+      'WWwWWWWWWwWWWWWW',
+      'WHWWWWWHWWWWWHwW',
+      'WWWwWWWWWwWWWWWW',
+      'WwWWWHWwWWWHWwWW',
+      'WWWWWWWWWWWWWwWW',
+      'WHWwWWWHWwWWWHWW',
+      'WWWWWWWWWWWWWWwW',
+      'WwWWWHWwWWWHWwWW',
+      'WWWwWWWWWwWWWWWW',
+      'LLLLLLLLLLLLLLLL',
+      'BBBbBBBBBbBBBBBb',
+      'bbBBBbbBBBbbBBBb',
     ].map(r => r.slice(0, 16)), woodPal);
 
-    // ── Wood wall with window ───────────────────────────────────────────────
+    // ── Wall with window (Echo Village) ─────────────────────────────────────
     const woodWinPal: Record<string, number> = {
-      P: 0x9a7050, p: 0x8a6040, H: 0xb08058, h: 0xa87848,
-      g: 0x684828, n: 0x584020, k: 0x785838,
-      N: 0x402818, Q: 0xb8d8f0, q: 0x88a8c8, Z: 0xa0c0e0,
+      W: 0xf0dcc0, w: 0xe8d0b0,
+      H: 0xf8e8d0, h: 0xe0c8a8,
+      B: 0xc8a880, b: 0xb89870,
+      L: 0xd8c0a0,
+      F: 0x8b6030, // window frame
+      G: 0x88c8e8, g: 0x70a8d0, // glass
+      Q: 0xa0d8f0, // glass highlight
+      s: 0x685020, // sill
     };
     makePixelTile('tile-bldg-wall-win', [
-      'PPPPpPPPPPPPpPPP',
-      'PHhPPPPPPPHhPPPH',
-      'PPPPNNNNNNnPPPPP',
-      'PPHhNQZZQNnhPPPP',
-      'ggggNqZZqNnggPPg',
-      'pPPhNQZZQNnPHhPP',
-      'PPPPNNNNNNnPPPPP',
-      'gggggggggggggggg',
-      'pPPPHhPPpPPPHhPP',
-      'PPPPPPPPPPPPPPnP',
-      'PPHhPPPPPHhPPPPP',
-      'gggggggggggggggg',
-      'pPPPPHhPpPPPPHhP',
-      'PPPPPPPPPPPPPPPp',
-      'pPPHhPPPPPPPHhPP',
-      'gggggggggggggggg',
+      'WWWWWWWWWWWWWWWw',
+      'WHWwWWWWWWWHWwWW',
+      'WWWsFFFFFFsWWWWW',
+      'WHWsFQggQFsWHwWW',
+      'WwWsFgGGgFsWwWWW',
+      'WWWsFQggQFsWWWWW',
+      'WHWsFFFFFFsWHWwW',
+      'WWWssssssssWWWWW',
+      'WwWWWWWWWWWWWwWW',
+      'WHWWWHWwWWWWWHWW',
+      'WWwWWWWWWwWWWWwW',
+      'WwWWWHWwWWWHWwWW',
+      'WWWwWWWWWwWWWWWW',
+      'LLLLLLLLLLLLLLLL',
+      'BBBbBBBBBbBBBBBb',
+      'bbBBBbbBBBbbBBBb',
     ].map(r => r.slice(0, 16)), woodWinPal);
 
-    // ── Building wall — cool gray stone (Neon Junction) ──────────────────────
+    // ── Building wall — stone brick (Neon Junction, Pokémon style) ───────────
     const stonePal: Record<string, number> = {
-      S: 0x808890, s: 0x707880, H: 0x98a0a8, d: 0x606870, m: 0x505860, v: 0x8890a0,
+      S: 0xc0c8d0, s: 0xb0b8c0, // main stone
+      H: 0xd0d8e0, h: 0xa0a8b0, // highlight / shadow
+      M: 0x9098a0,              // mortar line
+      B: 0x808890, b: 0x707880, // baseboard
     };
     makePixelTile('tile-bldg-stone', [
-      'HSSSSSSdmHSSSSSSd',
-      'SSSvSSSdmSSSSvSSd',
-      'SSSSSSSdmSSSSSSSd',
-      'SSSSSSsdmSSSSSSsd',
-      'mmmmmmmmmmmmmmmm',
-      'mHSSsdmHSSSSSSdmH',
-      'mSSSsdmSSSSvSSdmS',
-      'mSSSsdmSSSSSSSdmS',
-      'mmmmmmmmmmmmmmmm',
-      'HSSSSSSdmHSSSSSd',
-      'SvSSSSSdmSSSSvSd',
-      'SSSSSSSdmSSSSSSd',
-      'SSSSSSsdmSSSSSsd',
-      'mmmmmmmmmmmmmmmm',
-      'mHSSSSdmHSSSSSSdm',
-      'mSSvSSdmSSSSSSSdm',
+      'SSSHSSSSSSSHSSSS',
+      'SSSSSSsSSSSSSSsS',
+      'MMMMMMMMMMMMMMMM',
+      'sSSSSSSSHsSSSSSS',
+      'SSHSSSSSSSSSHSsS',
+      'MMMMMMMMMMMMMMMM',
+      'SSSSSSHSSSsSSSsS',
+      'sSSSSSSSSSSHSSSS',
+      'MMMMMMMMMMMMMMMM',
+      'SSHSSsSSSSSSSHSS',
+      'SSSSSSSSHSSSSsSS',
+      'MMMMMMMMMMMMMMMM',
+      'sSSSSSHSSsSSSSsS',
+      'SSHSSSSSSSSSHSSS',
+      'BBBbBBBBBbBBBBBb',
+      'bbBBBbbBBBbbBBBb',
     ].map(r => r.slice(0, 16)), stonePal);
 
-    // ── Stone wall with window ──────────────────────────────────────────────
+    // ── Stone wall with window (Neon Junction) ──────────────────────────────
     const stoneWinPal: Record<string, number> = {
-      S: 0x808890, s: 0x707880, H: 0x98a0a8, d: 0x606870, m: 0x505860, v: 0x8890a0,
-      N: 0x404050, Q: 0xb8d8f0, q: 0x88a8c8, Z: 0xa0c0e0,
+      S: 0xc0c8d0, s: 0xb0b8c0,
+      H: 0xd0d8e0, h: 0xa0a8b0,
+      M: 0x9098a0,
+      B: 0x808890, b: 0x707880,
+      F: 0x505860, // window frame
+      G: 0x88c8e8, g: 0x70a8d0, // glass
+      Q: 0xa0d8f0, // glass highlight
+      L: 0x404850, // sill
     };
     makePixelTile('tile-bldg-stone-win', [
-      'HSSSSSSdmHSSSSSS',
-      'SSSvNNNNNNSvSSSS',
-      'SSSSNQZZQNSSSSSd',
-      'SSSSNqZZqNSSSSsd',
-      'mmmmNNNNNNmmmmmm',
-      'mHSSsdmHSSSSSSdm',
-      'mSSSsdmSSSSvSSdm',
-      'mSSSsdmSSSSSSSdm',
-      'mmmmmmmmmmmmmmmm',
-      'HSSSSSSdmHSSSSSd',
-      'SvSSSSSdmSSSSvSd',
-      'SSSSSSSdmSSSSSSd',
-      'SSSSSSsdmSSSSSsd',
-      'mmmmmmmmmmmmmmmm',
-      'mHSSSSdmHSSSSSSd',
-      'mSSvSSdmSSSSSSSd',
+      'SSSHSSSSSSSHSSSS',
+      'SSSSSSsSSSSSSSsS',
+      'MMMLFFFFFFLMMMMM',
+      'SSSLFQggQFLSSSSS',
+      'SSHLFgGGgFLSSHSS',
+      'SSSLFQggQFLSSSSS',
+      'MMMLFFFFFFLMMMMM',
+      'SSSLLLLLLLLLSSSS',
+      'MMMMMMMMMMMMMMMM',
+      'SSHSSsSSSSSSSHSS',
+      'SSSSSSSSHSSSSsSS',
+      'MMMMMMMMMMMMMMMM',
+      'sSSSSSHSSsSSSSsS',
+      'SSHSSSSSSSSSHSSS',
+      'BBBbBBBBBbBBBBBb',
+      'bbBBBbbBBBbbBBBb',
     ].map(r => r.slice(0, 16)), stoneWinPal);
 
-    // ── Building roof — brown wooden shingles (Echo Village) ─────────────────
+    // ── Building roof — terracotta (Echo Village, Pokémon style) ─────────────
     const roofBrownPal: Record<string, number> = {
-      R: 0x9a5030, r: 0x884020, h: 0xb86840, s: 0x703018, d: 0x602810, l: 0xc87848,
+      R: 0xc85838, r: 0xb04828, // main red
+      H: 0xd86848, h: 0xa03820, // highlight / shadow
+      S: 0xe07858,              // shine
+      D: 0x882818, d: 0x701808, // dark edge
     };
     makePixelTile('tile-building-roof', [
-      'hhRRRRhhRRRRhhRR',
-      'RRRRRRRRRRRRrRRR',
-      'RRrRRRRRRRRRRRRR',
-      'rrssrrssrrssrrss',
-      'ssddssddssddssdd',
-      'RRhhRRRRhhRRRRhh',
-      'RRRRRRrRRRRRRRRR',
-      'RRRRRRRRRRrRRRRR',
-      'rrssrrssrrssrrss',
-      'ssddssddssddssdd',
-      'hhRRRRhhRRRRhhRR',
-      'RRRRrRRRRRRRRRRR',
-      'RRRRRRRRRRRRrRRR',
-      'rrssrrssrrssrrss',
-      'ssddssddssddssdd',
-      'ddddddddddddddd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRRRRRRRRRRRRr',
+      'RRrRRHRRRrRRHRRR',
+      'RRRRRRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDddDDddDDddDDdd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRRRRRRRRRRRRr',
+      'RRHRRrRRRHRRrRRR',
+      'RRRRRRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDddDDddDDddDDdd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRrRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDDDDDDDDDDDDDDd',
     ].map(r => r.slice(0, 16)), roofBrownPal);
 
     // ── Building roof — blue ceramic (Muse's Study) ──────────────────────────
     const roofBluePal: Record<string, number> = {
-      B: 0x3868a8, b: 0x284880, h: 0x4888c8, s: 0x203868, d: 0x182850, l: 0x58a0d8,
+      R: 0x3868b0, r: 0x285098, // main blue
+      H: 0x4878c0, h: 0x204080, // highlight / shadow
+      S: 0x5888d0,              // shine
+      D: 0x183060, d: 0x102048, // dark edge
     };
     makePixelTile('tile-roof-blue', [
-      'hhBBBBhhBBBBhhBB',
-      'BBBBBBBBBBBBbBBB',
-      'BBbBBBBBBBBBBBBB',
-      'bbssbbssbbssbbss',
-      'ssddssddssddssdd',
-      'BBhhBBBBhhBBBBhh',
-      'BBBBBBbBBBBBBBBB',
-      'BBBBBBBBBBbBBBBB',
-      'bbssbbssbbssbbss',
-      'ssddssddssddssdd',
-      'hhBBBBhhBBBBhhBB',
-      'BBBBbBBBBBBBBBBB',
-      'BBBBBBBBBBBBbBBB',
-      'bbssbbssbbssbbss',
-      'ssddssddssddssdd',
-      'dddddddddddddddd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRRRRRRRRRRRRr',
+      'RRrRRHRRRrRRHRRR',
+      'RRRRRRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDddDDddDDddDDdd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRRRRRRRRRRRRr',
+      'RRHRRrRRRHRRrRRR',
+      'RRRRRRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDddDDddDDddDDdd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRrRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDDDDDDDDDDDDDDd',
     ].map(r => r.slice(0, 16)), roofBluePal);
 
-    // ── Building roof — gray slate (Neon Junction) ───────────────────────────
+    // ── Building roof — dark slate (Neon Junction) ───────────────────────────
     const roofGrayPal: Record<string, number> = {
-      G: 0x607080, g: 0x506068, h: 0x788898, s: 0x404850, d: 0x303840, v: 0x8898a8,
+      R: 0x586878, r: 0x485868, // main gray
+      H: 0x687888, h: 0x384858, // highlight / shadow
+      S: 0x788898,              // shine
+      D: 0x283040, d: 0x1c2430, // dark edge
     };
     makePixelTile('tile-roof-gray', [
-      'hhGGGGhhGGGGhhGG',
-      'GGGGGGGGGGGGgGGG',
-      'GGgGGGGGGGGGGGGG',
-      'ggssggssggssggss',
-      'ssddssddssddssdd',
-      'GGhhGGGGhhGGGGhh',
-      'GGGGGGgGGGGGGGGG',
-      'GGGGGGGGGGgGGGGG',
-      'ggssggssggssggss',
-      'ssddssddssddssdd',
-      'hhGGGGhhGGGGhhGG',
-      'GGGGgGGGGGGGGGGG',
-      'GGGGGGGGGGGGgGGG',
-      'ggssggssggssggss',
-      'ssddssddssddssdd',
-      'dddddddddddddddd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRRRRRRRRRRRRr',
+      'RRrRRHRRRrRRHRRR',
+      'RRRRRRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDddDDddDDddDDdd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRRRRRRRRRRRRr',
+      'RRHRRrRRRHRRrRRR',
+      'RRRRRRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDddDDddDDddDDdd',
+      'SHRRRRSHRRRRSHrR',
+      'RRRRrRRRRRRRRRRr',
+      'hhhhhhhhhhhhhhhh',
+      'DDDDDDDDDDDDDDDd',
     ].map(r => r.slice(0, 16)), roofGrayPal);
 
-    // ── Door — warm wooden (Echo Village) ────────────────────────────────────
+    // ── Door — warm wooden (Echo Village, Pokémon style) ─────────────────────
     const doorWoodPal: Record<string, number> = {
-      W: 0x9a7050, // surrounding wall
-      F: 0x684028, // frame
-      D: 0x503018, // door dark
-      d: 0x684028, // door mid
-      h: 0x785030, // door highlight
-      G: 0xffd700, // gold handle
-      g: 0xccaa00, // handle shadow
-      L: 0xb8d8f0, // window light
-      l: 0x88a8c0, // window frame
+      W: 0xf0dcc0, w: 0xe8d0b0, // wall
+      F: 0x704020, f: 0x603018, // frame
+      D: 0x884828, d: 0x7a3c20, // door panels
+      H: 0x985838, h: 0xa06840, // door highlight
+      G: 0xffd700, g: 0xccaa00, // gold handle
+      B: 0xc8a880, b: 0xb89870, // baseboard
+      L: 0xd8c0a0,
     };
     makePixelTile('tile-building-door', [
       'WWWWWWWWWWWWWWWw',
-      'WWWWWWWWWWWWWWWw',
-      'WWWFFFFFFFFFFWWw',
-      'WWWF.llll..FDWWw',
-      'WWWF.LLLL..FDWWw',
-      'WWWF.LLLL..FDWWw',
-      'WWWF.llll..FDWWw',
-      'WWWFDDDDDDDFDWWw',
-      'WWWFDhDDDhDFDWWw',
-      'WWWFDDDDDDDFDWWw',
-      'WWWFDhDGgDDFDWWw',
-      'WWWFDDDgDDDFDWWw',
-      'WWWFDhDDDhDFDWWw',
-      'WWWFDDDDDDDFDWWw',
-      'WWWFDDDDDDDF.WWw',
-      'WWWFFFFFFFFFFWWw',
+      'WHwWWfffffff.WHw',
+      'WWWWWfHhDHhfWWWW',
+      'WHwWWfhDDDhfWHwW',
+      'WWWWWfDDDDDfWWWW',
+      'WHwWWfhDDDhfWHwW',
+      'WWWWWfDDDDDfWWWW',
+      'WHwWWfhDGDhfWHwW',
+      'WWWWWfDDgDDfWWWW',
+      'WHwWWfhDDDhfWHwW',
+      'WWWWWfDDDDDfWWWW',
+      'WWwWWfhDDDhfWWwW',
+      'WHwWWfffffffWHwW',
+      'LLLLLLLLLLLLLLLL',
+      'BBBbBBBBBbBBBBBb',
+      'bbBBBbbBBBbbBBBb',
     ].map(r => r.slice(0, 16)), doorWoodPal);
 
-    // ── Door — iron reinforced (Neon Junction) ───────────────────────────────
+    // ── Door — reinforced (Neon Junction) ────────────────────────────────────
     const doorIronPal: Record<string, number> = {
-      S: 0x808890, // surrounding stone
-      F: 0x404850, // frame
-      D: 0x585868, // door main
-      d: 0x4a4a58, // door shadow
-      h: 0x6a6a78, // door highlight
-      R: 0x383840, // rivet
-      H: 0x888898, // handle
-      L: 0xc8d8e8, // window light
-      l: 0x606878, // window frame
+      S: 0xc0c8d0, s: 0xb0b8c0, // stone wall
+      F: 0x404850, f: 0x384040, // frame
+      D: 0x505860, d: 0x484e58, // door
+      H: 0x606870, h: 0x585e68, // highlight
+      R: 0x383840,              // rivet
+      G: 0x888898,              // handle
+      M: 0x9098a0,              // mortar
+      B: 0x808890, b: 0x707880, // baseboard
     };
     makePixelTile('tile-door-iron', [
-      'SSSSSSSSSSSSSSSSs',
-      'SSSSSSSSSSSSSSSSs',
-      'SSSFFFFFFFFFFSSSs',
-      'SSSF.llll..FdSSSs',
-      'SSSF.LLLL..FdSSSs',
-      'SSSF.LLLL..FdSSSs',
-      'SSSF.llll..FdSSSs',
-      'SSSFDhRDRhDFdSSSs',
-      'SSSFDDDDDDDFdSSSs',
-      'SSSFDRDDDRDFdSSSs',
-      'SSSFDDDHDDDFdSSSs',
-      'SSSFDDDHDDDFdSSSs',
-      'SSSFDRDDDRDFdSSSs',
-      'SSSFDDDDDDDFdSSSs',
-      'SSSFDDDDDDDFF.SSs',
-      'SSSFFFFFFFFFFSSSs',
+      'SSSHSSSSSSSHSSSS',
+      'SSSSfffffffSSsSS',
+      'MMMMfHhDHhfMMMMM',
+      'SSSSfhRDRhfSSSSS',
+      'SSHSfDDDDDfSSHSS',
+      'SSSSfhDDDhfSSSSS',
+      'MMMMfDDDDDfMMMMM',
+      'SSSSfhDGDhfSSSSS',
+      'SSHSfDDGDDfSSHSS',
+      'SSSSfhRDRhfSSSSS',
+      'MMMMfDDDDDfMMMMM',
+      'SSSSfhDDDhfSSSSS',
+      'SSSSfffffffSSSSS',
+      'SSHSSSSSSSSSHSSS',
+      'BBBbBBBBBbBBBBBb',
+      'bbBBBbbBBBbbBBBb',
     ].map(r => r.slice(0, 16)), doorIronPal);
 
     // ── Flower — colorful blooms on grass ───────────────────────────────────
@@ -1163,16 +1211,28 @@ export class TextureFactory {
 
   // ── Items ─────────────────────────────────────────────────────────────────
   static createItemTextures(scene: Phaser.Scene): void {
-    // Sound Fragment — glowing music note
+    // Sound Fragment — bright glowing crystal shard
     if (!scene.textures.exists('item-fragment')) {
       const g = scene.make.graphics({ x: 0, y: 0 }, false);
-      g.fillStyle(0x4080ff);
-      g.fillRect(6, 2, 4, 1);
-      g.fillRect(9, 2, 1, 6);
-      g.fillCircle(6, 9, 3);
-      g.fillStyle(0x80c0ff);
-      g.fillRect(6, 2, 2, 1);
-      g.fillCircle(6, 8, 2);
+      // Outer glow
+      g.fillStyle(0x4080ff, 0.12);
+      g.fillCircle(8, 8, 7);
+      g.fillStyle(0x80c0ff, 0.18);
+      g.fillCircle(8, 8, 5);
+      // Crystal body — diamond shape
+      g.fillStyle(0x3070e0);
+      g.fillTriangle(8, 1, 3, 8, 8, 14);  // left half
+      g.fillTriangle(8, 1, 13, 8, 8, 14); // right half
+      // Lighter face
+      g.fillStyle(0x5090ff);
+      g.fillTriangle(8, 2, 4, 8, 8, 13);
+      // Bright highlight
+      g.fillStyle(0xa0d0ff);
+      g.fillTriangle(8, 3, 5, 7, 8, 10);
+      // White sparkle at top
+      g.fillStyle(0xffffff);
+      g.fillRect(7, 2, 2, 2);
+      g.fillRect(6, 3, 1, 1);
       g.generateTexture('item-fragment', 16, 16);
       g.destroy();
     }

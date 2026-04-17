@@ -29,6 +29,9 @@ export function GameContainer({ visible }: GameContainerProps) {
         parent: containerRef.current,
       });
 
+      // Expose game instance for console commands
+      (window as unknown as Record<string, unknown>).game = gameRef.current;
+
       // Register console cheat commands
       registerCheatCommands(gameRef);
     }, 50);

@@ -114,32 +114,41 @@ export class MapBuilder {
     //  ZONE 1 — ECHO VILLAGE  (rows 1–11)
     // ═════════════════════════════════════════════════════════════════════════
 
-    // House 1 — "Bard's Cottage"  (rows 2–6, cols 2–8) — warm wood + brown roof
-    hLine(2, 2, 8, O);
-    fill(3, 2, 5, 8, B);
-    set(3, 4, BW); set(3, 7, BW);        // upper windows
-    set(5, 5, D);
+    // House 1 — "Bard's Cottage" (compact 3-wide body, brown roof overhang)
+    hLine(2, 2, 6, O);
+    set(3, 3, BW); set(3, 4, B); set(3, 5, BW);
+    set(4, 3, B);  set(4, 4, D); set(4, 5, B);
 
-    // House 2 — "Muse's Study"  (rows 2–6, cols 10–16) — wood + blue roof
-    hLine(2, 10, 16, O2);
-    fill(3, 10, 5, 16, B);
-    set(3, 12, BW); set(3, 15, BW);      // upper windows
-    set(4, 11, BW); set(4, 14, BW);      // lower windows
-    set(5, 13, D);
+    // House 2 — "Muse's Study" (5-wide body, blue roof overhang)
+    hLine(2, 9, 15, O2);
+    set(3, 10, BW); set(3, 11, B); set(3, 12, B); set(3, 13, B); set(3, 14, BW);
+    set(4, 10, B);  set(4, 11, BW); set(4, 12, D); set(4, 13, BW); set(4, 14, B);
 
-    // House 3 — smaller workshop  (rows 8–11, cols 2–7) — wood + brown roof
-    hLine(8, 2, 7, O);
-    fill(9, 2, 10, 7, B);
-    set(9, 3, BW); set(9, 6, BW);        // windows
-    set(10, 4, D);
+    // House 3 — "Workshop" (compact 3-wide body, brown roof)
+    hLine(8, 2, 6, O);
+    set(9, 3, BW); set(9, 4, B); set(9, 5, BW);
+    set(10, 3, B);  set(10, 4, D); set(10, 5, B);
 
-    // Decorative pond  (rows 2–5, cols 24–30)
+    // House 4 — "Lakeside Cabin" (near pond, 3-wide body, brown roof)
+    hLine(2, 33, 37, O);
+    set(3, 34, BW); set(3, 35, B); set(3, 36, BW);
+    set(4, 34, B);  set(4, 35, D); set(4, 36, B);
+
+    // Decorative pond (rows 2–5, cols 24–30)
     fill(2, 24, 5, 30, R);
 
-    // Flowers
+    // Village walkways (connect houses to main path)
+    hLine(5, 4, 18, P);
+    hLine(11, 4, 18, P);
+
+    // Flowers — around buildings and village green
     for (const [r, c] of [
-      [4,9],[5,18],[6,1],[6,9],[6,17],[7,1],[7,17],
-      [3,32],[4,35],[5,38],[6,32],[7,36],
+      [1,3],[1,6],[3,2],[3,6],            // House 1
+      [1,10],[1,14],[3,9],[3,15],         // House 2
+      [8,7],[9,7],[8,1],[9,1],            // House 3
+      [1,34],[1,36],[3,32],[3,38],        // House 4
+      [6,1],[6,8],[6,17],[7,1],[7,17],    // village green
+      [7,36],[4,31],                      // near pond
     ] as [number,number][]) set(r, c, F);
 
     // Sign (village)
@@ -180,29 +189,36 @@ export class MapBuilder {
     //  ZONE 3 — NEON JUNCTION  (rows 27–36)
     // ═════════════════════════════════════════════════════════════════════════
 
-    // Building A — "The Junction Inn"  (rows 27–32, cols 2–12) — stone + gray roof
-    hLine(27, 2, 12, O3);
-    fill(28, 2, 31, 12, B2);
-    set(29, 4, SW); set(29, 7, SW); set(29, 10, SW);  // upper windows
-    set(30, 5, SW); set(30, 9, SW);                    // lower windows
-    set(31, 7, D2);
+    // Building A — "Junction Inn" (compact 5-wide body, gray roof overhang)
+    hLine(27, 2, 8, O3);
+    set(28, 3, SW); set(28, 4, B2); set(28, 5, B2); set(28, 6, B2); set(28, 7, SW);
+    set(29, 3, B2); set(29, 4, B2); set(29, 5, D2); set(29, 6, B2); set(29, 7, B2);
 
-    // Building B — "Signal Station"  (rows 27–32, cols 28–42) — stone + gray roof
-    hLine(27, 28, 42, O3);
-    fill(28, 28, 31, 42, B2);
-    set(29, 31, SW); set(29, 35, SW); set(29, 39, SW); // upper windows
-    set(30, 30, SW); set(30, 34, SW); set(30, 38, SW); // lower windows
-    set(31, 35, D2);
+    // Building B — "Signal Station" (compact 5-wide body, gray roof overhang)
+    hLine(27, 28, 34, O3);
+    set(28, 29, SW); set(28, 30, B2); set(28, 31, B2); set(28, 32, B2); set(28, 33, SW);
+    set(29, 29, B2); set(29, 30, B2); set(29, 31, D2); set(29, 32, B2); set(29, 33, B2);
 
-    // Small building C  (rows 33–36, cols 38–44) — stone + gray roof
-    hLine(33, 38, 44, O3);
-    fill(34, 38, 35, 44, B2);
-    set(34, 40, SW); set(34, 43, SW);                  // windows
-    set(35, 41, D2);
+    // Building C — guard post (compact 3-wide body, gray roof)
+    hLine(33, 38, 42, O3);
+    set(34, 39, B2); set(34, 40, SW); set(34, 41, B2);
+    set(35, 39, B2); set(35, 40, D2); set(35, 41, B2);
 
-    // Town flowers and open space details
+    // Building D — storage shed (compact 3-wide body, gray roof)
+    hLine(33, 2, 6, O3);
+    set(34, 3, B2); set(34, 4, SW); set(34, 5, B2);
+    set(35, 3, B2); set(35, 4, D2); set(35, 5, B2);
+
+    // Junction walkway (connects top buildings via main path)
+    hLine(30, 5, 31, P);
+
+    // Town flowers and decorative details
     for (const [r, c] of [
-      [28,14],[29,16],[30,14],[32,14],[33,14],[32,25],[33,24],
+      [28,2],[28,8],[31,3],[31,7],          // Building A
+      [28,28],[28,34],[31,29],[31,33],       // Building B
+      [34,2],[34,6],[36,3],[36,5],           // Building D
+      [34,38],[34,42],[36,39],[36,41],       // Building C
+      [32,14],[33,14],[32,25],[33,24],       // open area
     ] as [number,number][]) set(r, c, F);
 
     // Sign in Neon Junction (warns of danger ahead)
@@ -342,7 +358,16 @@ export class MapBuilder {
           case A:  { const i = scene.add.image(px, py, 'tile-arena');        i.setDepth(0); decorative.add(i); break; }
           case C:  { const i = scene.add.image(px, py, 'tile-cave-floor');   i.setDepth(0); decorative.add(i); break; }
           case R:  { const i = scene.add.image(px, py, 'tile-water');        i.setDepth(0); decorative.add(i); break; }
-          case L:  { const i = scene.add.image(px, py, 'tile-tall-grass');   i.setDepth(1); decorative.add(i); break; }
+          case L: {
+            // Tileset grass base underneath
+            const gk = rng < 0.3 ? 'tile-grass-2' : 'tile-grass';
+            const gi = scene.add.image(px, py, gk); gi.setDepth(0); decorative.add(gi);
+            // Full tall-grass tile below player
+            const tg = scene.add.image(px, py, 'tile-tall-grass'); tg.setDepth(1); decorative.add(tg);
+            // Top overlay above player so tufts cover the sprite
+            const to = scene.add.image(px, py, 'tile-tall-grass-top'); to.setDepth(8); decorative.add(to);
+            break;
+          }
           case U: {
             const gk = rng < 0.3 ? 'tile-grass-2' : 'tile-grass';
             const gi = scene.add.image(px, py, gk); gi.setDepth(0); decorative.add(gi);

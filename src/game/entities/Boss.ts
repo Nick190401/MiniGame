@@ -3,9 +3,9 @@ import { BOSS_DEFINITION } from './Enemy';
 import type { BossPhase } from '../../types/game.types';
 
 export const BOSS_PHASES: BossPhase[] = [
-  { hpThreshold: 0.60, attackMultiplier: 1.0, label: 'Phase I' },
-  { hpThreshold: 0.30, attackMultiplier: 1.35, label: 'Phase II' },
-  { hpThreshold: 0.00, attackMultiplier: 1.7, label: 'Phase III' },
+  { hpThreshold: 1.00, attackMultiplier: 0.7, label: 'Phase I' },
+  { hpThreshold: 0.75, attackMultiplier: 1.0, label: 'Phase II' },
+  { hpThreshold: 0.20, attackMultiplier: 1.2, label: 'Phase III' },
 ];
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {

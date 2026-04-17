@@ -105,9 +105,9 @@ export const BOSS_DEFINITION: EnemyData = {
   isBoss: true,
   color: 0xffd700,
   attacks: [
-    { name: 'Silence Wave', damage: 14 },
-    { name: 'Void Crush', damage: 20 },
-    { name: 'Gate Slam', damage: 25 },
-    { name: 'Frequency Lock', damage: 18 },
+    { name: 'Silence Wave', damage: 10 },
+    { name: 'Void Crush', damage: 15 },
+    { name: 'Gate Slam', damage: 20 },
+    { name: 'Frequency Lock', damage: 13 },
   ],
 };
