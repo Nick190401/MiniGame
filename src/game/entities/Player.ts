@@ -24,10 +24,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.setDepth(5);
     this.setOrigin(0.5, 0.75);
+    this.setScale(0.70);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(10, 8);
-    body.setOffset(3, 8);
+    body.setSize(20, 16);
+    body.setOffset(6, 16);
     body.setCollideWorldBounds(true);
 
     // Keyboard setup

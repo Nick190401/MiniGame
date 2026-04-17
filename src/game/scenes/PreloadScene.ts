@@ -23,6 +23,8 @@ export class PreloadScene extends Phaser.Scene {
     // Character art (used in battle scene)
     this.load.image('player-battle', 'assets/player_model.PNG');
     this.load.image('silence-battle', 'assets/silence_model.PNG');
+    this.load.image('staticnoise-battle', 'assets/static-noice.PNG');
+    this.load.image('brokensignal-battle', 'assets/brokensignal_model.PNG');
   }
 
   create(): void {

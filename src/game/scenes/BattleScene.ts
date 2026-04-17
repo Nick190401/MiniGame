@@ -149,9 +149,18 @@ export class BattleScene extends Phaser.Scene {
     const enemyFinalX = W * 0.70;
 
     // Use high-res battle art when available, otherwise pixel sprite
-    const hasBattleArt = this.enemyData.id === 'silence' && this.textures.exists('silence-battle');
-    const enemyTexture = hasBattleArt ? 'silence-battle' : this.enemyData.textureKey;
-    const enemyScale = hasBattleArt ? 0.09 : (this.isBoss ? 6 : 5);
+    const hasSilenceArt = this.enemyData.id === 'silence' && this.textures.exists('silence-battle');
+    const hasStaticNoiseArt = this.enemyData.id === 'static-noise' && this.textures.exists('staticnoise-battle');
+    const hasBrokenSignalArt = this.enemyData.id === 'broken-signal' && this.textures.exists('brokensignal-battle');
+    const hasBattleArt = hasSilenceArt || hasStaticNoiseArt || hasBrokenSignalArt;
+    const enemyTexture = hasSilenceArt ? 'silence-battle'
+      : hasStaticNoiseArt ? 'staticnoise-battle'
+      : hasBrokenSignalArt ? 'brokensignal-battle'
+      : this.enemyData.textureKey;
+    // Broken Signal PNG is landscape (~2:1), needs different scale
+    const enemyScale = hasBrokenSignalArt ? 0.14
+      : hasBattleArt ? 0.09
+      : (this.isBoss ? 6 : 5);
 
     this.enemySprite = this.add.sprite(W + 60, enemySpriteY, enemyTexture);
     this.enemySprite.setScale(enemyScale);
@@ -172,9 +181,15 @@ export class BattleScene extends Phaser.Scene {
           ease: 'Sine.easeInOut',
         });
 
-        // Silence-specific ambient particles (purple squares + cyan glow)
-        if (hasBattleArt) {
+        // Enemy-specific ambient particles
+        if (hasSilenceArt) {
           this.spawnSilenceParticles(enemyFinalX, enemySpriteY, BATTLE_H);
+        }
+        if (hasStaticNoiseArt) {
+          this.spawnStaticNoiseParticles(enemyFinalX, enemySpriteY, BATTLE_H);
+        }
+        if (hasBrokenSignalArt) {
+          this.spawnBrokenSignalParticles(enemyFinalX, enemySpriteY, BATTLE_H);
         }
       },
     });
@@ -182,7 +197,7 @@ export class BattleScene extends Phaser.Scene {
     // ── Player sprite — slides in from left ──────────────────────────────
     const playerFinalX = W * 0.24;
     this.playerSprite = this.add.sprite(-40, BATTLE_H * 0.72, 'player-battle');
-    this.playerSprite.setScale(0.07);
+    this.playerSprite.setScale(0.10);
     this.playerSprite.setDepth(5);
 
     this.tweens.add({
@@ -904,7 +919,7 @@ export class BattleScene extends Phaser.Scene {
         this.tweens.add({
           targets: this.playerSprite,
           y: pY - 18,
-          scaleX: 0.075, scaleY: 0.075,
+          scaleX: 0.108, scaleY: 0.108,
           duration: 200,
           ease: 'Quad.easeOut',
           onComplete: () => {
@@ -912,12 +927,12 @@ export class BattleScene extends Phaser.Scene {
             this.tweens.add({
               targets: this.playerSprite,
               y: pY + 4,
-              scaleX: 0.065, scaleY: 0.065,
+              scaleX: 0.092, scaleY: 0.092,
               duration: 80,
               ease: 'Quad.easeIn',
               onComplete: () => {
                 // Reset player
-                this.tweens.add({ targets: this.playerSprite, y: pY, scaleX: 0.07, scaleY: 0.07, duration: 200 });
+                this.tweens.add({ targets: this.playerSprite, y: pY, scaleX: 0.10, scaleY: 0.10, duration: 200 });
 
                 this.cameras.main.shake(300, 0.012);
 
@@ -1200,7 +1215,7 @@ export class BattleScene extends Phaser.Scene {
         for (let i = 0; i < 4; i++) {
           this.time.delayedCall(i * 30, () => {
             const ghost = this.add.sprite(this.playerSprite.x, this.playerSprite.y, 'player-battle');
-            ghost.setScale(0.07).setDepth(19).setAlpha(0.4 - i * 0.08).setTint(color);
+            ghost.setScale(0.10).setDepth(19).setAlpha(0.4 - i * 0.08).setTint(color);
             afterimages.push(ghost);
             this.tweens.add({ targets: ghost, alpha: 0, duration: 300, delay: 60, onComplete: () => ghost.destroy() });
           });
@@ -1654,56 +1669,171 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private playGlitchAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
-    // Screen glitch — red bars flash across
-    const glitch = this.add.graphics().setDepth(22);
-    let frame = 0;
     const W = this.scale.width;
+    const radioColors = [0xcc1111, 0xff6600, 0xffaa00, 0xffdd44, 0x8b1a1a];
 
+    // Phase 1: Radio interference — crimson/amber glitch bars + static burst
+    const glitch = this.add.graphics().setDepth(22);
     this.time.addEvent({
-      delay: 40,
-      repeat: 10,
+      delay: 35,
+      repeat: 14,
       callback: () => {
-        frame++;
         glitch.clear();
-        // Random horizontal bars
-        for (let i = 0; i < 4; i++) {
-          const barY = Phaser.Math.Between(20, this.battleH - 20);
-          const barH = Phaser.Math.Between(2, 8);
-          glitch.fillStyle(0xcc1111, 0.3 + Math.random() * 0.3);
+        for (let i = 0; i < 5; i++) {
+          const barY = Phaser.Math.Between(10, this.battleH - 10);
+          const barH = Phaser.Math.Between(1, 6);
+          const c = radioColors[Math.floor(Math.random() * radioColors.length)];
+          glitch.fillStyle(c, 0.2 + Math.random() * 0.2);
           glitch.fillRect(0, barY, W, barH);
+        }
+        // Screen tear strips
+        for (let i = 0; i < 2; i++) {
+          const stripY = Phaser.Math.Between(30, this.battleH - 30);
+          const stripH = Phaser.Math.Between(8, 20);
+          glitch.fillStyle(0x1a0000, 0.3);
+          glitch.fillRect(Phaser.Math.Between(-30, 0), stripY, W + 30, stripH);
         }
       },
     });
 
-    // Projectile shards fly toward player
+    // Phase 2: Speaker shockwave — dual bass rings from enemy's speakers
+    this.time.delayedCall(80, () => {
+      for (const side of [-1, 1]) {
+        const sx = origX + 25 * side;
+        for (let r = 0; r < 3; r++) {
+          const ring = this.add.graphics().setDepth(23);
+          ring.lineStyle(2.5, 0xcc8800, 0.7);
+          ring.strokeCircle(0, 0, 8);
+          ring.setPosition(sx, origY);
+          this.tweens.add({
+            targets: ring,
+            scaleX: 5 + r * 2,
+            scaleY: 3 + r,
+            alpha: 0,
+            duration: 400 + r * 100,
+            delay: r * 60,
+            onComplete: () => ring.destroy(),
+          });
+        }
+      }
+
+      // Frequency beam — amber line with distortion traveling to player
+      const beam = this.add.graphics().setDepth(23);
+      const beamState = { headX: origX };
+      const beamY = (origY + pY) / 2;
+
+      this.tweens.add({
+        targets: beamState,
+        headX: pX,
+        duration: 280,
+        ease: 'Quad.easeIn',
+        onUpdate: () => {
+          beam.clear();
+          // Wide radio static trail
+          beam.fillStyle(0xff6600, 0.1);
+          beam.fillRect(origX, beamY - 14, beamState.headX - origX, 28);
+          // Core frequency line with jitter
+          beam.lineStyle(3, 0xffaa00, 0.85);
+          beam.beginPath();
+          beam.moveTo(origX, beamY);
+          const dist = beamState.headX - origX;
+          for (let i = 0; i <= 16; i++) {
+            const t = i / 16;
+            const sx = origX + dist * t;
+            if (sx > beamState.headX) break;
+            const jitter = Math.sin(t * 12 + beamState.headX * 0.1) * 8;
+            beam.lineTo(sx, beamY + jitter);
+          }
+          beam.strokePath();
+          // White hot core
+          beam.lineStyle(1, 0xffffff, 0.5);
+          beam.lineBetween(origX, beamY, beamState.headX, beamY);
+        },
+        onComplete: () => {
+          this.tweens.add({ targets: beam, alpha: 0, duration: 200, onComplete: () => beam.destroy() });
+        },
+      });
+    });
+
+    // Phase 3: Crimson shrapnel — metal shards from the broken radio
     this.time.delayedCall(200, () => {
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 8; i++) {
         const shard = this.add.graphics().setDepth(21);
-        shard.fillStyle(0xcc1111, 0.8);
-        shard.fillRect(-3, -3, 6, 6);
-        shard.setPosition(origX + Phaser.Math.Between(-20, 20), origY + Phaser.Math.Between(-20, 20));
+        const c = radioColors[i % radioColors.length];
+        // Elongated metal shard shape
+        shard.fillStyle(c, 0.85);
+        shard.fillRect(-2, -4, 4, 8);
+        shard.setPosition(origX + Phaser.Math.Between(-25, 25), origY + Phaser.Math.Between(-15, 15));
         this.tweens.add({
           targets: shard,
-          x: pX + Phaser.Math.Between(-15, 15),
-          y: pY + Phaser.Math.Between(-15, 15),
-          duration: 200 + i * 40,
+          x: pX + Phaser.Math.Between(-18, 18),
+          y: pY + Phaser.Math.Between(-18, 18),
+          angle: Phaser.Math.Between(180, 720),
+          duration: 180 + i * 35,
           ease: 'Quad.easeIn',
           onComplete: () => shard.destroy(),
         });
       }
     });
 
-    this.time.delayedCall(480, () => {
+    // Phase 4: Impact — fiery radio burst + bass rings at player
+    this.time.delayedCall(520, () => {
       glitch.destroy();
-      // Impact
-      const impact = this.add.graphics().setDepth(21);
-      impact.fillStyle(0xcc1111, 0.5);
-      impact.fillCircle(pX, pY, 18);
+      this.cameras.main.shake(200, 0.008);
+
+      // Central impact — crimson + amber + white
+      const impact = this.add.graphics().setDepth(22);
+      impact.fillStyle(0x8b1a1a, 0.5);
+      impact.fillCircle(pX, pY, 24);
+      impact.fillStyle(0xff6600, 0.4);
+      impact.fillCircle(pX, pY, 16);
+      impact.fillStyle(0xffdd44, 0.5);
+      impact.fillCircle(pX, pY, 8);
+      impact.fillStyle(0xffffff, 0.5);
+      impact.fillCircle(pX, pY, 4);
+
+      // Bass disruption rings
+      for (let r = 0; r < 3; r++) {
+        const ring = this.add.graphics().setDepth(21);
+        const rc = [0xcc8800, 0xff4400, 0xffaa00][r];
+        ring.lineStyle(2, rc, 0.6);
+        ring.strokeCircle(0, 0, 6);
+        ring.setPosition(pX, pY);
+        this.tweens.add({
+          targets: ring,
+          scaleX: 3.5 + r, scaleY: 3.5 + r,
+          alpha: 0,
+          duration: 300 + r * 80,
+          delay: r * 50,
+          onComplete: () => ring.destroy(),
+        });
+      }
+
+      // Hot metal debris scatter
+      for (let d = 0; d < 8; d++) {
+        const debris = this.add.graphics().setDepth(22);
+        const dc = radioColors[d % radioColors.length];
+        debris.fillStyle(dc, 0.8);
+        debris.fillRect(-1.5, -1.5, 3, 3);
+        debris.setPosition(pX, pY);
+        const angle = (d / 8) * Math.PI * 2;
+        this.tweens.add({
+          targets: debris,
+          x: pX + Math.cos(angle) * 35,
+          y: pY + Math.sin(angle) * 35,
+          alpha: 0,
+          angle: 180,
+          duration: 400,
+          ease: 'Quad.easeOut',
+          onComplete: () => debris.destroy(),
+        });
+      }
+
       this.tweens.add({
         targets: impact,
         alpha: 0,
         scaleX: 2, scaleY: 2,
-        duration: 250,
+        duration: 300,
         onComplete: () => { impact.destroy(); onComplete(); },
       });
     });
@@ -1851,6 +1981,322 @@ export class BattleScene extends Phaser.Scene {
         delay: Math.random() * 1500,
       });
     }
+  }
+
+  private spawnBrokenSignalParticles(cx: number, cy: number, _battleH: number): void {
+    // Broken Signal = corrupted radio/boombox: dual speakers, antennas, frequency dial, crimson tendrils
+
+    // 1) Speaker bass pulse — circular sound waves from left and right speaker "eyes"
+    const speakerOffsetX = 35;
+    for (const side of [-1, 1]) {
+      const sx = cx + speakerOffsetX * side;
+      this.time.addEvent({
+        delay: 1400 + side * 200,
+        repeat: -1,
+        callback: () => {
+          if (!this.enemySprite?.active) return;
+          for (let r = 0; r < 3; r++) {
+            const ring = this.add.graphics().setDepth(4);
+            ring.lineStyle(2, 0xcc8800, 0.5);
+            ring.strokeCircle(0, 0, 6);
+            ring.setPosition(sx, cy);
+            this.tweens.add({
+              targets: ring,
+              scaleX: 3 + r,
+              scaleY: 3 + r,
+              alpha: 0,
+              duration: 600 + r * 150,
+              delay: r * 80,
+              onComplete: () => ring.destroy(),
+            });
+          }
+        },
+      });
+    }
+
+    // 2) Antenna sparks — electric orange/gold crackles at the antenna tips
+    const antennaPositions = [{ x: cx - 28, y: cy - 40 }, { x: cx + 28, y: cy - 40 }];
+    this.time.addEvent({
+      delay: 350,
+      repeat: -1,
+      callback: () => {
+        if (!this.enemySprite?.active) return;
+        const ant = antennaPositions[Math.floor(Math.random() * 2)];
+        for (let s = 0; s < 3; s++) {
+          const spark = this.add.graphics().setDepth(7);
+          const sc = [0xffaa00, 0xff6600, 0xffdd44][s];
+          spark.fillStyle(sc, 0.9);
+          spark.fillRect(-1, -1, 2, 2);
+          spark.setPosition(ant.x + Phaser.Math.Between(-4, 4), ant.y + Phaser.Math.Between(-4, 4));
+          this.tweens.add({
+            targets: spark,
+            y: spark.y - 10 - Math.random() * 15,
+            x: spark.x + Phaser.Math.Between(-8, 8),
+            alpha: 0,
+            duration: 200 + Math.random() * 200,
+            onComplete: () => spark.destroy(),
+          });
+        }
+      },
+    });
+
+    // 3) Frequency dial glow — pulsating amber/orange light at the center
+    const dialGlow = this.add.graphics().setDepth(3);
+    dialGlow.setPosition(cx, cy + 5);
+    dialGlow.fillStyle(0xff6600, 0.1);
+    dialGlow.fillCircle(0, 0, 45);
+    dialGlow.fillStyle(0xffaa00, 0.12);
+    dialGlow.fillCircle(0, 0, 25);
+    dialGlow.fillStyle(0xffdd44, 0.08);
+    dialGlow.fillCircle(0, 0, 12);
+    this.tweens.add({
+      targets: dialGlow,
+      scaleX: 1.3, scaleY: 1.3,
+      alpha: 0.04,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // 4) Frequency needle scanning — a thin line sweeping back and forth
+    const needle = this.add.graphics().setDepth(5);
+    const needleState = { pos: 0 };
+    this.tweens.add({
+      targets: needleState,
+      pos: 1,
+      duration: 2500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.time.addEvent({
+      delay: 40,
+      repeat: -1,
+      callback: () => {
+        if (!this.enemySprite?.active) { needle.destroy(); return; }
+        needle.clear();
+        const spriteY = this.enemySprite.y;
+        const needleX = cx - 30 + needleState.pos * 60;
+        needle.lineStyle(1.5, 0xffdd44, 0.6);
+        needle.lineBetween(needleX, spriteY - 2, needleX, spriteY + 12);
+        // Tiny glow at needle tip
+        needle.fillStyle(0xffdd44, 0.3);
+        needle.fillCircle(needleX, spriteY + 5, 3);
+      },
+    });
+
+    // 5) Crimson tendrils — dark red wisps drifting around the body
+    for (let i = 0; i < 8; i++) {
+      const tendril = this.add.graphics().setDepth(4);
+      const tc = [0x8b1a1a, 0xaa2020, 0x660c0c, 0x991515][i % 4];
+      tendril.fillStyle(tc, 0.4);
+      // Elongated wisp shape
+      const w = 8 + Math.random() * 12;
+      const h = 2 + Math.random() * 3;
+      tendril.fillEllipse(0, 0, w, h);
+
+      const angle = (i / 8) * Math.PI * 2;
+      const radius = 30 + Math.random() * 25;
+      tendril.setPosition(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius * 0.6);
+
+      this.tweens.add({
+        targets: tendril,
+        x: tendril.x + Phaser.Math.Between(-15, 15),
+        y: tendril.y + Phaser.Math.Between(-8, 8),
+        alpha: { from: 0.15, to: 0.45 },
+        angle: { from: -20, to: 20 },
+        duration: 2000 + Math.random() * 2000,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 1500,
+      });
+    }
+
+    // 6) Ember particles — tiny rising orange/red sparks from the body
+    this.time.addEvent({
+      delay: 250,
+      repeat: -1,
+      callback: () => {
+        if (!this.enemySprite?.active) return;
+        const ember = this.add.graphics().setDepth(6);
+        const ec = [0xff6600, 0xffaa00, 0xff3300, 0xffdd44][Math.floor(Math.random() * 4)];
+        ember.fillStyle(ec, 0.7);
+        ember.fillCircle(0, 0, 1 + Math.random());
+        ember.setPosition(
+          this.enemySprite.x + Phaser.Math.Between(-30, 30),
+          this.enemySprite.y + Phaser.Math.Between(-10, 20)
+        );
+        this.tweens.add({
+          targets: ember,
+          y: ember.y - 25 - Math.random() * 20,
+          x: ember.x + Phaser.Math.Between(-10, 10),
+          alpha: 0,
+          duration: 500 + Math.random() * 400,
+          ease: 'Quad.easeOut',
+          onComplete: () => ember.destroy(),
+        });
+      },
+    });
+  }
+
+  private spawnStaticNoiseParticles(cx: number, cy: number, _battleH: number): void {
+    // 1) Scattered neon pixel fragments — dispersing outward like the model's glitch shards
+    for (let i = 0; i < 14; i++) {
+      const sq = this.add.graphics().setDepth(6);
+      const color = [0x00ddff, 0x00ff88, 0xff44cc, 0xccff00, 0x8844ff, 0x00ffff][i % 6];
+      const size = 2 + Math.random() * 5;
+      sq.fillStyle(color, 0.85);
+      sq.fillRect(-size / 2, -size / 2, size, size);
+
+      const angle = (i / 14) * Math.PI * 2;
+      const radius = 35 + Math.random() * 40;
+      sq.setPosition(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius * 0.7);
+
+      // Drift outward and back — simulates the dispersing fragments
+      this.tweens.add({
+        targets: sq,
+        x: { from: sq.x - 8, to: sq.x + 12 + Math.random() * 10 },
+        y: { from: sq.y - 5, to: sq.y + 8 },
+        alpha: { from: 0.3, to: 0.9 },
+        duration: 1500 + Math.random() * 1500,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 2000,
+      });
+      // Slow rotation
+      this.tweens.add({
+        targets: sq,
+        angle: 360,
+        duration: 5000 + Math.random() * 4000,
+        repeat: -1,
+      });
+    }
+
+    // 2) Horizontal EKG signal waveforms — the cyan/green zigzag lines from the model
+    const drawSignalWave = (yOffset: number, waveColor: number, speed: number) => {
+      const wave = this.add.graphics().setDepth(5);
+      let phase = 0;
+      this.time.addEvent({
+        delay: 50,
+        repeat: -1,
+        callback: () => {
+          if (!this.enemySprite?.active) return;
+          wave.clear();
+          phase += 0.15;
+          wave.lineStyle(1.5, waveColor, 0.5 + Math.sin(phase * 0.5) * 0.2);
+          wave.beginPath();
+          const startX = cx - 55;
+          const endX = cx + 55;
+          wave.moveTo(startX, cy + yOffset);
+          for (let x = startX; x <= endX; x += 4) {
+            const t = (x - startX) / (endX - startX);
+            // EKG-style: flat → spike → flat → dip → flat
+            let yVal = 0;
+            const pos = ((t * 3 + phase * speed) % 1);
+            if (pos > 0.35 && pos < 0.4) yVal = -14;      // sharp spike up
+            else if (pos > 0.4 && pos < 0.45) yVal = 8;    // dip down
+            else if (pos > 0.6 && pos < 0.65) yVal = -6;   // smaller spike
+            else yVal = (Math.random() - 0.5) * 1.5;       // noise
+            wave.lineTo(x, cy + yOffset + yVal);
+          }
+          wave.strokePath();
+        },
+      });
+    };
+    drawSignalWave(-18, 0x00ffcc, 0.8);   // upper wave (cyan-green)
+    drawSignalWave(6, 0x00ddff, 1.0);      // middle wave (cyan)
+    drawSignalWave(28, 0xff44cc, 0.6);     // lower wave (magenta)
+
+    // 3) Screen corruption — flickering horizontal glitch bars across the battle area
+    const glitchBars = this.add.graphics().setDepth(4);
+    this.time.addEvent({
+      delay: 120,
+      repeat: -1,
+      callback: () => {
+        if (!this.enemySprite?.active) return;
+        glitchBars.clear();
+        // Only show glitch bars ~40% of frames for a stuttery feel
+        if (Math.random() > 0.4) return;
+        for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) {
+          const barY = cy - 50 + Math.random() * 100;
+          const barH = 1 + Math.random() * 3;
+          const barColor = [0xcc1111, 0x00ddff, 0x00ff88, 0xff44cc][Math.floor(Math.random() * 4)];
+          glitchBars.fillStyle(barColor, 0.15 + Math.random() * 0.15);
+          glitchBars.fillRect(cx - 60, barY, 120, barH);
+        }
+      },
+    });
+
+    // 4) Bass pulse rings — concentric rings pulsing outward from the speaker area
+    const speakerY = cy + 25;
+    this.time.addEvent({
+      delay: 1200,
+      repeat: -1,
+      callback: () => {
+        if (!this.enemySprite?.active) return;
+        for (let r = 0; r < 3; r++) {
+          const ring = this.add.graphics().setDepth(4);
+          ring.lineStyle(2, 0x00ddff, 0.4);
+          ring.strokeCircle(0, 0, 8);
+          ring.setPosition(cx, speakerY);
+          this.tweens.add({
+            targets: ring,
+            scaleX: 4 + r * 1.5,
+            scaleY: 2.5 + r,
+            alpha: 0,
+            duration: 800 + r * 200,
+            delay: r * 120,
+            onComplete: () => ring.destroy(),
+          });
+        }
+      },
+    });
+
+    // 5) Static crackling — small electric sparks popping around the sprite
+    this.time.addEvent({
+      delay: 200,
+      repeat: -1,
+      callback: () => {
+        if (!this.enemySprite?.active) return;
+        const spark = this.add.graphics().setDepth(7);
+        const sc = [0x00ffff, 0x00ff88, 0xccff00, 0xff44cc][Math.floor(Math.random() * 4)];
+        spark.fillStyle(sc, 0.8);
+        const s = 1 + Math.random() * 2;
+        spark.fillRect(-s / 2, -s / 2, s, s);
+        spark.setPosition(
+          this.enemySprite.x + Phaser.Math.Between(-35, 35),
+          this.enemySprite.y + Phaser.Math.Between(-30, 35)
+        );
+        // Quick flash and fade
+        this.tweens.add({
+          targets: spark,
+          alpha: 0,
+          y: spark.y - 15 - Math.random() * 20,
+          x: spark.x + Phaser.Math.Between(-8, 8),
+          duration: 300 + Math.random() * 300,
+          ease: 'Quad.easeOut',
+          onComplete: () => spark.destroy(),
+        });
+      },
+    });
+
+    // 6) Core glow — pulsing red/cyan dual glow at center
+    const glow = this.add.graphics().setDepth(3);
+    glow.setPosition(cx, cy);
+    glow.fillStyle(0xcc1111, 0.08);
+    glow.fillCircle(0, 0, 55);
+    glow.fillStyle(0x00ddff, 0.06);
+    glow.fillCircle(0, 5, 40);
+    this.tweens.add({
+      targets: glow,
+      scaleX: 1.25, scaleY: 1.25,
+      alpha: 0.03,
+      duration: 1800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   private spawnDefeatParticles(x: number, y: number): void {

@@ -22,288 +22,159 @@ export class TextureFactory {
     });
   }
 
-  // ── Player (Sound Keeper — full 16×16 pixel art) ──────────────────────────
+  // ── Player (Sound Keeper — 32×32 pixel art) ────────────────────────────────
   static createPlayerTextures(scene: Phaser.Scene): void {
-    // Full 16×16 resolution (scale=1) for maximum detail
-    const SCALE = 1;
-
     const pal: Record<string, number> = {
-      // Cap — black snapback with green "MR" text
-      C: 0x181820,  // cap black
-      c: 0x282830,  // cap brim edge
-      M: 0x50b848,  // cap text green
-      // Hair — brown, peeks under cap
-      H: 0x3a2818,  // dark
-      h: 0x5a3828,  // mid
-      // Skin
-      S: 0xf8c888,  // light
-      s: 0xd8a868,  // shadow
-      // Eyes — green
+      C: 0x181820, c: 0x282830,
+      M: 0x50b848, m: 0x388830,
+      H: 0x3a2818, h: 0x5a3828,
+      S: 0xf8c888, s: 0xd8a868, e: 0xe8b878,
       E: 0x208838,
-      // Hoodie — yellow/cream
-      Y: 0xe8d880,  // main
-      y: 0xc8b860,  // shadow
-      // Vest — black puffer
-      V: 0x1a1a24,  // main
-      v: 0x2a2a38,  // highlight seam
-      // Green — sleeves + treble clef on vest
-      N: 0x48a840,  // note symbol
-      G: 0x48a840,  // sleeve bright
-      g: 0x388830,  // sleeve dark
-      // Pants — olive-green cargo
-      P: 0x509040,  // main
-      p: 0x408030,  // shadow
-      K: 0x607040,  // pocket detail
-      // Shoes — white + green accent
-      O: 0xe8e8e8,  // white
-      o: 0xb8b8b8,  // gray
-      A: 0x48a848,  // accent green
+      Y: 0xe8d880, y: 0xc8b860,
+      V: 0x1a1a24, v: 0x2a2a38,
+      N: 0x48a840,
+      G: 0x48a840, g: 0x388830,
+      P: 0x509040, p: 0x408030, K: 0x607040,
+      O: 0xe8e8e8, o: 0xb8b8b8, A: 0x48a848,
     };
 
-    // ── DOWN — front view, 4-frame walk cycle ───────────────────────────
-    //  Sequence: 0 (stand) → 1 (left stride + bob) → 2 (stand) → 3 (right stride + bob)
-    const down0 = [
-      '....CCCC........',  // cap crown
-      '...CCCMCC.......',  // cap front with MR
-      '..cCCCCCCc......',  // brim overhang (snapback)
-      '..hhSSSShh......',  // hair + forehead
-      '..hSESSESh......',  // face + green eyes
-      '...sSSSSs.......',  // chin
-      '..YYVVVVYY......',  // hoodie collar + vest shoulders
-      '..GVVNVVG.......',  // green sleeves + vest + note
-      '..gVVvVVg.......',  // lower vest
-      '...yVVVy........',  // hoodie waist
-      '...PPPPP........',  // pants waist
-      '...PP..PP.......',  // legs
-      '...Pp..pP.......',  // cargo detail
-      '...OA..AO.......',  // sneakers
-      '................',
-      '................',
+    const _ = '................................';
+
+    // ── Modular body parts (11 head + 7 torso + 8 legs = 26 rows) ─────
+    const headDown = [
+      '............CCCCCCCC............',
+      '...........CCMMMmCCCC...........',
+      '..........cCCCCCCCCCCc..........',
+      '.........ccCCCCCCCCCCcc.........',
+      '.........hhhhSSSSSShhhh.........',
+      '.........hhSSSSSSSSSShh.........',
+      '.........hhSEESSSSEEShh.........',
+      '.........hhSSSSeeSSSShh.........',
+      '..........sSSSSSSSSSs...........',
+      '...........ssSSSSSss............',
+      '............sSSSSSs.............',
     ];
-    const down1 = [                    // left stride — body drops 1px
-      '................',
-      '....CCCC........',
-      '...CCCMCC.......',
-      '..cCCCCCCc......',
-      '..hhSSSShh......',
-      '..hSESSESh......',
-      '...sSSSSs.......',
-      '..YYVVVVYY......',
-      '..GVVNVVG.......',
-      '..gVVvVVg.......',
-      '...yVVVy........',
-      '..PP....PP......',  // left leg wide
-      '..Pp.....P......',
-      '..OA....AO......',  // sneakers spread
-      '................',
-      '................',
+    const headUp = [
+      '............CCCCCCCC............',
+      '...........CCCCCCCCCC...........',
+      '..........cCCCCCCCCCCc..........',
+      '.........ccCCCCCCCCCCcc.........',
+      '.........hhhhHHHHHHhhhh.........',
+      '.........hhHHHHHHHHHHhh.........',
+      '.........hhHHHHHHHHHHhh.........',
+      '.........hhhhHHHHHHhhhh.........',
+      '..........hHHHHHHHHHh...........',
+      '...........hhHHHHHHhh...........',
+      '............hHHHHh..............',
     ];
-    const down2 = [                    // stand (same as 0 — pass-through)
-      '....CCCC........',
-      '...CCCMCC.......',
-      '..cCCCCCCc......',
-      '..hhSSSShh......',
-      '..hSESSESh......',
-      '...sSSSSs.......',
-      '..YYVVVVYY......',
-      '..GVVNVVG.......',
-      '..gVVvVVg.......',
-      '...yVVVy........',
-      '...PPPPP........',
-      '...PP..PP.......',
-      '...Pp..pP.......',
-      '...OA..AO.......',
-      '................',
-      '................',
-    ];
-    const down3 = [                    // right stride — body drops 1px
-      '................',
-      '....CCCC........',
-      '...CCCMCC.......',
-      '..cCCCCCCc......',
-      '..hhSSSShh......',
-      '..hSESSESh......',
-      '...sSSSSs.......',
-      '..YYVVVVYY......',
-      '..GVVNVVG.......',
-      '..gVVvVVg.......',
-      '...yVVVy........',
-      '....PP....PP....',  // right leg wide
-      '....P.....pP....',
-      '....OA....AO....',  // sneakers spread
-      '................',
-      '................',
+    const headRight = [
+      '..............CCCCCC............',
+      '.............CCCCCCCM...........',
+      '............cCCCCCCCCc..........',
+      '...........ccCCCCCCCCcc.........',
+      '...........hhhSSSSSShh..........',
+      '...........hhSSSSSSSSh..........',
+      '...........hSSSSSSEESh..........',
+      '...........hSSSSSeSSSh..........',
+      '............sSSSSSSss...........',
+      '.............ssSSSSs............',
+      '..............sSSSs.............',
     ];
 
-    // ── UP — back view, 4-frame walk cycle ────────────────────────────
-    const up0 = [
-      '....CCCC........',  // cap back
-      '...CCCCCCC......',  // cap (no MR from back)
-      '..cCCCCCCc......',  // brim
-      '..hhHHHHhh......',  // hair back of head
-      '..hhhhhhhh......',  // hair lower
-      '...HhhhhH.......',  // nape
-      '..YYVVVVYY......',  // hoodie + vest back
-      '..GVVVVVG.......',  // sleeves + vest
-      '..gVVvVVg.......',  // vest seam
-      '...gVVVg........',  // waist
-      '...PPPPP........',  // pants
-      '...PP..PP.......',
-      '...Pp..pP.......',
-      '...OA..AO.......',
-      '................',
-      '................',
+    const torsoFront = [
+      '.........YYVVVVVVVVYY...........',
+      '........YGGVVVVVVVVGGY..........',
+      '........GGVVVVNNVVVVGG..........',
+      '........GGVVVVvvVVVVGG..........',
+      '........ggVVVVVVVVVVgg..........',
+      '.........gVVVVvvVVVVg...........',
+      '..........yVVVVVVVVy............',
     ];
-    const up1 = [                      // left stride + bob
-      '................',
-      '....CCCC........',
-      '...CCCCCCC......',
-      '..cCCCCCCc......',
-      '..hhHHHHhh......',
-      '..hhhhhhhh......',
-      '...HhhhhH.......',
-      '..YYVVVVYY......',
-      '..GVVVVVG.......',
-      '..gVVvVVg.......',
-      '...gVVVg........',
-      '..PP....PP......',
-      '..Pp.....P......',
-      '..OA....AO......',
-      '................',
-      '................',
+    const torsoBack = [
+      '.........YYVVVVVVVVYY...........',
+      '........YGGVVVVVVVVGGY..........',
+      '........GGVVVVVVVVVVGG..........',
+      '........GGVVVVvvVVVVGG..........',
+      '........ggVVVVVVVVVVgg..........',
+      '.........gVVVVvvVVVVg...........',
+      '..........yVVVVVVVVy............',
     ];
-    const up2 = [                      // stand (pass-through)
-      '....CCCC........',
-      '...CCCCCCC......',
-      '..cCCCCCCc......',
-      '..hhHHHHhh......',
-      '..hhhhhhhh......',
-      '...HhhhhH.......',
-      '..YYVVVVYY......',
-      '..GVVVVVG.......',
-      '..gVVvVVg.......',
-      '...gVVVg........',
-      '...PPPPP........',
-      '...PP..PP.......',
-      '...Pp..pP.......',
-      '...OA..AO.......',
-      '................',
-      '................',
-    ];
-    const up3 = [                      // right stride + bob
-      '................',
-      '....CCCC........',
-      '...CCCCCCC......',
-      '..cCCCCCCc......',
-      '..hhHHHHhh......',
-      '..hhhhhhhh......',
-      '...HhhhhH.......',
-      '..YYVVVVYY......',
-      '..GVVVVVG.......',
-      '..gVVvVVg.......',
-      '...gVVVg........',
-      '....PP....PP....',
-      '....P.....pP....',
-      '....OA....AO....',
-      '................',
-      '................',
+    const torsoSide = [
+      '...........YVVVVVVY.............',
+      '..........YGVVVVVVGY............',
+      '..........GVVVNVVVGG............',
+      '..........GVVVvVVVGG............',
+      '..........gVVVVVVVgg............',
+      '...........gVVVVVg..............',
+      '............yVVVy...............',
     ];
 
-    // ── RIGHT — side profile, 4-frame walk cycle (flipX → left) ──────
-    const right0 = [
-      '.....CCC........',  // cap side
-      '....CCCCM.......',  // cap with M visible
-      '...cCCCCCc......',  // brim
-      '...hhSSShh......',  // hair + face profile
-      '....hSESh.......',  // one eye visible
-      '.....sSs........',  // chin
-      '...YYVVYY.......',  // hoodie + vest side
-      '....GVNVG.......',  // sleeve + vest + note
-      '...gVvVg........',  // lower body
-      '....yVy.........',  // waist
-      '....PPP.........',  // pants together
-      '....PpP.........',  // pants mid
-      '....pKp.........',  // cargo pocket
-      '....OAO.........',  // shoe
-      '................',
-      '................',
+    const legsStand = [
+      '..........PPPPPPPPPP............',
+      '..........PPPP..PPPP............',
+      '..........PPp....pPP............',
+      '..........PPK....KPP............',
+      '..........PPp....pPP............',
+      '..........PP......PP............',
+      '.........OOA......AOO...........',
+      '.........OoA......AoO...........',
     ];
-    const right1 = [                   // stride A — legs apart + bob
-      '................',
-      '.....CCC........',
-      '....CCCCM.......',
-      '...cCCCCCc......',
-      '...hhSSShh......',
-      '....hSESh.......',
-      '.....sSs........',
-      '...YYVVYY.......',
-      '....GVNVG.......',
-      '...gVvVg........',
-      '....yVy.........',
-      '...P...P........',  // legs spread
-      '...p...p........',
-      '...O...A........',  // shoes far apart
-      '................',
-      '................',
+    const legsStride = [
+      '..........PPPPPPPPPP............',
+      '.........PPP......PPP...........',
+      '.........Pp........pP...........',
+      '.........PK........KP...........',
+      '.........Pp........pP...........',
+      '.........P..........P...........',
+      '........OA..........AO..........',
+      '........oA..........Ao..........',
     ];
-    const right2 = [                   // legs crossing (pass-through)
-      '.....CCC........',
-      '....CCCCM.......',
-      '...cCCCCCc......',
-      '...hhSSShh......',
-      '....hSESh.......',
-      '.....sSs........',
-      '...YYVVYY.......',
-      '....GVNVG.......',
-      '...gVvVg........',
-      '....yVy.........',
-      '....PP..........',  // legs together shifted
-      '....Pp..........',
-      '....OA..........',
-      '................',
-      '................',
-      '................',
+    const legsStandSide = [
+      '...........PPPPPPP..............',
+      '...........PPppPPP..............',
+      '...........PPpKpPP..............',
+      '...........PPppPPP..............',
+      '...........PPp.PPP..............',
+      '...........PP..PP...............',
+      '..........OOA.AOO...............',
+      '..........OoA.AoO...............',
     ];
-    const right3 = [                   // stride B — legs apart opposite + bob
-      '................',
-      '.....CCC........',
-      '....CCCCM.......',
-      '...cCCCCCc......',
-      '...hhSSShh......',
-      '....hSESh.......',
-      '.....sSs........',
-      '...YYVVYY.......',
-      '....GVNVG.......',
-      '...gVvVg........',
-      '....yVy.........',
-      '....P..P........',  // legs apart
-      '....p..p........',
-      '....O..A........',  // shoes apart
-      '................',
-      '................',
+    const legsStrideSide = [
+      '...........PPPPPPP..............',
+      '..........PP....PP..............',
+      '..........Pp....pP..............',
+      '..........PK....KP..............',
+      '..........Pp....pP..............',
+      '..........P......P..............',
+      '.........OA......AO.............',
+      '.........oA......Ao.............',
     ];
+
+    // ── Compose 32×32 frames ────────────────────────────────────────────
+    // Stand: 1 pad + 11 head + 7 torso + 8 legs + 5 pad = 32
+    // Stride: 3 pad + 11 head + 7 torso + 8 legs + 3 pad = 32 (2px bob)
+    const down0 = [_, ...headDown, ...torsoFront, ...legsStand, _, _, _, _, _];
+    const down1 = [_, _, _, ...headDown, ...torsoFront, ...legsStride, _, _, _];
+    const up0   = [_, ...headUp, ...torsoBack, ...legsStand, _, _, _, _, _];
+    const up1   = [_, _, _, ...headUp, ...torsoBack, ...legsStride, _, _, _];
+    const rt0   = [_, ...headRight, ...torsoSide, ...legsStandSide, _, _, _, _, _];
+    const rt1   = [_, _, _, ...headRight, ...torsoSide, ...legsStrideSide, _, _, _];
 
     const frames: Array<[string, string[]]> = [
-      ['player-down-0', down0],
-      ['player-down-1', down1],
-      ['player-down-2', down2],
-      ['player-down-3', down3],
-      ['player-up-0', up0],
-      ['player-up-1', up1],
-      ['player-up-2', up2],
-      ['player-up-3', up3],
-      ['player-right-0', right0],
-      ['player-right-1', right1],
-      ['player-right-2', right2],
-      ['player-right-3', right3],
+      ['player-down-0', down0], ['player-down-1', down1],
+      ['player-down-2', down0], ['player-down-3', down1],
+      ['player-up-0', up0],     ['player-up-1', up1],
+      ['player-up-2', up0],     ['player-up-3', up1],
+      ['player-right-0', rt0],  ['player-right-1', rt1],
+      ['player-right-2', rt0],  ['player-right-3', rt1],
       ['player-idle', down0],
     ];
 
     frames.forEach(([key, rows]) => {
       if (scene.textures.exists(key)) return;
       const g = scene.make.graphics({ x: 0, y: 0 }, false);
-      TextureFactory.drawPixelMap(g, rows, pal, SCALE);
-      g.generateTexture(key, 16, 16);
+      TextureFactory.drawPixelMap(g, rows, pal, 1);
+      g.generateTexture(key, 32, 32);
       g.destroy();
     });
   }
