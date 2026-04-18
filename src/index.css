@@ -147,6 +147,11 @@
   box-shadow: 3px 3px 0 #006666, 0 0 30px rgba(0, 255, 255, 0.8);
 }
 
+/* Hide lore text on short viewports (landscape mobile) */
+@media (max-height: 500px) {
+  .hide-on-short { display: none; }
+}
+
 /* HP / XP bars */
 .stat-bar {
   height: 8px;

@@ -26,6 +26,10 @@ const O3 = 20; // gray roof — decorative
 const D2 = 21; // iron door — decorative
 const BW = 22; // building wall with window (collision) — wood
 const SW = 23; // stone building wall with window (collision)
+const J  = 24; // pillar / standing stone (collision)
+const V  = 25; // wall rune (decorative)
+const Q2 = 26; // skull / bone decoration (decorative)
+const N  = 27; // stalactite (decorative, depth 2)
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -271,36 +275,74 @@ export class MapBuilder {
     // Full-width cave walls as default for this section
     fill(54, 1, 68, 46, K);
 
-    // Wide cave passage — rows 54–59
-    fill(54, 13, 59, 34, C);
+    // Organic passage shape — widens, narrows, then fans into boss ante-room
+    const passageShape: [number, number, number][] = [
+      [54, 12, 35], [55, 11, 36], [56, 10, 35],  // wide entry
+      [57, 11, 34], [58, 13, 35], [59, 14, 34],  // mid-wide
+      [60, 15, 32], [61, 14, 31], [62, 15, 32], [63, 16, 31], // choke-point
+      [64, 10, 37], [65, 9, 38], [66, 8, 38], [67, 8, 39], [68, 7, 39], // fan open
+    ];
+    passageShape.forEach(([r, cL, cR]) => fill(r, cL, r, cR, C));
 
-    // Narrow passage — rows 60–63
-    fill(60, 16, 63, 31, C);
+    // Stone pillar pairs flanking the inner gate (rows 67–68)
+    set(67, 11, J); set(67, 12, J); set(67, 35, J); set(67, 36, J);
+    set(68, 11, J); set(68, 12, J); set(68, 35, J); set(68, 36, J);
 
-    // Wide again — rows 64–68 (opening to boss chamber)
-    fill(64, 11, 68, 36, C);
+    // Wall rune tiles carved into cave-wall faces
+    set(57, 9, V);  set(57, 37, V);
+    set(63, 15, V); set(63, 32, V);
+    set(66, 6, V);  set(66, 40, V);
 
-    // Crystals (decorative) scattered along cave walls
+    // Stalactites dangling into the passage from wall edges
     for (const [r, c] of [
-      [55,12],[56,35],[57,12],[58,34],[59,13],
-      [60,15],[61,32],[62,15],[63,32],
-      [64,10],[65,37],[66,11],[67,36],[68,10],
-    ] as [number,number][]) set(r, c, X);
+      [54, 13], [54, 34], [55, 12], [55, 35], [56, 11],
+      [57, 11], [57, 34], [58, 14], [59, 15],
+    ] as [number, number][]) set(r, c, N);
+    for (const [r, c] of [
+      [60, 16], [61, 15], [62, 15], [63, 16],
+      [60, 32], [61, 31], [62, 32], [63, 31],
+    ] as [number, number][]) set(r, c, N);
+
+    // Skull / bone decorations at pillar bases and gate approach
+    set(68, 13, Q2); set(68, 34, Q2);
+
+    // Crystals — dramatically repositioned (asymmetric clusters)
+    for (const [r, c] of [
+      [55, 10], [55, 36],        // entry alcoves
+      [56, 10], [58, 36],        // wall pockets
+      [61, 13], [62, 33],        // choke zone
+      [64, 9],  [65, 38],        // fan zone
+      [66, 8],  [67, 38],
+      [69, 14], [69, 33],        // arena ante-room
+    ] as [number, number][]) set(r, c, X);
 
     // ═════════════════════════════════════════════════════════════════════════
     //  ZONE 6 — THE CORE  (rows 69–77)
     // ═════════════════════════════════════════════════════════════════════════
 
-    // Entry wall with opening
+    // Entry wall with wider opening (matches fanned passage)
     hLine(69, 1, 46, K);
-    fill(69, 16, 69, 31, C);
+    fill(69, 13, 69, 34, C);
 
-    // Boss arena floor
-    fill(70, 8, 77, 39, A);
+    // Quasi-elliptical boss arena floor — curved walls instead of a rectangle
+    const arenaRows: [number, number, number][] = [
+      [70, 12, 35],
+      [71, 8,  39],
+      [72, 7,  40],
+      [73, 7,  40],
+      [74, 8,  39],
+      [75, 9,  38],
+      [76, 11, 36],
+      [77, 14, 33],
+    ];
+    arenaRows.forEach(([r, cL, cR]) => {
+      fill(r, cL, r, cR, A);
+      fill(r, 1, r, cL - 1, K);
+      fill(r, cR + 1, r, 46, K);
+    });
 
-    // Arena outer ring (cave walls)
-    fill(70, 1, 77, 7, K);
-    fill(70, 40, 77, 46, K);
+    // Skull decorations at the deep arena back-wall corners
+    set(76, 9, Q2); set(76, 38, Q2);
 
     // Bottom border above world edge
     hLine(78, 1, 46, K);
@@ -329,6 +371,18 @@ export class MapBuilder {
     bg.fillStyle(0x0c0814); bg.fillRect(0, 54 * TILE, worldWidth, 15 * TILE);
     // The Core      — pure black
     bg.fillStyle(0x060410); bg.fillRect(0, 69 * TILE, worldWidth, 11 * TILE);
+
+    // Override grid with editor-saved map if present
+    const _editorMap = localStorage.getItem('editor-map');
+    if (_editorMap) {
+      try {
+        const editorGrid: number[][] = JSON.parse(_editorMap);
+        for (let r = 0; r < MAP_ROWS; r++)
+          for (let c = 0; c < MAP_COLS; c++)
+            if (editorGrid[r]?.[c] !== undefined) grid[r][c] = editorGrid[r][c];
+      } catch { /* ignore malformed data */ }
+      localStorage.removeItem('editor-map');
+    }
 
     // Seeded pseudo-random for deterministic variety per tile position
     const hash = (r: number, c: number) => ((r * 7919 + c * 104729) & 0xffff) / 0xffff;
@@ -386,6 +440,10 @@ export class MapBuilder {
             break;
           }
           case X:  { const i = scene.add.image(px, py, 'tile-crystal');      i.setDepth(1); decorative.add(i); break; }
+          case J:  { const i = scene.add.image(px, py, 'tile-pillar');      i.setDepth(1); walls.add(i);      break; }
+          case V:  { const i = scene.add.image(px, py, 'tile-wall-rune');   i.setDepth(1); decorative.add(i); break; }
+          case Q2: { const i = scene.add.image(px, py, 'tile-skull');       i.setDepth(1); decorative.add(i); break; }
+          case N:  { const i = scene.add.image(px, py, 'tile-stalactite');  i.setDepth(2); decorative.add(i); break; }
           case S: {
             const gk = rng < 0.3 ? 'tile-grass-2' : 'tile-grass';
             const gi = scene.add.image(px, py, gk);
@@ -438,6 +496,9 @@ export class MapBuilder {
     // ── Crystal glow pulses (tween on a few X tiles) ─────────────────────────
     MapBuilder.animateCrystals(scene, grid);
 
+    // ── Cave atmosphere: ash, fog, braziers, entrance arch ────────────────────
+    MapBuilder.drawCaveAtmosphere(scene);
+
     // ── Named positions ───────────────────────────────────────────────────────
     const px = (col: number) => col * TILE + TILE / 2;
     const py = (row: number) => row * TILE + TILE / 2;
@@ -486,50 +547,251 @@ export class MapBuilder {
     };
   }
 
-  // ── Boss chamber rune circle ─────────────────────────────────────────────
+  // ── Grid-only build (used by the map editor) ────────────────────────────
+  static buildGridOnly(): number[][] {
+    const grid: number[][] = Array.from({ length: MAP_ROWS }, () => new Array(MAP_COLS).fill(_));
+    const set  = (r: number, c: number, t: number) => { if (r >= 0 && r < MAP_ROWS && c >= 0 && c < MAP_COLS) grid[r][c] = t; };
+    const fill = (r1: number, c1: number, r2: number, c2: number, t: number) => { for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) set(r, c, t); };
+    const hLine = (row: number, c1: number, c2: number, t: number) => fill(row, c1, row, c2, t);
+    const vLine = (col: number, r1: number, r2: number, t: number) => fill(r1, col, r2, col, t);
+
+    hLine(0, 0, MAP_COLS - 1, W); hLine(MAP_ROWS - 1, 0, MAP_COLS - 1, W);
+    vLine(0, 0, MAP_ROWS - 1, W); vLine(MAP_COLS - 1, 0, MAP_ROWS - 1, W);
+    fill(1, 19, 51, 22, P);
+
+    // ZONE 1 — Echo Village
+    hLine(2, 2, 6, O); set(3,3,BW); set(3,4,B); set(3,5,BW); set(4,3,B); set(4,4,D); set(4,5,B);
+    hLine(2, 9, 15, O2); set(3,10,BW); set(3,11,B); set(3,12,B); set(3,13,B); set(3,14,BW); set(4,10,B); set(4,11,BW); set(4,12,D); set(4,13,BW); set(4,14,B);
+    hLine(8, 2, 6, O); set(9,3,BW); set(9,4,B); set(9,5,BW); set(10,3,B); set(10,4,D); set(10,5,B);
+    hLine(2, 33, 37, O); set(3,34,BW); set(3,35,B); set(3,36,BW); set(4,34,B); set(4,35,D); set(4,36,B);
+    fill(2, 24, 5, 30, R); hLine(5, 4, 18, P); hLine(11, 4, 18, P);
+    for (const [r,c] of [[1,3],[1,6],[3,2],[3,6],[1,10],[1,14],[3,9],[3,15],[8,7],[9,7],[8,1],[9,1],[1,34],[1,36],[3,32],[3,38],[6,1],[6,8],[6,17],[7,1],[7,17],[7,36],[4,31]] as [number,number][]) set(r,c,F);
+    set(9, 17, S);
+    for (let c = 1; c <= 46; c++) { if (c < 19 || c > 22) { set(12, c, T); set(13, c, U); } }
+
+    // ZONE 2 — Signal Path
+    fill(14,1,24,2,T); fill(14,45,24,46,T); fill(14,3,24,17,L); fill(14,23,24,44,L);
+    fill(18,8,19,10,_); fill(20,32,21,35,_); set(16,13,S);
+    for (let c = 1; c <= 46; c++) { if (c < 19 || c > 22) { set(25, c, T); set(26, c, U); } }
+
+    // ZONE 3 — Neon Junction
+    hLine(27,2,8,O3); set(28,3,SW); set(28,4,B2); set(28,5,B2); set(28,6,B2); set(28,7,SW); set(29,3,B2); set(29,4,B2); set(29,5,D2); set(29,6,B2); set(29,7,B2);
+    hLine(27,28,34,O3); set(28,29,SW); set(28,30,B2); set(28,31,B2); set(28,32,B2); set(28,33,SW); set(29,29,B2); set(29,30,B2); set(29,31,D2); set(29,32,B2); set(29,33,B2);
+    hLine(33,38,42,O3); set(34,39,B2); set(34,40,SW); set(34,41,B2); set(35,39,B2); set(35,40,D2); set(35,41,B2);
+    hLine(33,2,6,O3); set(34,3,B2); set(34,4,SW); set(34,5,B2); set(35,3,B2); set(35,4,D2); set(35,5,B2);
+    hLine(30,5,31,P);
+    for (const [r,c] of [[28,2],[28,8],[31,3],[31,7],[28,28],[28,34],[31,29],[31,33],[34,2],[34,6],[36,3],[36,5],[34,38],[34,42],[36,39],[36,41],[32,14],[33,14],[32,25],[33,24]] as [number,number][]) set(r,c,F);
+    set(35,17,S);
+
+    // Gate
+    hLine(37,1,46,W); fill(37,19,37,22,G); hLine(38,1,46,W); fill(38,19,38,22,G);
+
+    // ZONE 4 — Fading Path
+    fill(39,19,51,22,P); fill(39,1,51,2,W); fill(39,45,51,46,W); fill(39,3,51,17,L); fill(39,23,51,44,L);
+    fill(45,3,47,4,W); fill(45,43,47,44,W); set(43,12,S);
+
+    // Cave approach
+    for (let c = 1; c <= 46; c++) { if (c < 19 || c > 22) set(51, c, T); }
+    for (let c = 1; c <= 46; c++) { if (c < 15 || c > 26) set(52, c, K); }
+    fill(52,15,53,26,C); fill(52,19,53,22,C);
+
+    // ZONE 5 — Void Cave
+    fill(54,1,68,46,K);
+    const ps: [number,number,number][] = [[54,12,35],[55,11,36],[56,10,35],[57,11,34],[58,13,35],[59,14,34],[60,15,32],[61,14,31],[62,15,32],[63,16,31],[64,10,37],[65,9,38],[66,8,38],[67,8,39],[68,7,39]];
+    ps.forEach(([r,cL,cR]) => fill(r,cL,r,cR,C));
+    set(67,11,J); set(67,12,J); set(67,35,J); set(67,36,J); set(68,11,J); set(68,12,J); set(68,35,J); set(68,36,J);
+    set(57,9,V); set(57,37,V); set(63,15,V); set(63,32,V); set(66,6,V); set(66,40,V);
+    for (const [r,c] of [[54,13],[54,34],[55,12],[55,35],[56,11],[57,11],[57,34],[58,14],[59,15],[60,16],[61,15],[62,15],[63,16],[60,32],[61,31],[62,32],[63,31]] as [number,number][]) set(r,c,N);
+    set(68,13,Q2); set(68,34,Q2);
+    for (const [r,c] of [[55,10],[55,36],[56,10],[58,36],[61,13],[62,33],[64,9],[65,38],[66,8],[67,38],[69,14],[69,33]] as [number,number][]) set(r,c,X);
+
+    // ZONE 6 — The Core
+    hLine(69,1,46,K); fill(69,13,69,34,C);
+    const ar: [number,number,number][] = [[70,12,35],[71,8,39],[72,7,40],[73,7,40],[74,8,39],[75,9,38],[76,11,36],[77,14,33]];
+    ar.forEach(([r,cL,cR]) => { fill(r,cL,r,cR,A); fill(r,1,r,cL-1,K); fill(r,cR+1,r,46,K); });
+    set(76,9,Q2); set(76,38,Q2);
+    hLine(78,1,46,K); hLine(79,1,46,K);
+
+    return grid;
+  }
+
+  // ── Boss chamber rune circle (enhanced) ─────────────────────────────────
   private static drawCoreRunes(scene: Phaser.Scene, cx: number, cy: number): Phaser.GameObjects.GameObject[] {
+    const outerR = 5 * TILE;
+    const midR   = 3.5 * TILE;
+    const innerR = 2 * TILE;
+
+    // Three concentric circles on one graphics object
     const g = scene.add.graphics().setDepth(1);
+    g.lineStyle(3, 0x880000, 0.55); g.strokeCircle(cx, cy, outerR);
+    g.lineStyle(2, 0x660000, 0.40); g.strokeCircle(cx, cy, midR);
+    g.lineStyle(1, 0x440000, 0.30); g.strokeCircle(cx, cy, innerR);
 
-    // Outer circle
-    g.lineStyle(2, 0xcc0000, 0.5);
-    g.strokeCircle(cx, cy, 4 * TILE);
-
-    // Inner circle
-    g.lineStyle(1, 0x880000, 0.3);
-    g.strokeCircle(cx, cy, 2 * TILE);
-
-    // Pentagram spokes
-    g.lineStyle(1, 0xaa0000, 0.3);
+    // True pentagram: each point connects to the point two positions ahead
     const pts = 5;
-    const r = 4 * TILE;
+    g.lineStyle(1, 0x990000, 0.35);
+    const pentPoints: [number, number][] = Array.from({ length: pts }, (_, i) => [
+      cx + Math.cos(((Math.PI * 2) / pts) * i - Math.PI / 2) * outerR,
+      cy + Math.sin(((Math.PI * 2) / pts) * i - Math.PI / 2) * outerR,
+    ]);
     for (let i = 0; i < pts; i++) {
-      const a1 = ((Math.PI * 2) / pts) * i - Math.PI / 2;
-      const a2 = ((Math.PI * 2) / pts) * ((i + 2) % pts) - Math.PI / 2;
-      g.lineBetween(cx + Math.cos(a1) * r, cy + Math.sin(a1) * r,
-                    cx + Math.cos(a2) * r, cy + Math.sin(a2) * r);
+      const [x1, y1] = pentPoints[i];
+      const [x2, y2] = pentPoints[(i + 2) % pts];
+      g.lineBetween(x1, y1, x2, y2);
     }
+    scene.tweens.add({ targets: g, alpha: 0.35, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    // Pulsing centre dot
-    const dot = scene.add.graphics().setDepth(2);
-    dot.fillStyle(0xff0000, 0.7);
-    dot.fillCircle(cx, cy, 6);
-    scene.tweens.add({ targets: dot, alpha: 0.2, duration: 800, yoyo: true, repeat: -1 });
+    // 8 cardinal glyph markers on the mid ring
+    const markerG = scene.add.graphics().setDepth(2);
+    for (let i = 0; i < 8; i++) {
+      const angle = ((Math.PI * 2) / 8) * i;
+      const mx = cx + Math.cos(angle) * midR;
+      const my = cy + Math.sin(angle) * midR;
+      markerG.fillStyle(0xcc0000, 0.7); markerG.fillRect(mx - 2, my - 2, 4, 4);
+      markerG.fillStyle(0xff2200, 0.4); markerG.fillRect(mx - 1, my - 1, 2, 2);
+    }
+    scene.tweens.add({ targets: markerG, alpha: 0.2, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    // Corner rune markers
+    // Void-eye center — layered black / dark-red / bright-red
+    const eye = scene.add.graphics().setDepth(3);
+    eye.fillStyle(0x000000, 1.0); eye.fillCircle(cx, cy, 10);
+    eye.fillStyle(0x330011, 0.8); eye.fillCircle(cx, cy, 7);
+    eye.fillStyle(0x880022, 0.6); eye.fillCircle(cx, cy, 4);
+    eye.fillStyle(0xff0033, 0.9); eye.fillCircle(cx, cy, 2);
+    scene.tweens.add({ targets: eye, alpha: 0.25, duration: 700, yoyo: true, repeat: -1 });
+
+    // 5 pentagram-vertex rune markers with staggered pulsing
     const markers: Phaser.GameObjects.Graphics[] = [];
     for (let i = 0; i < pts; i++) {
-      const a = ((Math.PI * 2) / pts) * i - Math.PI / 2;
-      const mx = cx + Math.cos(a) * r;
-      const my = cy + Math.sin(a) * r;
-      const m = scene.add.graphics().setDepth(2);
-      m.fillStyle(0xcc0000, 0.6);
-      m.fillRect(-2, -2, 4, 4);
+      const a  = ((Math.PI * 2) / pts) * i - Math.PI / 2;
+      const mx = cx + Math.cos(a) * outerR;
+      const my = cy + Math.sin(a) * outerR;
+      const m  = scene.add.graphics().setDepth(2);
+      m.fillStyle(0xdd0000, 0.8); m.fillRect(-3, -1, 6, 2); m.fillRect(-1, -3, 2, 6);
+      m.fillStyle(0xff3300, 0.4); m.fillCircle(0, 0, 3);
       m.setPosition(mx, my);
-      scene.tweens.add({ targets: m, alpha: 0.15, duration: 600 + i * 150, yoyo: true, repeat: -1 });
+      scene.tweens.add({ targets: m, alpha: 0.1, duration: 600 + i * 150, yoyo: true, repeat: -1 });
       markers.push(m);
     }
 
-    return [g, dot, ...markers];
+    return [g, markerG, eye, ...markers];
+  }
+
+  // ── Cave atmosphere: ash motes, fog wisps, braziers, entrance arch ────────
+  private static drawCaveAtmosphere(scene: Phaser.Scene): void {
+    const caveTop    = 54 * TILE;
+    const caveBottom = 77 * TILE;
+    const caveLeft   = 7 * TILE;
+    const caveRight  = 41 * TILE;
+
+    // ── Floating ash / dust motes ──────────────────────────────────────────
+    for (let i = 0; i < 40; i++) {
+      const mote  = scene.add.graphics().setDepth(2);
+      const isRed = Math.random() < 0.3;
+      const isTeal = !isRed && Math.random() < 0.4;
+      const color = isRed ? 0x660011 : isTeal ? 0x004433 : 0x2a1a3a;
+      const alpha = 0.15 + Math.random() * 0.3;
+      mote.fillStyle(color, alpha);
+      mote.fillCircle(0, 0, 0.8 + Math.random() * 1.2);
+      const sx = caveLeft  + Math.random() * (caveRight - caveLeft);
+      const sy = caveTop   + Math.random() * (caveBottom - caveTop);
+      mote.setPosition(sx, sy);
+      const driftY = -25 - Math.random() * 40;
+      const driftX = (Math.random() - 0.5) * 30;
+      const dur    = 4000 + Math.random() * 5000;
+      scene.tweens.add({
+        targets: mote,
+        y: sy + driftY, x: sx + driftX,
+        alpha: 0,
+        duration: dur,
+        delay: Math.random() * dur,
+        repeat: -1,
+        onRepeat: () => {
+          mote.setPosition(
+            caveLeft + Math.random() * (caveRight - caveLeft),
+            caveTop  + Math.random() * (caveBottom - caveTop)
+          );
+          mote.setAlpha(alpha);
+        },
+      });
+    }
+
+    // ── Fog wisps at cave entrance (row 53) ────────────────────────────────
+    const fogY = 53 * TILE;
+    for (let i = 0; i < 6; i++) {
+      const fog = scene.add.graphics().setDepth(3);
+      fog.fillStyle(0x1a0e2a, 0.18);
+      fog.fillEllipse(0, 0, 48 + Math.random() * 32, 10 + Math.random() * 6);
+      const fx = 15 * TILE + Math.random() * 14 * TILE;
+      fog.setPosition(fx, fogY + Math.random() * 8);
+      scene.tweens.add({
+        targets: fog,
+        x: fx + (Math.random() < 0.5 ? 1 : -1) * (10 + Math.random() * 16),
+        alpha: { from: 0.08, to: 0.22 },
+        duration: 3000 + Math.random() * 2000,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
+
+    // ── Void crack floor glow in arena ────────────────────────────────────
+    const aCx = 24 * TILE;
+    const aCy = 74 * TILE;
+    const arenaGlow = scene.add.graphics().setDepth(1);
+    const crackAngles = [15, 72, 130, 200, 255, 310];
+    crackAngles.forEach(deg => {
+      const rad = Phaser.Math.DegToRad(deg);
+      const len = 40 + Math.random() * 20;
+      const ex  = aCx + Math.cos(rad) * len;
+      const ey  = aCy + Math.sin(rad) * len;
+      arenaGlow.lineStyle(1, 0x550020, 0.5);
+      arenaGlow.lineBetween(aCx, aCy, ex, ey);
+      arenaGlow.lineStyle(1, 0x220010, 0.3);
+      arenaGlow.lineBetween(aCx + 1, aCy, ex + 1, ey);
+    });
+    arenaGlow.fillStyle(0x1a0008, 0.35); arenaGlow.fillCircle(aCx, aCy, 22);
+    arenaGlow.fillStyle(0x2d0012, 0.2);  arenaGlow.fillCircle(aCx, aCy, 12);
+    scene.tweens.add({ targets: arenaGlow, alpha: 0.5, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // ── Brazier / torch glow points ────────────────────────────────────────
+    const braziers: [number, number, number][] = [
+      [15 * TILE, 53 * TILE, 0xff4400],  // entrance left
+      [27 * TILE, 53 * TILE, 0xff4400],  // entrance right
+      [12 * TILE, 68 * TILE, 0xff2200],  // pillar left
+      [35 * TILE, 68 * TILE, 0xff2200],  // pillar right
+      [11 * TILE, 76 * TILE, 0xcc0044],  // arena back left
+      [37 * TILE, 76 * TILE, 0xcc0044],  // arena back right
+    ];
+    braziers.forEach(([bx, by, col]) => {
+      const outer = scene.add.graphics().setDepth(2);
+      outer.fillStyle(col, 0.12); outer.fillCircle(bx, by, 18);
+      const inner = scene.add.graphics().setDepth(3);
+      inner.fillStyle(col, 0.35); inner.fillCircle(bx, by, 7);
+      const dot   = scene.add.graphics().setDepth(3);
+      dot.fillStyle(0xffcc44, 0.8); dot.fillCircle(bx, by, 2);
+      scene.tweens.add({ targets: outer, alpha: 0.04, scaleX: 1.15, scaleY: 1.1, duration: 180 + Math.random() * 120, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      scene.tweens.add({ targets: inner, alpha: 0.15, scaleX: 0.9,  scaleY: 1.1, duration: 220 + Math.random() * 100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      scene.tweens.add({ targets: dot,   alpha: 0.4,  scaleX: 1.3,  scaleY: 1.4, duration: 130 + Math.random() * 80,  yoyo: true, repeat: -1 });
+    });
+
+    // ── Entrance arch framing the boss chamber opening ─────────────────────
+    // arc(x, y, radius, startAngle, endAngle, anticlockwise):
+    // From PI (left) clockwise to 0 (right) traces the upper semicircle arch.
+    const archCx = 24 * TILE;
+    const archCy = 70 * TILE;
+    const archR  = 8 * TILE;
+    const arch   = scene.add.graphics().setDepth(3);
+
+    arch.lineStyle(8, 0x1e1630, 0.9);
+    arch.beginPath(); arch.arc(archCx, archCy, archR,      Math.PI, 0, false); arch.strokePath();
+
+    arch.lineStyle(4, 0x2a2248, 0.8);
+    arch.beginPath(); arch.arc(archCx, archCy, archR - 4,  Math.PI, 0, false); arch.strokePath();
+
+    arch.lineStyle(2, 0x7a5800, 0.5);
+    arch.beginPath(); arch.arc(archCx, archCy, archR - 8,  Math.PI + 0.15, -0.15, false); arch.strokePath();
+
+    arch.lineStyle(1, 0x004433, 0.3);
+    arch.beginPath(); arch.arc(archCx, archCy, archR - 12, Math.PI, 0, false); arch.strokePath();
   }
 
   // ── Animate crystal tiles with gentle glow pulse ─────────────────────────

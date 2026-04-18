@@ -1,4 +1,4 @@
-export type GamePhase = 'start' | 'world' | 'battle' | 'reward' | 'download';
+export type GamePhase = 'start' | 'world' | 'battle' | 'reward' | 'download' | 'editor';
 
 export type ZoneType = 'spawn' | 'route' | 'gate' | 'arena';
 

@@ -45,10 +45,17 @@ export class WorldScene extends Phaser.Scene {
   private battleActive = false;
   private worldFrozen = false;
 
-  // Zone rects (in world pixels)
-  // Boss chamber — rows 69–77
-  private bossZoneRect = new Phaser.Geom.Rectangle(0, 70 * TILE, 768, 8 * TILE);
+  // Pentagram center — boss triggers when player walks into the rune circle
+  private readonly PENTAGRAM_X = 24 * TILE;
+  private readonly PENTAGRAM_Y = 74 * TILE;
+  private readonly PENTAGRAM_TRIGGER_RADIUS = 4 * TILE; // ~64 px, just inside the outer ring
   private bossEncounterStarted = false;
+
+  // Boss approach zone — rows 64–69 (tension build-up before the actual encounter)
+  private bossApproachRect = new Phaser.Geom.Rectangle(0, 64 * TILE, 768, 5 * TILE);
+  private bossApproachStarted = false;
+  private approachEffects: Phaser.GameObjects.GameObject[] = [];
+  private _approachShakeTimer?: Phaser.Time.TimerEvent;
 
   // Gate zone — only the path columns directly against the gate (row 36)
   private gateZoneRect = new Phaser.Geom.Rectangle(18 * TILE, 36 * TILE, 6 * TILE, 1 * TILE);
@@ -191,10 +198,20 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // ── Boss zone ─────────────────────────────────────────────────────────
-    if (!this.bossEncounterStarted && this.gateOpen &&
-        this.bossZoneRect.contains(this.player.x, this.player.y)) {
-      this.startBossEncounter();
+    // ── Boss approach zone (rows 64–69) — pre-encounter tension ──────────
+    if (!this.bossApproachStarted && this.gateOpen &&
+        this.bossApproachRect.contains(this.player.x, this.player.y)) {
+      this.startBossApproach();
+    }
+
+    // ── Boss zone — triggers only when player steps into the rune circle ──
+    if (!this.bossEncounterStarted && this.gateOpen) {
+      const distToPentagram = Phaser.Math.Distance.Between(
+        this.player.x, this.player.y, this.PENTAGRAM_X, this.PENTAGRAM_Y
+      );
+      if (distToPentagram < this.PENTAGRAM_TRIGGER_RADIUS) {
+        this.startBossEncounter();
+      }
     }
 
     // ── Lost track pickup ─────────────────────────────────────────────────
@@ -557,32 +574,94 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  private startBossApproach(): void {
+    this.bossApproachStarted = true;
+
+    // Subtle dark vignette that fades in
+    const vignette = this.add.graphics().setDepth(50).setScrollFactor(0);
+    vignette.fillStyle(0x000000, 0.0);
+    vignette.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({ targets: vignette, alpha: 0.18, duration: 3000, ease: 'Sine.easeIn' });
+    this.approachEffects.push(vignette);
+
+    // Periodic low-magnitude camera tremors
+    this._approachShakeTimer = this.time.addEvent({
+      delay: 4000,
+      repeat: -1,
+      callback: () => { if (!this.bossEncounterStarted) this.cameras.main.shake(600, 0.0015); },
+    });
+
+    // 12 red motes rising from the arena floor
+    for (let i = 0; i < 12; i++) {
+      this.time.delayedCall(i * 400, () => {
+        const mote = this.add.graphics().setDepth(5);
+        mote.fillStyle(0x880011, 0.5);
+        mote.fillCircle(0, 0, 1.5);
+        const sx = 8 * TILE + Math.random() * 32 * TILE;
+        const sy = 77 * TILE;
+        mote.setPosition(sx, sy);
+        this.tweens.add({
+          targets: mote,
+          y: sy - 60 - Math.random() * 40,
+          alpha: 0,
+          duration: 2500 + Math.random() * 1500,
+          repeat: -1,
+          onRepeat: () => {
+            mote.setPosition(8 * TILE + Math.random() * 32 * TILE, 77 * TILE);
+            mote.setAlpha(0.5);
+          },
+        });
+        this.approachEffects.push(mote);
+      });
+    }
+  }
+
   private startBossEncounter(): void {
     if (this.bossEncounterStarted || this.battleActive) return;
     this.bossEncounterStarted = true;
     this.battleActive = true;
     this.player.freeze();
 
-    this.cameras.main.shake(400, 0.008);
-    this.boss?.setAlpha(1);
+    // Heavy shake + brief zoom pulse
+    this.cameras.main.shake(600, 0.012);
+    this.tweens.add({
+      targets: this.cameras.main,
+      zoom: 2.4,
+      duration: 800,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        this.tweens.add({ targets: this.cameras.main, zoom: 2.0, duration: 400, ease: 'Sine.easeOut' });
+      },
+    });
 
-    this.showDialog(
-      [
-        'The air goes completely still.',
-        'All sound dies.',
-        'A shape rises from the darkness...',
-        'THE GATEKEEPER:',
-        '"No sound passes through The Core."',
-        '"Your journey ends here."',
-      ],
-      () => {
-        this.cameras.main.flash(500, 100, 0, 180);
-        this.time.delayedCall(400, () => {
-          this.scene.launch('BattleScene', { enemyData: BOSS_DEFINITION, isBoss: true });
-          this.scene.pause();
-        });
-      }
-    );
+    // Red screen tint overlay (fixed to camera)
+    const tint = this.add.graphics().setDepth(60).setScrollFactor(0);
+    tint.fillStyle(0x440000, 0.0);
+    tint.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({ targets: tint, alpha: 0.22, duration: 1000, ease: 'Sine.easeIn' });
+
+    // Boss fades in with a short delay
+    this.time.delayedCall(300, () => { this.boss?.setAlpha(1); });
+
+    this.time.delayedCall(800, () => {
+      this.showDialog(
+        [
+          'The air goes completely still.',
+          'All sound dies.',
+          'A shape rises from the darkness...',
+          'THE GATEKEEPER:',
+          '"No sound passes through The Core."',
+          '"Your journey ends here."',
+        ],
+        () => {
+          this.cameras.main.flash(500, 100, 0, 180);
+          this.time.delayedCall(400, () => {
+            this.scene.launch('BattleScene', { enemyData: BOSS_DEFINITION, isBoss: true });
+            this.scene.pause();
+          });
+        }
+      );
+    });
   }
 
   private onBattleEnd = (result: { outcome: 'win' | 'lose'; isBoss: boolean }) => {
@@ -904,6 +983,7 @@ export class WorldScene extends Phaser.Scene {
   private onRespawn = (): void => {
     this.scene.resume();
     this.cameras.main.resetFX();
+    this.cameras.main.setZoom(2);
     this.player.setPosition(this.spawnX, this.spawnY);
     this.player.unfreeze();
 
@@ -913,6 +993,13 @@ export class WorldScene extends Phaser.Scene {
     this.dialogActive = false;
     this.worldFrozen = false;
     this.isTyping = false;
+
+    // Clean up approach effects
+    for (const fx of this.approachEffects) fx.destroy();
+    this.approachEffects = [];
+    this.bossApproachStarted = false;
+    this._approachShakeTimer?.remove();
+    this._approachShakeTimer = undefined;
     if (this.currentTypeTimer) { this.currentTypeTimer.destroy(); this.currentTypeTimer = undefined; }
     this.dialogQueue = [];
     if (this.dialogBox) { this.dialogBox.setVisible(false); }

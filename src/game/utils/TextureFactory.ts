@@ -1078,6 +1078,97 @@ export class TextureFactory {
       g.generateTexture('tile-crystal', 16, 16);
       g.destroy();
     }
+
+    // Pillar — dark basalt column with teal void seam and capital/base
+    makeTile('tile-pillar', g => {
+      g.fillStyle(0x1a1428); g.fillRect(0, 0, 16, 16);
+      g.fillStyle(0x241d38); g.fillRect(2, 0, 12, 16);
+      g.fillStyle(0x2e2548); g.fillRect(3, 0, 10, 16);
+      g.fillStyle(0x3a2f5a); g.fillRect(2, 0, 2, 16);
+      g.fillStyle(0x140f22); g.fillRect(12, 0, 2, 16);
+      // Horizontal banding
+      g.fillStyle(0x1e1830); g.fillRect(2, 4, 12, 1);
+      g.fillRect(2, 9, 12, 1);
+      g.fillRect(2, 13, 12, 1);
+      // Capital (top block)
+      g.fillStyle(0x2a2240); g.fillRect(0, 0, 16, 3);
+      g.fillStyle(0x382e52); g.fillRect(1, 0, 14, 2);
+      g.fillStyle(0x4a3d6a); g.fillRect(2, 0, 12, 1);
+      // Base (bottom block)
+      g.fillStyle(0x2a2240); g.fillRect(0, 13, 16, 3);
+      g.fillStyle(0x140f22); g.fillRect(1, 14, 14, 2);
+      // Void crack seam (teal)
+      g.fillStyle(0x003322); g.fillRect(7, 3, 2, 7);
+      g.fillStyle(0x005544); g.fillRect(8, 4, 1, 5);
+    });
+
+    // Wall rune — cave wall with carved red sigil
+    makeTile('tile-wall-rune', g => {
+      g.fillStyle(0x2c2240); g.fillRect(0, 0, 16, 16);
+      g.fillStyle(0x201830); g.fillRect(1, 1, 6, 6);
+      g.fillRect(9, 9, 6, 6);
+      g.fillStyle(0x382a50); g.fillRect(1, 9, 6, 6);
+      g.fillRect(9, 1, 6, 6);
+      g.fillStyle(0x120c20); g.fillRect(7, 0, 2, 16);
+      g.fillRect(0, 7, 16, 2);
+      // Carved cross rune
+      g.fillStyle(0x660000); g.fillRect(7, 4, 2, 8);
+      g.fillRect(4, 7, 8, 2);
+      // Circle outline via corner marks
+      g.fillStyle(0x880000); g.fillRect(5, 4, 1, 1); g.fillRect(10, 4, 1, 1);
+      g.fillRect(5, 11, 1, 1); g.fillRect(10, 11, 1, 1);
+      g.fillRect(4, 5, 1, 1); g.fillRect(11, 5, 1, 1);
+      g.fillRect(4, 10, 1, 1); g.fillRect(11, 10, 1, 1);
+      // Glow core
+      g.fillStyle(0xff2222); g.fillRect(7, 7, 2, 2);
+      g.fillStyle(0xaa1111); g.fillRect(6, 6, 4, 4);
+    });
+
+    // Void crack floor — dark stone with glowing magenta diagonal fissure
+    makeTile('tile-void-crack', g => {
+      g.fillStyle(0x0e0a1c); g.fillRect(0, 0, 16, 16);
+      g.fillStyle(0x14102a); g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
+      g.fillStyle(0x100c22); g.fillRect(8, 0, 8, 8); g.fillRect(0, 8, 8, 8);
+      // Diagonal crack path
+      g.fillStyle(0x3d0020);
+      g.fillRect(2, 2, 1, 1); g.fillRect(3, 3, 2, 1); g.fillRect(5, 4, 1, 1);
+      g.fillRect(6, 5, 2, 2); g.fillRect(8, 7, 1, 1); g.fillRect(9, 8, 2, 1);
+      g.fillRect(11, 9, 1, 1); g.fillRect(12, 10, 2, 1); g.fillRect(14, 11, 1, 2);
+      // Glow on crack
+      g.fillStyle(0x7a0040);
+      g.fillRect(3, 3, 1, 1); g.fillRect(6, 6, 1, 1);
+      g.fillRect(9, 8, 1, 1); g.fillRect(12, 10, 1, 1);
+      // Bright core pixels
+      g.fillStyle(0xcc0066);
+      g.fillRect(6, 5, 1, 1); g.fillRect(9, 8, 1, 1);
+    });
+
+    // Stalactite — downward stone spike with teal drip tip (transparent bg)
+    makeTile('tile-stalactite', g => {
+      g.fillStyle(0x241d38); g.fillTriangle(5, 0, 11, 0, 8, 11);
+      g.fillStyle(0x2e2548); g.fillTriangle(6, 0, 10, 0, 8, 9);
+      g.fillStyle(0x3a2f5a); g.fillTriangle(6, 0, 7, 0, 6, 6);
+      // Teal drip tip
+      g.fillStyle(0x003333); g.fillRect(7, 9, 2, 2);
+      g.fillStyle(0x005544); g.fillRect(8, 11, 1, 1);
+    });
+
+    // Skull — bone decoration on cave wall with void eye-socket glow
+    makeTile('tile-skull', g => {
+      g.fillStyle(0x2c2240); g.fillRect(0, 0, 16, 16);
+      // Skull dome
+      g.fillStyle(0xc8c0b0); g.fillEllipse(8, 7, 9, 8);
+      g.fillStyle(0xe0d8c8); g.fillEllipse(7, 5, 5, 4);
+      // Eye sockets
+      g.fillStyle(0x0c0a14); g.fillEllipse(5, 7, 3, 3); g.fillEllipse(11, 7, 3, 3);
+      // Nasal cavity
+      g.fillStyle(0x0c0a14); g.fillRect(7, 9, 2, 2);
+      // Teeth row
+      g.fillStyle(0xb0a898); g.fillRect(5, 11, 6, 2);
+      g.fillStyle(0x0c0a14); g.fillRect(6, 11, 1, 2); g.fillRect(8, 11, 1, 2); g.fillRect(10, 11, 1, 2);
+      // Eye socket glow (void purple)
+      g.fillStyle(0x330044); g.fillRect(5, 7, 1, 1); g.fillRect(10, 7, 1, 1);
+    });
   }
 
   // ── Items ─────────────────────────────────────────────────────────────────
