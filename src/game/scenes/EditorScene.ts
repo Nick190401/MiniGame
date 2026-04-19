@@ -84,16 +84,16 @@ export class EditorScene extends Phaser.Scene {
     this.grid = MapBuilder.buildGridOnly();
 
     // No setBounds — allows centerOn to work even when world < canvas
-    const zoom = Math.min(this.scale.height / WORLD_H, this.scale.width / WORLD_W) * 0.95;
-    this.cameras.main.setZoom(zoom);
-    this.cameras.main.centerOn(WORLD_W / 2, WORLD_H / 2);
-
-    // Re-center on resize (Phaser.Scale.RESIZE fires this)
-    this.scale.on('resize', () => {
+    let didInitialFit = false;
+    const doInitialFit = () => {
+      if (didInitialFit || this.scale.width < 10 || this.scale.height < 10) return;
       const z = Math.min(this.scale.height / WORLD_H, this.scale.width / WORLD_W) * 0.95;
       this.cameras.main.setZoom(z);
       this.cameras.main.centerOn(WORLD_W / 2, WORLD_H / 2);
-    });
+      didInitialFit = true;
+    };
+    doInitialFit();
+    this.scale.on('resize', doInitialFit);
 
     for (let row = 0; row < MAP_ROWS; row++) {
       for (let col = 0; col < MAP_COLS; col++) {
@@ -238,15 +238,8 @@ export class EditorScene extends Phaser.Scene {
       const canvasX = (e.clientX - rect.left) * scaleX;
       const canvasY = (e.clientY - rect.top)  * scaleY;
 
-      const oldZoom = cam.zoom;
-      const factor  = e.deltaY > 0 ? 1 / 1.15 : 1.15;
-      const newZoom = Phaser.Math.Clamp(oldZoom * factor, 0.1, 12);
-
-      // World point under cursor stays fixed
-      const wx = cam.scrollX + canvasX / oldZoom;
-      const wy = cam.scrollY + canvasY / oldZoom;
-      cam.setZoom(newZoom);
-      cam.setScroll(wx - canvasX / newZoom, wy - canvasY / newZoom);
+      const factor = e.deltaY > 0 ? 1 / 1.15 : 1.15;
+      this.zoomAt(factor, canvasX, canvasY);
     }, { passive: false });
 
     this.input.mouse?.disableContextMenu();
@@ -293,12 +286,32 @@ export class EditorScene extends Phaser.Scene {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  private worldCellAt(ptr: Phaser.Input.Pointer): [number, number] {
+  private screenToWorld(sx: number, sy: number): { x: number; y: number } {
     const cam = this.cameras.main;
-    const wx = cam.scrollX + ptr.x / cam.zoom;
-    const wy = cam.scrollY + ptr.y / cam.zoom;
-    const col = Math.floor(wx / TILE);
-    const row = Math.floor(wy / TILE);
+    const ox = cam.width * cam.originX;
+    const oy = cam.height * cam.originY;
+    return {
+      x: cam.scrollX + ox + (sx - ox) / cam.zoom,
+      y: cam.scrollY + oy + (sy - oy) / cam.zoom,
+    };
+  }
+
+  private zoomAt(factor: number, sx: number, sy: number): void {
+    const cam = this.cameras.main;
+    const newZoom = Phaser.Math.Clamp(cam.zoom * factor, 0.1, 12);
+    if (newZoom === cam.zoom) return;
+    const ox = cam.width * cam.originX;
+    const oy = cam.height * cam.originY;
+    const wx = cam.scrollX + ox + (sx - ox) / cam.zoom;
+    const wy = cam.scrollY + oy + (sy - oy) / cam.zoom;
+    cam.setZoom(newZoom);
+    cam.setScroll(wx - ox - (sx - ox) / newZoom, wy - oy - (sy - oy) / newZoom);
+  }
+
+  private worldCellAt(ptr: Phaser.Input.Pointer): [number, number] {
+    const wp = this.screenToWorld(ptr.x, ptr.y);
+    const col = Math.floor(wp.x / TILE);
+    const row = Math.floor(wp.y / TILE);
     if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) return [-1, -1];
     return [col, row];
   }
@@ -579,22 +592,15 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private applyZoom(factor: number): void {
-    const cam = this.cameras.main;
     const ptr = this.input.activePointer;
-    const oldZ = cam.zoom;
-    const newZ = Phaser.Math.Clamp(oldZ * factor, 0.1, 12);
-    const wx = cam.scrollX + ptr.x / oldZ;
-    const wy = cam.scrollY + ptr.y / oldZ;
-    cam.setZoom(newZ);
-    cam.setScroll(wx - ptr.x / newZ, wy - ptr.y / newZ);
+    this.zoomAt(factor, ptr.x, ptr.y);
   }
 
   zoomIn():  void { this.applyZoom(1.25); }
   zoomOut(): void { this.applyZoom(1 / 1.25); }
 
   scrollToWorld(worldX: number, worldY: number): void {
-    const cam = this.cameras.main;
-    cam.setScroll(worldX - this.scale.width / 2 / cam.zoom, worldY - this.scale.height / 2 / cam.zoom);
+    this.cameras.main.centerOn(worldX, worldY);
   }
 
   getGrid(): number[][] { return this.grid.map(r => [...r]); }
