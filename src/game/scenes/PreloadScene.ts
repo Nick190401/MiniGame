@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { TextureFactory } from '../utils/TextureFactory';
 import { WorldArtFactory } from '../utils/WorldArtFactory';
 import { EventBus, EVENTS } from '../EventBus';
+import { PLAYER_TEXTURE_ASSETS, PLAYER_TEXTURES } from '../assets/PlayerTextures';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -9,11 +10,9 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.spritesheet('player-overworld-v2', 'assets/player-overworld-v2.png', {
-      frameWidth: 313,
-      frameHeight: 313,
-      endFrame: 15,
-    });
+    // Standalone frames avoid iOS WebKit decoding the 4x4 sheet at a
+    // density-adjusted size and exposing four characters in one frame.
+    PLAYER_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
     this.load.image('player-battle', 'assets/player_model.PNG');
     this.load.image('npc-elder-muse-v2', 'assets/npc-elder-muse-v2.png');
     this.load.image('npc-junction-guard-v2', 'assets/npc-junction-guard-v2.png');
@@ -157,7 +156,7 @@ export class PreloadScene extends Phaser.Scene {
     platform.lineStyle(1, 0x49dfbf, 0.5);
     platform.strokeEllipse(486, 335, 91, 18);
 
-    const playerPreview = this.add.sprite(486, 337, 'player-overworld-v2', 0)
+    const playerPreview = this.add.sprite(486, 337, PLAYER_TEXTURES.down[0])
       .setOrigin(169 / 313, 291 / 313)
       .setScale(0.48)
       .setAlpha(0);

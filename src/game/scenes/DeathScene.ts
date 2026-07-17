@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { useGameStore } from '../../store/gameStore';
 import { EventBus, EVENTS } from '../EventBus';
+import { PLAYER_TEXTURES } from '../assets/PlayerTextures';
 
 /**
  * Full-screen broadcast-failure sequence shown over the paused world.
@@ -194,7 +195,7 @@ export class DeathScene extends Phaser.Scene {
     platform.strokeEllipse(0, 62, 70, 12);
     receiver.add(platform);
 
-    const playerGhost = this.add.sprite(0, 61, 'player-overworld-v2', 0)
+    const playerGhost = this.add.sprite(0, 61, PLAYER_TEXTURES.down[0])
       .setOrigin(169 / 313, 291 / 313)
       .setScale(0.34)
       .setTint(0x7b8a81)

@@ -1056,18 +1056,19 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private onBattleEnd = (result: { outcome: 'win' | 'lose'; isBoss: boolean }) => {
-    this.battleActive = false;
     this.scene.resume();
 
     if (result.outcome === 'lose') {
-      // Reset boss encounter flag so the player can retry
-      if (result.isBoss) {
-        this.bossEncounterStarted = false;
-      }
+      // Keep the world locked throughout the hand-off to DeathScene. Releasing
+      // these flags while the player is still standing in the boss rune would
+      // immediately queue a second boss dialog behind the game-over screen.
+      this.battleActive = true;
+      if (result.isBoss) this.bossEncounterStarted = true;
       this.handlePlayerDeath();
       return;
     }
 
+    this.battleActive = false;
     if (result.isBoss) {
       this.handleBossDefeated();
     } else {

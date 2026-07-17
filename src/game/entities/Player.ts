@@ -1,24 +1,17 @@
 import Phaser from 'phaser';
 import { MobileInput } from '../input/MobileInput';
+import { PLAYER_TEXTURES, type PlayerDirection } from '../assets/PlayerTextures';
 
 const SPEED = 120;
 const WORLD_MODEL_SCALE = 0.105;
-type PlayerDirection = 'down' | 'up' | 'left' | 'right';
 
-const PLAYER_FRAMES: Record<PlayerDirection, readonly number[]> = {
-  down: [0, 1, 2, 3],
-  up: [4, 5, 6, 7],
-  left: [8, 9, 10, 11],
-  right: [12, 13, 14, 15],
+// Subject centre and foot baseline inside each standalone 313px texture.
+const PLAYER_ORIGINS: Record<PlayerDirection, ReadonlyArray<readonly [number, number]>> = {
+  down: [[169, 291], [157, 291], [151, 291], [148, 291]],
+  up: [[167, 281], [157, 281], [149, 281], [146, 281]],
+  left: [[157, 263], [154, 261], [145, 263], [141, 261]],
+  right: [[162, 239], [141, 239], [152, 239], [141, 239]],
 };
-
-// Subject centre and foot baseline inside each generated 313px sheet cell.
-const PLAYER_ORIGINS: ReadonlyArray<readonly [number, number]> = [
-  [169, 291], [157, 291], [151, 291], [148, 291],
-  [167, 281], [157, 281], [149, 281], [146, 281],
-  [157, 263], [154, 261], [145, 263], [141, 261],
-  [162, 239], [141, 239], [152, 239], [141, 239],
-];
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -35,7 +28,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private moving = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 'player-overworld-v2', 0);
+    super(scene, x, y, PLAYER_TEXTURES.down[0]);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
@@ -45,7 +38,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(90, 55);
-    this.applyVisualFrame(0);
+    this.applyVisualFrame('down', 0);
     body.setCollideWorldBounds(true);
 
     // Keyboard setup
@@ -88,11 +81,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.frameTimer = 0;
         this.currentFrame = (this.currentFrame + 1) % 4;
       }
-      this.applyVisualFrame(PLAYER_FRAMES[this.lastDirection][this.currentFrame]);
+      this.applyVisualFrame(this.lastDirection, this.currentFrame);
     } else {
       this.currentFrame = 0;
       this.frameTimer = 0;
-      this.applyVisualFrame(PLAYER_FRAMES[this.lastDirection][0]);
+      this.applyVisualFrame(this.lastDirection, 0);
     }
   }
 
@@ -128,9 +121,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return null;
   }
 
-  private applyVisualFrame(frame: number): void {
-    this.setFrame(frame);
-    const [centerX, baselineY] = PLAYER_ORIGINS[frame];
+  private applyVisualFrame(direction: PlayerDirection, frame: number): void {
+    this.setTexture(PLAYER_TEXTURES[direction][frame]);
+    const [centerX, baselineY] = PLAYER_ORIGINS[direction][frame];
     this.setOrigin(centerX / 313, baselineY / 313);
 
     // Keep the collision footprint anchored beneath the feet for every pose.
