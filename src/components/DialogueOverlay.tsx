@@ -110,9 +110,9 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
         </header>
         <p>{dialog.text}</p>
         <div className="dialog-overlay__continue">
-          <span>E</span>
-          <span>SPACE</span>
-          <span>TAP</span>
+          <span className="dialog-hint--desktop">E</span>
+          <span className="dialog-hint--desktop">SPACE</span>
+          <span className="dialog-hint--mobile">A / TAP</span>
           <i aria-hidden="true">↓</i>
         </div>
       </div>

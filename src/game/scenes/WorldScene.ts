@@ -6,6 +6,7 @@ import { Boss } from '../entities/Boss';
 import { BOSS_CORE_ROW, CAVE_START_ROW, CORE_START_ROW, MAP_COLS, MAP_ROWS, MapBuilder } from '../utils/MapBuilder';
 import { EventBus, EVENTS, type DialogPayload } from '../EventBus';
 import { useGameStore } from '../../store/gameStore';
+import { consumeMobileAction } from '../input/MobileInput';
 
 const TILE = 16;
 
@@ -221,6 +222,13 @@ export class WorldScene extends Phaser.Scene {
       this.dialogBox.setPosition(wv.x + 4, wv.y + wv.height - 76);
     }
 
+    const mobileAction = consumeMobileAction();
+    if (mobileAction && this.dialogActive) {
+      this.handleDialogAdvance();
+      (this.player?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+      return;
+    }
+
     if (this.worldFrozen || this.battleActive) {
       (this.player?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
       return;
@@ -230,10 +238,11 @@ export class WorldScene extends Phaser.Scene {
     this.updateWorldPresentation(delta);
 
     // ── NPC proximity interactions ─────────────────────────────────────────
-    this.checkNpcProximity();
+    const interactionRequested = mobileAction || Phaser.Input.Keyboard.JustDown(this.interactKey);
+    this.checkNpcProximity(interactionRequested);
 
     // ── Sign proximity (E to read) ─────────────────────────────────────────
-    if (!this.dialogActive && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+    if (!this.dialogActive && interactionRequested) {
       const d1 = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.signPos.x, this.signPos.y);
       if (d1 < 28) {
         this.showDialogOnce('sign-village', [
@@ -570,7 +579,7 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  private checkNpcProximity(): void {
+  private checkNpcProximity(interactionRequested: boolean): void {
     const px = this.player.x;
     const py = this.player.y;
 
@@ -580,7 +589,7 @@ export class WorldScene extends Phaser.Scene {
       : 999;
     const near1 = d1 < 30;
     this.npcInteractLabel?.setVisible(near1 && !this.dialogActive);
-    if (near1 && !this.dialogActive && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+    if (near1 && !this.dialogActive && interactionRequested) {
       this.triggerNpc1();
     }
 
@@ -590,7 +599,7 @@ export class WorldScene extends Phaser.Scene {
       : 999;
     const near2 = d2 < 30;
     this.npc2InteractLabel?.setVisible(near2 && !this.dialogActive);
-    if (near2 && !this.dialogActive && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+    if (near2 && !this.dialogActive && interactionRequested) {
       this.triggerNpc2();
     }
 
@@ -600,7 +609,7 @@ export class WorldScene extends Phaser.Scene {
       : 999;
     const near3 = d3 < 30;
     this.npc3InteractLabel?.setVisible(near3 && !this.dialogActive);
-    if (near3 && !this.dialogActive && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+    if (near3 && !this.dialogActive && interactionRequested) {
       this.triggerNpc3();
     }
   }
@@ -1836,21 +1845,21 @@ export class WorldScene extends Phaser.Scene {
     this.dialogBox.setData('accent', accent);
     this.dialogBox.setData('callback', null);
 
-    const onAdvance = () => {
-      if (!this.dialogActive) return;
-      if (this.isTyping) {
-        this.currentTypeTimer?.remove();
-        this.currentTypeTimer = undefined;
-        this.isTyping = false;
-        (this.dialogBox!.getData('text') as Phaser.GameObjects.Text).setText(this.currentLine);
-      } else {
-        this.advanceDialog();
-      }
-    };
-
-    this.input.on('pointerdown', onAdvance);
+    this.input.on('pointerdown', this.handleDialogAdvance, this);
     const advanceKeys = ['SPACE','ENTER','Z','E','W','S','A','D','UP','DOWN','LEFT','RIGHT'];
-    advanceKeys.forEach(k => this.input.keyboard?.on(`keydown-${k}`, onAdvance));
+    advanceKeys.forEach(k => this.input.keyboard?.on(`keydown-${k}`, this.handleDialogAdvance, this));
+  }
+
+  private handleDialogAdvance(): void {
+    if (!this.dialogActive) return;
+    if (this.isTyping) {
+      this.currentTypeTimer?.remove();
+      this.currentTypeTimer = undefined;
+      this.isTyping = false;
+      (this.dialogBox!.getData('text') as Phaser.GameObjects.Text).setText(this.currentLine);
+      return;
+    }
+    this.advanceDialog();
   }
 
   private setDialogSpeaker(name?: string): void {

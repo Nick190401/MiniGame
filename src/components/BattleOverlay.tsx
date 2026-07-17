@@ -124,7 +124,14 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
               <span className="battle-action__rail" aria-hidden="true" />
               <span className="battle-action__copy">
                 <small>Track {String(attack.key).padStart(2, '0')} // {attack.unlocked ? (usable ? 'Ready' : 'Standby') : 'Locked'}</small>
-                <strong>{attack.unlocked ? attack.name : 'Unavailable'}</strong>
+                <strong>
+                  {attack.unlocked ? attack.name : (
+                    <>
+                      <span className="battle-locked--desktop">Unavailable</span>
+                      <span className="battle-locked--mobile">Locked</span>
+                    </>
+                  )}
+                </strong>
                 <em>{attack.unlocked ? attack.description : `Unlocks at level ${String(attack.unlockLevel).padStart(2, '0')}`}</em>
               </span>
               <kbd>{attack.unlocked ? attack.key : '—'}</kbd>

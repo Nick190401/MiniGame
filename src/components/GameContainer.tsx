@@ -19,19 +19,33 @@ interface GameContainerProps {
   visible: boolean;
 }
 
+const DESKTOP_GAME_SIZE = { width: 640, height: 480 } as const;
+const PORTRAIT_GAME_SIZE = { width: 480, height: 640 } as const;
+
+function getResponsiveGameSize() {
+  return window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches
+    ? PORTRAIT_GAME_SIZE
+    : DESKTOP_GAME_SIZE;
+}
+
 export function GameContainer({ visible }: GameContainerProps) {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const battleActiveRef = useRef(false);
   const [battleActive, setBattleActive] = useState(false);
   const [deathActive, setDeathActive] = useState(false);
   const [worldReady, setWorldReady] = useState(false);
 
   useEffect(() => {
     const showBattle = () => {
+      battleActiveRef.current = true;
       setBattleActive(true);
       setDeathActive(false);
     };
-    const hideBattle = () => setBattleActive(false);
+    const hideBattle = () => {
+      battleActiveRef.current = false;
+      setBattleActive(false);
+    };
     const showDeath = () => setDeathActive(true);
     const hideDeath = () => setDeathActive(false);
     const handleSceneReady = (sceneKey: string) => {
@@ -59,9 +73,16 @@ export function GameContainer({ visible }: GameContainerProps) {
     const timer = setTimeout(() => {
       if (!containerRef.current) return;
 
+      const responsiveSize = getResponsiveGameSize();
+
       gameRef.current = new Phaser.Game({
         ...gameConfig,
         parent: containerRef.current,
+        scale: {
+          ...gameConfig.scale,
+          width: responsiveSize.width,
+          height: responsiveSize.height,
+        },
       });
 
       // Phaser reads the parent size during construction. Production CSS can
@@ -84,18 +105,45 @@ export function GameContainer({ visible }: GameContainerProps) {
   useEffect(() => {
     if (!visible || !containerRef.current) return;
 
-    const refreshScale = () => gameRef.current?.scale.refresh();
+    let resizeFrame = 0;
+    const refreshScale = () => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        const game = gameRef.current;
+        if (!game) return;
+
+        if (!battleActiveRef.current) {
+          const target = getResponsiveGameSize();
+          if (game.scale.gameSize.width !== target.width || game.scale.gameSize.height !== target.height) {
+            game.scale.setGameSize(target.width, target.height);
+          }
+        }
+        game.scale.refresh();
+      });
+    };
     const resizeObserver = new ResizeObserver(refreshScale);
     resizeObserver.observe(containerRef.current);
     window.addEventListener('resize', refreshScale);
     window.visualViewport?.addEventListener('resize', refreshScale);
 
     return () => {
+      cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
       window.removeEventListener('resize', refreshScale);
       window.visualViewport?.removeEventListener('resize', refreshScale);
     };
   }, [visible]);
+
+  useEffect(() => {
+    if (battleActive) return;
+    const game = gameRef.current;
+    if (!game) return;
+    const target = getResponsiveGameSize();
+    if (game.scale.gameSize.width !== target.width || game.scale.gameSize.height !== target.height) {
+      game.scale.setGameSize(target.width, target.height);
+    }
+    game.scale.refresh();
+  }, [battleActive]);
 
   // Destroy on unmount
   useEffect(() => {
