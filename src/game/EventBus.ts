@@ -6,12 +6,81 @@ import Phaser from 'phaser';
  */
 export const EventBus = new Phaser.Events.EventEmitter();
 
+export interface DialogPayload {
+  text: string;
+  speaker: string;
+  accent: string;
+  portrait?: 'elder' | 'guard' | 'musician' | 'gatekeeper';
+}
+
+export interface BattleAttackPayload {
+  id: string;
+  name: string;
+  description: string;
+  accent: string;
+  unlocked: boolean;
+  key: number;
+  unlockLevel: number;
+}
+
+export interface BattleUiPayload {
+  isBoss: boolean;
+  phase: string;
+  enemy: { name: string; hp: number; maxHp: number; accent: string };
+  player: { name: string; hp: number; maxHp: number; level: number };
+  message: string;
+  messageReady: boolean;
+  turnStatus: string;
+  turnAccent: string;
+  inputEnabled: boolean;
+  attacks: BattleAttackPayload[];
+}
+
+export interface NoticePayload {
+  eyebrow?: string;
+  title: string;
+  detail?: string;
+  accent?: string;
+  tone?: 'info' | 'success' | 'danger' | 'combat';
+  variant?: 'compact' | 'hero';
+  duration?: number;
+}
+
+export interface ZoneUiPayload {
+  title: string;
+  meta: string;
+  accent: string;
+}
+
+export interface LoadingUiPayload {
+  step: number;
+  total: number;
+  label: string;
+  progress: number;
+  ready?: boolean;
+}
+
+export interface DeathUiPayload {
+  ready: boolean;
+  reconnecting: boolean;
+}
+
 // ---- Event constants ----
 export const EVENTS = {
   XP_GAINED: 'xp-gained',
   LEVEL_UP: 'level-up',
   BATTLE_START: 'battle-start',
   BATTLE_END: 'battle-end',
+  BATTLE_UI_STATE: 'battle-ui-state',
+  BATTLE_UI_REQUEST: 'battle-ui-request',
+  BATTLE_UI_ACTION: 'battle-ui-action',
+  UI_NOTICE: 'ui-notice',
+  UI_NOTICE_CLEAR: 'ui-notice-clear',
+  ZONE_UI_STATE: 'zone-ui-state',
+  ZONE_UI_REQUEST: 'zone-ui-request',
+  LOADING_UI_STATE: 'loading-ui-state',
+  DEATH_UI_STATE: 'death-ui-state',
+  DEATH_UI_ACTION: 'death-ui-action',
   BOSS_DEFEATED: 'boss-defeated',
   BONUS_SONG_UNLOCKED: 'bonus-song-unlocked',
   DIALOG: 'dialog',

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TextureFactory } from '../utils/TextureFactory';
+import { WorldArtFactory } from '../utils/WorldArtFactory';
 import { EventBus, EVENTS } from '../EventBus';
 
 export class PreloadScene extends Phaser.Scene {
@@ -8,103 +9,262 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Load tileset images (Puny World CC0)
-    // Only tiles that work well as standalone repeating tiles.
-    // Buildings, trees, tall grass, water, cave tiles stay programmatic.
-    const tileImages = [
-      'tile-grass', 'tile-grass-2',
-      'tile-path', 'tile-path-2',
-      'tile-flower', 'tile-flower-2',
-    ];
-    tileImages.forEach(key => {
-      this.load.image(key, `assets/tiles/${key}.png`);
+    this.load.spritesheet('player-overworld-v2', 'assets/player-overworld-v2.png', {
+      frameWidth: 313,
+      frameHeight: 313,
+      endFrame: 15,
     });
-
-    // Character art (used in battle scene)
     this.load.image('player-battle', 'assets/player_model.PNG');
+    this.load.image('npc-elder-muse-v2', 'assets/npc-elder-muse-v2.png');
+    this.load.image('npc-junction-guard-v2', 'assets/npc-junction-guard-v2.png');
+    this.load.image('npc-wandering-musician-v2', 'assets/npc-wandering-musician-v2.png');
     this.load.image('silence-battle', 'assets/silence_model.PNG');
     this.load.image('staticnoise-battle', 'assets/static-noice.PNG');
     this.load.image('brokensignal-battle', 'assets/brokensignal_model.PNG');
+    this.load.image('boss-gatekeeper-battle-phase1', 'assets/boss-gatekeeper-phase1-v2.png');
+    this.load.image('boss-gatekeeper-battle-phase2', 'assets/boss-gatekeeper-phase2-v2.png');
+    this.load.image('boss-gatekeeper-battle-phase3', 'assets/boss-gatekeeper-phase3-v2.png');
   }
 
   create(): void {
     const { width, height } = this.scale;
+    this.cameras.main.setBackgroundColor('#050908');
+    EventBus.emit(EVENTS.LOADING_UI_STATE, {
+      step: 0,
+      total: 6,
+      label: 'OPENING SONIC ARCHIVE',
+      progress: 0,
+    });
 
-    // ── Loading screen ────────────────────────────────────────────────────
-    this.cameras.main.setBackgroundColor('#1a0a2e');
+    const text = (
+      x: number,
+      y: number,
+      value: string,
+      style: Phaser.Types.GameObjects.Text.TextStyle,
+    ) => {
+      const label = this.add.text(x, y, value, style).setResolution(2);
+      label.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      return label;
+    };
 
-    // Title
-    this.add.text(width / 2, height / 2 - 60, 'SOUND QUEST', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '20px',
-      color: '#ffd700',
+    const backdrop = this.add.graphics();
+    backdrop.fillStyle(0x07100c, 1);
+    backdrop.fillRect(0, 0, width, height);
+    backdrop.fillStyle(0x0b1712, 1);
+    backdrop.fillRect(20, 20, width - 40, height - 40);
+    backdrop.lineStyle(1, 0x284036, 0.28);
+    for (let x = 20; x <= width - 20; x += 32) backdrop.lineBetween(x, 20, x, height - 20);
+    for (let y = 20; y <= height - 20; y += 32) backdrop.lineBetween(20, y, width - 20, y);
+    backdrop.lineStyle(1, 0xd7ff4a, 0.34);
+    backdrop.strokeRect(20.5, 20.5, width - 41, height - 41);
+    backdrop.fillStyle(0xd7ff4a, 0.82);
+    backdrop.fillRect(20, 20, 88, 2);
+    backdrop.fillRect(width - 108, height - 22, 88, 2);
+
+    const atmosphere = this.add.graphics();
+    atmosphere.fillStyle(0x49dfbf, 0.035);
+    atmosphere.fillCircle(486, 218, 158);
+    atmosphere.fillStyle(0xd7ff4a, 0.025);
+    atmosphere.fillCircle(486, 218, 112);
+
+    const brand = this.add.graphics();
+    brand.fillStyle(0xd7ff4a, 1);
+    brand.fillRect(38, 37, 31, 31);
+    text(53.5, 52.5, 'SQ', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#07100c',
     }).setOrigin(0.5);
+    text(82, 38, 'SOUND QUEST', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '12px', color: '#f2f7f2', letterSpacing: 2,
+    });
+    text(82, 56, 'WORLD LINK // BOOT SEQUENCE', {
+      fontFamily: 'DM Mono', fontSize: '7px', color: '#708078', letterSpacing: 1,
+    });
 
-    this.add.text(width / 2, height / 2 - 30, 'Find the Lost Track', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '8px',
-      color: '#aaaaaa',
-    }).setOrigin(0.5);
+    const online = this.add.graphics();
+    online.fillStyle(0x49dfbf, 0.13);
+    online.fillRoundedRect(width - 169, 39, 131, 27, 4);
+    online.lineStyle(1, 0x49dfbf, 0.55);
+    online.strokeRoundedRect(width - 169, 39, 131, 27, 4);
+    online.fillStyle(0x49dfbf, 1);
+    online.fillCircle(width - 151, 52.5, 3);
+    const onlineDot = this.add.circle(width - 151, 52.5, 5, 0x49dfbf, 0.18);
+    text(width - 140, 47, 'LINK ACTIVE', {
+      fontFamily: 'DM Mono', fontSize: '8px', color: '#91f4dd', letterSpacing: 1,
+    });
+    this.tweens.add({ targets: onlineDot, alpha: 0.75, scale: 1.4, duration: 760, yoyo: true, repeat: -1 });
 
-    // Loading bar background
-    const barBg = this.add.graphics();
-    barBg.fillStyle(0x333355);
-    barBg.fillRect(width / 2 - 150, height / 2 + 10, 300, 20);
-    barBg.lineStyle(2, 0xffd700);
-    barBg.strokeRect(width / 2 - 150, height / 2 + 10, 300, 20);
+    text(40, 122, 'ENTERING // THE SONIC ARCHIVE', {
+      fontFamily: 'DM Mono', fontSize: '8px', color: '#8c9b92', letterSpacing: 2,
+    });
+    text(36, 143, 'SIGNAL', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '53px', color: '#f2f7f2', letterSpacing: -2,
+    });
+    text(36, 192, 'LOCK', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '63px', color: '#d7ff4a', letterSpacing: -3,
+    });
+    text(41, 264, 'Calibrating your frequency\nfor the world beyond.', {
+      fontFamily: 'DM Mono', fontSize: '10px', color: '#9ba9a0', lineSpacing: 7,
+    });
 
-    // Loading bar fill
-    const barFill = this.add.graphics();
-    const loadingText = this.add.text(width / 2, height / 2 + 50, 'Generating world...', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
-      color: '#888888',
-    }).setOrigin(0.5);
+    const scanner = this.add.container(486, 218);
+    const rings = this.add.graphics();
+    rings.lineStyle(1, 0x49dfbf, 0.34);
+    rings.strokeCircle(0, 0, 122);
+    rings.strokeCircle(0, 0, 91);
+    rings.lineStyle(1, 0xd7ff4a, 0.58);
+    rings.strokeCircle(0, 0, 62);
+    rings.lineStyle(1, 0x5f756a, 0.35);
+    rings.lineBetween(-140, 0, 140, 0);
+    rings.lineBetween(0, -140, 0, 140);
+    for (let i = 0; i < 24; i++) {
+      const angle = (Math.PI * 2 * i) / 24;
+      const inner = i % 3 === 0 ? 128 : 133;
+      const outer = 139;
+      rings.lineStyle(i % 3 === 0 ? 2 : 1, i % 3 === 0 ? 0xd7ff4a : 0x4a6658, i % 3 === 0 ? 0.72 : 0.45);
+      rings.lineBetween(
+        Math.cos(angle) * inner,
+        Math.sin(angle) * inner,
+        Math.cos(angle) * outer,
+        Math.sin(angle) * outer,
+      );
+    }
+    scanner.add(rings);
+    this.tweens.add({ targets: rings, angle: 360, duration: 18000, repeat: -1, ease: 'Linear' });
 
-    // ── Generate all textures ─────────────────────────────────────────────
-    // Simulate progressive loading with steps
+    const sweep = this.add.graphics();
+    sweep.fillStyle(0x49dfbf, 0.08);
+    sweep.fillTriangle(0, 0, 125, -7, 125, 7);
+    scanner.add(sweep);
+    this.tweens.add({ targets: sweep, angle: 360, duration: 2200, repeat: -1, ease: 'Linear' });
+
+    const waveform = this.add.graphics();
+    waveform.lineStyle(1, 0xd7ff4a, 0.6);
+    const points: Phaser.Math.Vector2[] = [];
+    for (let x = -122; x <= 122; x += 4) {
+      const envelope = Math.max(0.15, 1 - Math.abs(x) / 150);
+      points.push(new Phaser.Math.Vector2(
+        x,
+        Math.sin(x * 0.23) * 7 * envelope + Math.sin(x * 0.51) * 3,
+      ));
+    }
+    waveform.strokePoints(points, false);
+    scanner.add(waveform);
+    this.tweens.add({ targets: waveform, alpha: 0.22, duration: 520, yoyo: true, repeat: -1 });
+
+    const platform = this.add.graphics();
+    platform.fillStyle(0x000000, 0.45);
+    platform.fillEllipse(486, 335, 104, 24);
+    platform.lineStyle(1, 0x49dfbf, 0.5);
+    platform.strokeEllipse(486, 335, 91, 18);
+
+    const playerPreview = this.add.sprite(486, 337, 'player-overworld-v2', 0)
+      .setOrigin(169 / 313, 291 / 313)
+      .setScale(0.48)
+      .setAlpha(0);
+    playerPreview.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.tweens.add({ targets: playerPreview, alpha: 1, y: 331, duration: 520, ease: 'Cubic.easeOut' });
+
+    text(438, 349, 'PLAYER SIGNAL', {
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#728078', letterSpacing: 1,
+    });
+    text(438, 360, 'IDENTITY SYNC', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '9px', color: '#d7ff4a', letterSpacing: 1,
+    });
+
+    const module = this.add.graphics();
+    module.fillStyle(0x07100c, 0.94);
+    module.fillRoundedRect(38, 376, width - 76, 66, 6);
+    module.lineStyle(1, 0x34483e, 0.9);
+    module.strokeRoundedRect(38, 376, width - 76, 66, 6);
+
+    const loadingText = text(52, 388, '00 // OPENING ARCHIVE', {
+      fontFamily: 'DM Mono', fontSize: '8px', color: '#9aa8a0', letterSpacing: 1,
+    });
+    const progressText = text(width - 52, 384, '00%', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '17px', color: '#d7ff4a',
+    }).setOrigin(1, 0);
+
+    const segmentGap = 5;
+    const segmentWidth = (width - 109 - segmentGap * 5) / 6;
+    const segments = Array.from({ length: 6 }, (_, index) => {
+      const segment = this.add.rectangle(
+        52 + index * (segmentWidth + segmentGap),
+        421,
+        segmentWidth,
+        5,
+        0x24342c,
+        1,
+      ).setOrigin(0, 0.5);
+      const marker = text(segment.x, 428, String(index + 1).padStart(2, '0'), {
+        fontFamily: 'DM Mono', fontSize: '5px', color: '#536158',
+      });
+      return { segment, marker };
+    });
+
     const steps = [
-      { label: 'Loading tiles...', fn: () => TextureFactory.createTileTextures(this) },
-      { label: 'Creating player...', fn: () => TextureFactory.createPlayerTextures(this) },
-      { label: 'Summoning enemies...', fn: () => TextureFactory.createAllEnemyTextures(this) },
-      { label: 'Awakening the boss...', fn: () => TextureFactory.createBossTextures(this) },
-      { label: 'Hiding the track...', fn: () => TextureFactory.createItemTextures(this) },
-      { label: 'Building UI...', fn: () => TextureFactory.createUITextures(this) },
+      { label: 'MAPPING TERRAIN', fn: () => WorldArtFactory.createTileTextures(this) },
+      {
+        label: 'CALIBRATING PLAYER SIGNAL',
+        fn: () => {
+          TextureFactory.createPlayerTextures(this);
+          WorldArtFactory.createCharacterTextures(this);
+        },
+      },
+      { label: 'LOCATING DISTORTIONS', fn: () => WorldArtFactory.createEnemyTextures(this) },
+      { label: 'UNLOCKING VOID GATE', fn: () => WorldArtFactory.createBossTextures(this) },
+      { label: 'LOCATING LOST TRACK', fn: () => WorldArtFactory.createItemTextures(this) },
+      { label: 'SYNCING INTERFACE', fn: () => TextureFactory.createUITextures(this) },
     ];
 
     let step = 0;
-    const total = steps.length;
-
     const runNextStep = () => {
-      if (step >= total) {
-        // Done — transition to world
-        loadingText.setText('Ready.');
-        barFill.clear();
-        barFill.fillStyle(0xffd700);
-        barFill.fillRect(width / 2 - 150, height / 2 + 10, 300, 20);
-
-        this.time.delayedCall(400, () => {
-          this.scene.start('WorldScene');
-          EventBus.emit(EVENTS.SCENE_READY, 'WorldScene');
+      if (step >= steps.length) {
+        loadingText.setText('06 // SIGNAL LOCKED - WORLD READY').setColor('#d7ff4a');
+        progressText.setText('100%');
+        EventBus.emit(EVENTS.LOADING_UI_STATE, {
+          step: steps.length,
+          total: steps.length,
+          label: 'SIGNAL LOCKED - WORLD READY',
+          progress: 100,
+          ready: true,
+        });
+        this.time.delayedCall(420, () => {
+          this.cameras.main.fadeOut(260, 5, 9, 8);
+          this.time.delayedCall(260, () => {
+            this.scene.start('WorldScene');
+            EventBus.emit(EVENTS.SCENE_READY, 'WorldScene');
+          });
         });
         return;
       }
 
-      const { label, fn } = steps[step];
-      loadingText.setText(label);
-      fn();
+      const currentStep = steps[step];
+      loadingText.setText(`${String(step + 1).padStart(2, '0')} // ${currentStep.label}`);
+      currentStep.fn();
       step++;
 
-      const progress = step / total;
-      barFill.clear();
-      barFill.fillStyle(0x4080ff);
-      barFill.fillRect(width / 2 - 150, height / 2 + 10, 300 * progress, 20);
-      barFill.fillStyle(0xffd700);
-      barFill.fillRect(width / 2 - 150, height / 2 + 10, 300 * progress, 4);
+      const progress = step / steps.length;
+      progressText.setText(`${Math.round(progress * 100).toString().padStart(2, '0')}%`);
+      EventBus.emit(EVENTS.LOADING_UI_STATE, {
+        step,
+        total: steps.length,
+        label: currentStep.label,
+        progress: Math.round(progress * 100),
+      });
+      const activeSegment = segments[step - 1];
+      activeSegment.segment.setFillStyle(step === steps.length ? 0xd7ff4a : 0x49dfbf, 1);
+      activeSegment.marker.setColor(step === steps.length ? '#d7ff4a' : '#72dbc3');
+      this.tweens.add({
+        targets: activeSegment.segment,
+        alpha: 0.48,
+        duration: 90,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+      });
 
-      this.time.delayedCall(120, runNextStep);
+      this.time.delayedCall(150, runNextStep);
     };
 
-    this.time.delayedCall(300, runNextStep);
+    this.time.delayedCall(260, runNextStep);
   }
 }

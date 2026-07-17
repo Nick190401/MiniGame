@@ -26,7 +26,7 @@ export class TextureFactory {
   static createPlayerTextures(scene: Phaser.Scene): void {
     const pal: Record<string, number> = {
       C: 0x181820, c: 0x282830,
-      M: 0x50b848, m: 0x388830,
+      M: 0xf4f5ef, m: 0xbfc4c3,
       H: 0x3a2818, h: 0x5a3828,
       S: 0xf8c888, s: 0xd8a868, e: 0xe8b878,
       E: 0x208838,

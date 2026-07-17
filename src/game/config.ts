@@ -9,7 +9,7 @@ import { DeathScene } from './scenes/DeathScene';
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game-container',
-  backgroundColor: '#1a0a2e',
+  backgroundColor: '#050908',
   pixelArt: true,
   roundPixels: true,
   antialias: false,

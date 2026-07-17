@@ -3,9 +3,9 @@ import { BOSS_DEFINITION } from './Enemy';
 import type { BossPhase } from '../../types/game.types';
 
 export const BOSS_PHASES: BossPhase[] = [
-  { hpThreshold: 1.00, attackMultiplier: 0.7, label: 'Phase I' },
+  { hpThreshold: 1.00, attackMultiplier: 0.85, label: 'Phase I' },
   { hpThreshold: 0.75, attackMultiplier: 1.0, label: 'Phase II' },
-  { hpThreshold: 0.20, attackMultiplier: 1.2, label: 'Phase III' },
+  { hpThreshold: 0.25, attackMultiplier: 1.25, label: 'Phase III' },
 ];
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
@@ -13,14 +13,20 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   private currentPhaseIndex = 0;
   private pulseTween?: Phaser.Tweens.Tween;
   private auraGraphics!: Phaser.GameObjects.Graphics;
+  private readonly usesBattleArt: boolean;
+  private readonly baseScale: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 'boss-gatekeeper');
+    const usesBattleArt = scene.textures.exists('boss-gatekeeper-battle-phase1');
+    super(scene, x, y, usesBattleArt ? 'boss-gatekeeper-battle-phase1' : 'boss-gatekeeper');
+    this.usesBattleArt = usesBattleArt;
+    this.baseScale = usesBattleArt ? 0.066 : 2.5;
     scene.add.existing(this);
     scene.physics.add.existing(this, true);
 
     this.setDepth(4);
-    this.setScale(2.5);
+    this.setScale(this.baseScale);
+    if (usesBattleArt) this.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
 
     // Aura background effect
     this.auraGraphics = scene.add.graphics();
@@ -30,8 +36,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     // Pulse tween
     this.pulseTween = scene.tweens.add({
       targets: this,
-      scaleX: 2.7,
-      scaleY: 2.3,
+      scaleX: this.baseScale * 1.06,
+      scaleY: this.baseScale * 0.96,
       duration: 1200,
       yoyo: true,
       repeat: -1,
@@ -75,7 +81,9 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
 
   private onPhaseChange(phaseIndex: number): void {
     // Change texture per phase
-    const textureKeys = ['boss-gatekeeper', 'boss-gatekeeper-phase2', 'boss-gatekeeper-phase3'];
+    const textureKeys = this.usesBattleArt
+      ? ['boss-gatekeeper-battle-phase1', 'boss-gatekeeper-battle-phase2', 'boss-gatekeeper-battle-phase3']
+      : ['boss-gatekeeper', 'boss-gatekeeper-phase2', 'boss-gatekeeper-phase3'];
     this.setTexture(textureKeys[phaseIndex]);
 
     // Speed up pulse
@@ -83,8 +91,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     const duration = 1200 - phaseIndex * 300;
     this.pulseTween = this.scene.tweens.add({
       targets: this,
-      scaleX: 2.8 + phaseIndex * 0.1,
-      scaleY: 2.4 + phaseIndex * 0.1,
+      scaleX: this.baseScale * (1.07 + phaseIndex * 0.025),
+      scaleY: this.baseScale * (0.97 + phaseIndex * 0.02),
       duration,
       yoyo: true,
       repeat: -1,
@@ -100,7 +108,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
 
   private updateAura(): void {
     this.auraGraphics.clear();
-    const colors = [0x8800ff, 0xff00ff, 0xff0000];
+    const colors = [0x49dfbf, 0xff6b3d, 0xff5c66];
     const color = colors[this.currentPhaseIndex];
     const alpha = 0.2 + this.currentPhaseIndex * 0.1;
 
@@ -117,8 +125,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.scene.tweens.add({
       targets: this,
       alpha: 0,
-      scaleX: 5,
-      scaleY: 5,
+      scaleX: this.scaleX * 1.8,
+      scaleY: this.scaleY * 1.8,
       duration: 800,
       ease: 'Power3',
       onComplete: () => {

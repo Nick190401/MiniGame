@@ -33,7 +33,7 @@ const N  = 27; // stalactite (decorative, depth 2)
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ──────────────────────────────────────────────────────────────────────────────
-//  Map: 48 columns × 80 rows  →  768 × 1280 px
+//  Map: 48 columns × 94 rows  →  768 × 1504 px
 //
 //  Zone layout
 //  ───────────────────────────────────────────────────────────
@@ -46,13 +46,16 @@ const N  = 27; // stalactite (decorative, depth 2)
 //  Rows 37–38  : FREQUENCY GATE  (Level-2 locked)
 //  Rows 38–51  : ZONE 4 — FADING PATH  (darker route, tension)
 //  Rows 51–54  : Cave approach / entrance
-//  Rows 54–69  : ZONE 5 — VOID CAVE  (dungeon)
-//  Rows 69–77  : ZONE 6 — THE CORE  (boss chamber)
-//  Rows 77–79  : Bottom border
+//  Rows 54–81  : ZONE 5 — VOID CAVE  (winding dungeon)
+//  Rows 82–91  : ZONE 6 — THE CORE  (boss chamber)
+//  Rows 92–93  : Bottom border
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const MAP_COLS = 48;
-export const MAP_ROWS = 80;
+export const MAP_ROWS = 94;
+export const CAVE_START_ROW = 54;
+export const CORE_START_ROW = 82;
+export const BOSS_CORE_ROW = 87;
 
 export interface MapBuildResult {
   walls:      Phaser.Physics.Arcade.StaticGroup;
@@ -77,14 +80,20 @@ export interface MapBuildResult {
   fragment3Pos: { x: number; y: number };
   // Tall-grass encounter rectangles
   tallGrassZones: Phaser.Geom.Rectangle[];
+  // Y-sorted foreground tufts animated when the player pushes through grass
+  tallGrassFrontTiles: Phaser.GameObjects.Image[];
   // Boss chamber rune graphics (for destruction after boss defeat)
   runeGraphics: Phaser.GameObjects.GameObject[];
+  // Cave surfaces transition in sequence when the boss corruption is cleansed.
+  caveSurfaceTiles: Phaser.GameObjects.Image[];
+  // Ash, fissures and hostile lights that disappear during purification.
+  caveCorruptionObjects: Phaser.GameObjects.GameObject[];
 }
 
 export class MapBuilder {
   static build(scene: Phaser.Scene): MapBuildResult {
     const worldWidth  = MAP_COLS * TILE;   // 768
-    const worldHeight = MAP_ROWS * TILE;   // 1280
+    const worldHeight = MAP_ROWS * TILE;   // 1504
 
     scene.physics.world.setBounds(0, 0, worldWidth, worldHeight);
     scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
@@ -269,7 +278,7 @@ export class MapBuilder {
     fill(52, 19, 53, 22, C);  // reinforce path as cave floor
 
     // ═════════════════════════════════════════════════════════════════════════
-    //  ZONE 5 — VOID CAVE  (rows 54–68)
+    //  ZONE 5 — VOID CAVE  (legacy compact pass; expanded below)
     // ═════════════════════════════════════════════════════════════════════════
 
     // Full-width cave walls as default for this section
@@ -317,7 +326,7 @@ export class MapBuilder {
     ] as [number, number][]) set(r, c, X);
 
     // ═════════════════════════════════════════════════════════════════════════
-    //  ZONE 6 — THE CORE  (rows 69–77)
+    //  ZONE 6 — THE CORE  (legacy compact pass; expanded below)
     // ═════════════════════════════════════════════════════════════════════════
 
     // Entry wall with wider opening (matches fanned passage)
@@ -348,29 +357,108 @@ export class MapBuilder {
     hLine(78, 1, 46, K);
     hLine(79, 1, 46, K);
 
+    // Expanded finale layout. This second pass replaces the compact legacy cave
+    // above while keeping the preceding open-world zones untouched.
+    fill(54, 1, 91, 46, K);
+    fill(54, 12, 57, 35, C);
+    fill(57, 18, 61, 24, C);
+    fill(60, 7, 63, 24, C);
+    fill(62, 5, 67, 15, C);
+    fill(65, 11, 67, 38, C);
+    fill(64, 32, 70, 41, C);
+    fill(68, 35, 74, 40, C);
+    fill(72, 12, 74, 38, C);
+    fill(70, 9, 76, 20, C);
+    fill(74, 14, 79, 19, C);
+    fill(77, 14, 79, 34, C);
+    fill(79, 10, 81, 37, C);
+
+    // Optional branches end in small pockets, making the cave exploratory
+    // without hiding the guaranteed S-route to the Core.
+    fill(58, 29, 59, 34, C);
+    fill(68, 24, 70, 29, C);
+    fill(68, 5, 69, 9, C);
+    fill(75, 27, 76, 32, C);
+
+    fill(55, 22, 56, 25, K);
+    fill(55, 15, 56, 17, K);
+    fill(61, 12, 62, 14, K);
+    fill(60, 18, 61, 20, K);
+    fill(64, 9, 65, 11, K);
+    fill(66, 24, 66, 27, K);
+    fill(67, 37, 68, 38, K);
+    fill(71, 16, 72, 18, K);
+    fill(73, 24, 73, 28, K);
+    fill(80, 18, 80, 21, K);
+    fill(80, 27, 80, 30, K);
+    for (const [r, c] of [
+      [55,14],[55,33],[60,8],[60,22],[63,7],[66,13],[66,36],
+      [69,34],[72,13],[72,37],[76,10],[78,16],[78,32],[80,11],[80,36],
+    ] as [number, number][]) set(r, c, J);
+    for (const [r, c] of [
+      [58,17],[59,25],[61,6],[64,15],[64,31],[68,33],
+      [71,40],[73,11],[75,21],[77,13],[79,35],[81,9],[81,38],
+    ] as [number, number][]) set(r, c, V);
+    for (const [r, c] of [
+      [54,13],[54,34],[57,17],[57,25],[60,9],[60,23],[62,6],[63,15],
+      [65,12],[65,37],[68,35],[70,40],[72,14],[72,36],[74,19],[74,34],
+      [77,15],[77,33],[79,12],[79,36],
+    ] as [number, number][]) set(r, c, N);
+    for (const [r, c] of [
+      [63,6],[67,14],[70,36],[74,13],[76,19],[79,33],[81,12],[81,35],
+    ] as [number, number][]) set(r, c, Q2);
+    for (const [r, c] of [
+      [55,12],[56,35],[60,7],[62,23],[63,15],[65,11],[65,38],
+      [68,40],[70,35],[72,12],[74,39],[75,10],[77,18],[78,34],[80,10],[80,37],
+    ] as [number, number][]) set(r, c, X);
+
+    hLine(82, 1, 46, K);
+    fill(82, 13, 82, 34, C);
+    const expandedArenaRows: [number, number, number][] = [
+      [83,12,35],[84,8,39],[85,6,41],[86,5,42],[87,5,42],
+      [88,6,41],[89,7,40],[90,9,38],[91,13,34],
+    ];
+    expandedArenaRows.forEach(([r, cL, cR]) => {
+      fill(r, cL, r, cR, A);
+      fill(r, 1, r, cL - 1, K);
+      fill(r, cR + 1, r, 46, K);
+    });
+    set(89, 8, Q2); set(89, 39, Q2);
+    hLine(92, 1, 46, K);
+    hLine(93, 1, 46, K);
+
     // ── Render tile grid to Phaser game objects ───────────────────────────────
     const walls     = scene.physics.add.staticGroup();
     const decorative = scene.add.group();
+    const tallGrassFrontTiles: Phaser.GameObjects.Image[] = [];
+    const caveSurfaceTiles: Phaser.GameObjects.Image[] = [];
+    const caveCorruptionObjects: Phaser.GameObjects.GameObject[] = [];
+
+    const markCaveSurface = (image: Phaser.GameObjects.Image, purifiedTexture: string) => {
+      image.setName('cave-surface').setData('purifiedTexture', purifiedTexture);
+      caveSurfaceTiles.push(image);
+      return image;
+    };
 
     // Zone backgrounds (drawn first, depth 0)
-    const bg = scene.add.graphics().setDepth(0);
+    const bg = scene.add.graphics().setDepth(-10);
 
     // Echo Village  — matched to punyworld grass #85a643
-    bg.fillStyle(0x7a9a40); bg.fillRect(0, 0, worldWidth, 13 * TILE);
+    bg.fillStyle(0x5e7848); bg.fillRect(0, 0, worldWidth, 13 * TILE);
     // Signal Path   — slightly darker
-    bg.fillStyle(0x6a8a38); bg.fillRect(0, 13 * TILE, worldWidth, 13 * TILE);
+    bg.fillStyle(0x566f44); bg.fillRect(0, 13 * TILE, worldWidth, 13 * TILE);
     // Neon Junction — muted grey-green urban
-    bg.fillStyle(0x506838); bg.fillRect(0, 26 * TILE, worldWidth, 12 * TILE);
+    bg.fillStyle(0x455c4d); bg.fillRect(0, 26 * TILE, worldWidth, 12 * TILE);
     // Gate row      — near-black red
-    bg.fillStyle(0x1a0808); bg.fillRect(0, 37 * TILE, worldWidth, 2 * TILE);
+    bg.fillStyle(0x241814); bg.fillRect(0, 37 * TILE, worldWidth, 2 * TILE);
     // Fading Path   — very dark green, ominous
-    bg.fillStyle(0x1e2c18); bg.fillRect(0, 39 * TILE, worldWidth, 13 * TILE);
+    bg.fillStyle(0x354b39); bg.fillRect(0, 39 * TILE, worldWidth, 13 * TILE);
     // Cave approach — dark stone
-    bg.fillStyle(0x141018); bg.fillRect(0, 52 * TILE, worldWidth, 2 * TILE);
+    bg.fillStyle(0x182426); bg.fillRect(0, 52 * TILE, worldWidth, 2 * TILE);
     // Void Cave     — near black purple
-    bg.fillStyle(0x0c0814); bg.fillRect(0, 54 * TILE, worldWidth, 15 * TILE);
+    bg.fillStyle(0x0a1113); bg.fillRect(0, 54 * TILE, worldWidth, 28 * TILE);
     // The Core      — pure black
-    bg.fillStyle(0x060410); bg.fillRect(0, 69 * TILE, worldWidth, 11 * TILE);
+    bg.fillStyle(0x030707); bg.fillRect(0, 82 * TILE, worldWidth, 12 * TILE);
 
     // Override grid with editor-saved map if present
     const _editorMap = localStorage.getItem('editor-map');
@@ -387,6 +475,12 @@ export class MapBuilder {
     // Seeded pseudo-random for deterministic variety per tile position
     const hash = (r: number, c: number) => ((r * 7919 + c * 104729) & 0xffff) / 0xffff;
 
+    const addShadow = (texture: string, x: number, y: number, depth = 0.5) => {
+      const shadow = scene.add.image(x + 2, y + 2, texture);
+      shadow.setTint(0x07100c).setAlpha(0.22).setDepth(depth);
+      return shadow;
+    };
+
     for (let row = 0; row < MAP_ROWS; row++) {
       for (let col = 0; col < MAP_COLS; col++) {
         const tileType = grid[row][col];
@@ -395,35 +489,52 @@ export class MapBuilder {
         const rng = hash(row, col);
 
         switch (tileType) {
-          case W:  { const i = scene.add.image(px, py, 'tile-wall');           i.setDepth(1); walls.add(i);      break; }
-          case T:  { const treeKey = rng < 0.4 ? 'tile-tree-top-2' : 'tile-tree-top'; const i = scene.add.image(px, py, treeKey); i.setDepth(2); walls.add(i); break; }
-          case B:  { const i = scene.add.image(px, py, 'tile-building-wall'); i.setDepth(1); walls.add(i);     break; }
-          case B2: { const i = scene.add.image(px, py, 'tile-bldg-stone');   i.setDepth(1); walls.add(i);      break; }
-          case BW: { const i = scene.add.image(px, py, 'tile-bldg-wall-win'); i.setDepth(1); walls.add(i); break; }
-          case SW: { const i = scene.add.image(px, py, 'tile-bldg-stone-win'); i.setDepth(1); walls.add(i); break; }
-          case K:  { const i = scene.add.image(px, py, 'tile-cave-wall');    i.setDepth(1); walls.add(i);      break; }
-          case G:  { const i = scene.add.image(px, py, 'tile-gate'); i.setDepth(1); i.setName('gate-tile'); walls.add(i); break; }
+          case W:  { addShadow('tile-wall', px, py); const i = scene.add.image(px, py, 'tile-wall'); i.setDepth(1); walls.add(i); break; }
+          case T:  { const treeKey = rng < 0.4 ? 'tile-tree-top-2' : 'tile-tree-top'; addShadow(treeKey, px, py, 1.5); const i = scene.add.image(px, py, treeKey); i.setDepth(2); walls.add(i); break; }
+          case B:  { addShadow('tile-building-wall', px, py); const i = scene.add.image(px, py, 'tile-building-wall'); i.setDepth(1); walls.add(i); break; }
+          case B2: { addShadow('tile-bldg-stone', px, py); const i = scene.add.image(px, py, 'tile-bldg-stone'); i.setDepth(1); walls.add(i); break; }
+          case BW: { addShadow('tile-bldg-wall-win', px, py); const i = scene.add.image(px, py, 'tile-bldg-wall-win'); i.setDepth(1); walls.add(i); break; }
+          case SW: { addShadow('tile-bldg-stone-win', px, py); const i = scene.add.image(px, py, 'tile-bldg-stone-win'); i.setDepth(1); walls.add(i); break; }
+          case K:  { addShadow('tile-cave-wall', px, py); const i = markCaveSurface(scene.add.image(px, py, 'tile-cave-wall'), 'tile-cave-wall-purified'); i.setDepth(1); walls.add(i); break; }
+          case G:  {
+            // A real road surface remains visible after the doors slide away.
+            const floor = scene.add.image(px, py, 'tile-path');
+            floor.setDepth(0); decorative.add(floor);
+            // Collision is independent from the coherent multi-tile door artwork.
+            const blocker = scene.add.image(px, py, 'tile-gate');
+            blocker.setAlpha(0).setDepth(1).setName('gate-blocker');
+            walls.add(blocker);
+            break;
+          }
           case P: {
-            const pathKey = rng < 0.3 ? 'tile-path-2' : 'tile-path';
+            const pathKey = row >= 26 && row < 38 ? 'tile-path-2' : 'tile-path';
             const i = scene.add.image(px, py, pathKey);
             i.setDepth(0); decorative.add(i);
             break;
           }
-          case A:  { const i = scene.add.image(px, py, 'tile-arena');        i.setDepth(0); decorative.add(i); break; }
-          case C:  { const i = scene.add.image(px, py, 'tile-cave-floor');   i.setDepth(0); decorative.add(i); break; }
-          case R:  { const i = scene.add.image(px, py, 'tile-water');        i.setDepth(0); decorative.add(i); break; }
+          case A:  { const i = markCaveSurface(scene.add.image(px, py, 'tile-arena'), 'tile-arena-purified'); i.setDepth(0); decorative.add(i); break; }
+          case C:  { const i = markCaveSurface(scene.add.image(px, py, 'tile-cave-floor'), 'tile-cave-floor-purified'); i.setDepth(0); decorative.add(i); break; }
+          case R:  { const i = scene.add.image(px, py, 'tile-water'); i.setName('water-tile').setData('baseY', py).setDepth(0); decorative.add(i); break; }
           case L: {
             // Tileset grass base underneath
-            const gk = rng < 0.3 ? 'tile-grass-2' : 'tile-grass';
+            const gk = rng < 0.18 ? 'tile-grass-2' : 'tile-grass';
             const gi = scene.add.image(px, py, gk); gi.setDepth(0); decorative.add(gi);
-            // Full tall-grass tile below player
-            const tg = scene.add.image(px, py, 'tile-tall-grass'); tg.setDepth(1); decorative.add(tg);
-            // Top overlay above player so tufts cover the sprite
-            const to = scene.add.image(px, py, 'tile-tall-grass-top'); to.setDepth(8); decorative.add(to);
+            const grassVariant = rng < 0.5 ? '' : '-2';
+            // Full clump below the player plus a foot-line-sorted foreground tuft.
+            const tg = scene.add.image(px, py, `tile-tall-grass${grassVariant}`); tg.setDepth(1); decorative.add(tg);
+            const tileBottom = py + TILE / 2;
+            const to = scene.add.image(px, tileBottom, `tile-tall-grass-top${grassVariant}`)
+              .setOrigin(0.5, 1)
+              .setDepth(5 + tileBottom / 10000 + 0.0001)
+              .setName('tall-grass-front')
+              .setData('row', row)
+              .setData('col', col);
+            decorative.add(to);
+            tallGrassFrontTiles.push(to);
             break;
           }
           case U: {
-            const gk = rng < 0.3 ? 'tile-grass-2' : 'tile-grass';
+            const gk = rng < 0.18 ? 'tile-grass-2' : 'tile-grass';
             const gi = scene.add.image(px, py, gk); gi.setDepth(0); decorative.add(gi);
             const ti = scene.add.image(px, py, 'tile-tree-trunk'); ti.setDepth(1); decorative.add(ti);
             break;
@@ -439,13 +550,13 @@ export class MapBuilder {
             i.setDepth(0); decorative.add(i);
             break;
           }
-          case X:  { const i = scene.add.image(px, py, 'tile-crystal');      i.setDepth(1); decorative.add(i); break; }
-          case J:  { const i = scene.add.image(px, py, 'tile-pillar');      i.setDepth(1); walls.add(i);      break; }
-          case V:  { const i = scene.add.image(px, py, 'tile-wall-rune');   i.setDepth(1); decorative.add(i); break; }
-          case Q2: { const i = scene.add.image(px, py, 'tile-skull');       i.setDepth(1); decorative.add(i); break; }
+          case X:  { const i = markCaveSurface(scene.add.image(px, py, 'tile-crystal'), 'tile-crystal-purified'); i.setDepth(1); decorative.add(i); break; }
+          case J:  { const i = markCaveSurface(scene.add.image(px, py, 'tile-pillar'), 'tile-pillar-purified'); i.setDepth(1); walls.add(i); break; }
+          case V:  { const i = markCaveSurface(scene.add.image(px, py, 'tile-wall-rune'), 'tile-wall-rune-purified'); i.setDepth(1); walls.add(i); break; }
+          case Q2: { const i = scene.add.image(px, py, 'tile-skull'); i.setDepth(1); decorative.add(i); caveCorruptionObjects.push(i); break; }
           case N:  { const i = scene.add.image(px, py, 'tile-stalactite');  i.setDepth(2); decorative.add(i); break; }
           case S: {
-            const gk = rng < 0.3 ? 'tile-grass-2' : 'tile-grass';
+            const gk = rng < 0.18 ? 'tile-grass-2' : 'tile-grass';
             const gi = scene.add.image(px, py, gk);
             gi.setDepth(0); decorative.add(gi);
             const i = scene.add.image(px, py, 'tile-sign');
@@ -455,7 +566,7 @@ export class MapBuilder {
           default: {
             // Fill empty outdoor tiles with tileset grass for a richer ground
             if (row < 52) {
-              const grassKey = rng < 0.3 ? 'tile-grass-2' : 'tile-grass';
+              const grassKey = rng < 0.18 ? 'tile-grass-2' : 'tile-grass';
               const i = scene.add.image(px, py, grassKey);
               i.setDepth(0); decorative.add(i);
             }
@@ -465,11 +576,44 @@ export class MapBuilder {
       }
     }
 
+    // Walkable void fissures add danger without introducing invisible damage.
+    for (const [row, col, angle] of [
+      [56,17,-18],[60,19,24],[62,9,-8],[66,18,78],[69,37,12],
+      [73,18,-42],[75,16,28],[77,24,82],[80,28,-24],[85,17,18],
+      [86,34,-36],[89,28,70],
+    ] as [number, number, number][]) {
+      const fissure = scene.add.image(col * TILE + TILE / 2, row * TILE + TILE / 2, 'tile-void-fissure')
+        .setDepth(0.7)
+        .setAngle(angle)
+        .setName('cave-corruption');
+      decorative.add(fissure);
+      caveCorruptionObjects.push(fissure);
+      scene.tweens.add({
+        targets: fissure,
+        alpha: { from: 0.46, to: 1 },
+        duration: 620 + (row % 5) * 110,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    // The Frequency Gate is one architectural object instead of eight repeated tiles.
+    const gateCenterX = 21 * TILE;
+    const gateCenterY = 38 * TILE;
+    const gateLeftPanel = scene.add.image(gateCenterX - 16, gateCenterY, 'gate-panel-left')
+      .setDepth(6).setName('gate-panel-left');
+    const gateRightPanel = scene.add.image(gateCenterX + 16, gateCenterY, 'gate-panel-right')
+      .setDepth(6).setName('gate-panel-right');
+    const gateFrame = scene.add.image(gateCenterX, gateCenterY, 'gate-frame')
+      .setDepth(7).setName('gate-frame');
+    decorative.addMultiple([gateLeftPanel, gateRightPanel, gateFrame]);
+
     walls.refresh();
 
     // ── Subtle grid overlay ───────────────────────────────────────────────────
     const grid2 = scene.add.graphics().setDepth(0);
-    grid2.lineStyle(1, 0xffffff, 0.025);
+    grid2.lineStyle(1, 0xd7ff4a, 0.009);
     for (let c = 0; c <= MAP_COLS; c++) grid2.lineBetween(c * TILE, 0, c * TILE, worldHeight);
     for (let r = 0; r <= MAP_ROWS; r++) grid2.lineBetween(0, r * TILE, worldWidth, r * TILE);
 
@@ -478,26 +622,21 @@ export class MapBuilder {
       scene.add.text(x, y, text, { fontFamily: '"Press Start 2P"', fontSize: '8px',
         color: '#' + col.toString(16).padStart(6, '0') }).setDepth(0).setAlpha(a);
 
-    label(2 * TILE,  2 * TILE, 'ECHO VILLAGE',   0x88cc68, 0.40);
-    label(2 * TILE, 15 * TILE, 'SIGNAL PATH',    0x68aa50, 0.35);
-    label(2 * TILE, 28 * TILE, 'NEON JUNCTION',  0x60aa88, 0.40);
-    label(2 * TILE, 40 * TILE, 'FADING PATH',    0x4a6040, 0.45);
-    label(2 * TILE, 56 * TILE, 'VOID CAVE',      0x8844cc, 0.50);
-    label(2 * TILE, 71 * TILE, 'THE CORE',       0xff2200, 0.60);
-
-    // ── Gate highlight ────────────────────────────────────────────────────────
-    const gh = scene.add.graphics().setDepth(3);
-    gh.lineStyle(2, 0xffd700, 0.7);
-    gh.strokeRect(19 * TILE, 36 * TILE + 8, 4 * TILE, 2 * TILE + 8);
+    label(2 * TILE,  2 * TILE, 'ECHO VILLAGE',   0xd7ff4a, 0.28);
+    label(2 * TILE, 15 * TILE, 'SIGNAL PATH',    0x9ebd6a, 0.26);
+    label(2 * TILE, 28 * TILE, 'NEON JUNCTION',  0x49dfbf, 0.30);
+    label(2 * TILE, 40 * TILE, 'FADING PATH',    0x8da662, 0.30);
+    label(2 * TILE, 56 * TILE, 'VOID CAVE // DEAD AIR', 0x49dfbf, 0.32);
+    label(2 * TILE, 84 * TILE, 'THE CORE',              0xff6b3d, 0.50);
 
     // ── Boss chamber rune circle ──────────────────────────────────────────────
-    const runeGraphics = MapBuilder.drawCoreRunes(scene, 24 * TILE, 74 * TILE);
+    const runeGraphics = MapBuilder.drawCoreRunes(scene, 24 * TILE, BOSS_CORE_ROW * TILE);
 
     // ── Crystal glow pulses (tween on a few X tiles) ─────────────────────────
     MapBuilder.animateCrystals(scene, grid);
 
     // ── Cave atmosphere: ash, fog, braziers, entrance arch ────────────────────
-    MapBuilder.drawCaveAtmosphere(scene);
+    caveCorruptionObjects.push(...MapBuilder.drawCaveAtmosphere(scene));
 
     // ── Named positions ───────────────────────────────────────────────────────
     const px = (col: number) => col * TILE + TILE / 2;
@@ -520,7 +659,7 @@ export class MapBuilder {
     // Gate centre
     const gatePos = { x: px(20), y: py(37) };
     // Boss — true arena center (arena spans cols 8–39, rows 70–77)
-    const bossPos = { x: 24 * TILE, y: 74 * TILE };
+    const bossPos = { x: 24 * TILE, y: BOSS_CORE_ROW * TILE };
 
     // Sound fragments
     const fragment1Pos = { x: px(9),  y: py(18) };  // Signal Path left nook
@@ -542,8 +681,10 @@ export class MapBuilder {
       signPos, sign2Pos,
       gatePos, bossPos,
       fragment1Pos, fragment2Pos, fragment3Pos,
-      tallGrassZones,
+      tallGrassZones, tallGrassFrontTiles,
       runeGraphics,
+      caveSurfaceTiles,
+      caveCorruptionObjects,
     };
   }
 
@@ -612,6 +753,26 @@ export class MapBuilder {
     set(76,9,Q2); set(76,38,Q2);
     hLine(78,1,46,K); hLine(79,1,46,K);
 
+    // Expanded finale layout mirrors the playable map's second pass.
+    fill(54,1,91,46,K);
+    fill(54,12,57,35,C); fill(57,18,61,24,C); fill(60,7,63,24,C);
+    fill(62,5,67,15,C); fill(65,11,67,38,C); fill(64,32,70,41,C);
+    fill(68,35,74,40,C); fill(72,12,74,38,C); fill(70,9,76,20,C);
+    fill(74,14,79,19,C); fill(77,14,79,34,C); fill(79,10,81,37,C);
+    fill(58,29,59,34,C); fill(68,24,70,29,C); fill(68,5,69,9,C); fill(75,27,76,32,C);
+    fill(55,22,56,25,K); fill(55,15,56,17,K); fill(61,12,62,14,K); fill(60,18,61,20,K);
+    fill(64,9,65,11,K); fill(66,24,66,27,K); fill(67,37,68,38,K); fill(71,16,72,18,K);
+    fill(73,24,73,28,K); fill(80,18,80,21,K); fill(80,27,80,30,K);
+    for (const [r,c] of [[55,14],[55,33],[60,8],[60,22],[63,7],[66,13],[66,36],[69,34],[72,13],[72,37],[76,10],[78,16],[78,32],[80,11],[80,36]] as [number,number][]) set(r,c,J);
+    for (const [r,c] of [[58,17],[59,25],[61,6],[64,15],[64,31],[68,33],[71,40],[73,11],[75,21],[77,13],[79,35],[81,9],[81,38]] as [number,number][]) set(r,c,V);
+    for (const [r,c] of [[54,13],[54,34],[57,17],[57,25],[60,9],[60,23],[62,6],[63,15],[65,12],[65,37],[68,35],[70,40],[72,14],[72,36],[74,19],[74,34],[77,15],[77,33],[79,12],[79,36]] as [number,number][]) set(r,c,N);
+    for (const [r,c] of [[63,6],[67,14],[70,36],[74,13],[76,19],[79,33],[81,12],[81,35]] as [number,number][]) set(r,c,Q2);
+    for (const [r,c] of [[55,12],[56,35],[60,7],[62,23],[63,15],[65,11],[65,38],[68,40],[70,35],[72,12],[74,39],[75,10],[77,18],[78,34],[80,10],[80,37]] as [number,number][]) set(r,c,X);
+    hLine(82,1,46,K); fill(82,13,82,34,C);
+    const expandedArena: [number,number,number][] = [[83,12,35],[84,8,39],[85,6,41],[86,5,42],[87,5,42],[88,6,41],[89,7,40],[90,9,38],[91,13,34]];
+    expandedArena.forEach(([r,cL,cR]) => { fill(r,cL,r,cR,A); fill(r,1,r,cL-1,K); fill(r,cR+1,r,46,K); });
+    set(89,8,Q2); set(89,39,Q2); hLine(92,1,46,K); hLine(93,1,46,K);
+
     return grid;
   }
 
@@ -623,13 +784,13 @@ export class MapBuilder {
 
     // Three concentric circles on one graphics object
     const g = scene.add.graphics().setDepth(1);
-    g.lineStyle(3, 0x880000, 0.55); g.strokeCircle(cx, cy, outerR);
-    g.lineStyle(2, 0x660000, 0.40); g.strokeCircle(cx, cy, midR);
-    g.lineStyle(1, 0x440000, 0.30); g.strokeCircle(cx, cy, innerR);
+    g.lineStyle(3, 0xff6b3d, 0.42); g.strokeCircle(cx, cy, outerR);
+    g.lineStyle(2, 0xff5c66, 0.30); g.strokeCircle(cx, cy, midR);
+    g.lineStyle(1, 0x49dfbf, 0.20); g.strokeCircle(cx, cy, innerR);
 
     // True pentagram: each point connects to the point two positions ahead
     const pts = 5;
-    g.lineStyle(1, 0x990000, 0.35);
+    g.lineStyle(1, 0xff6b3d, 0.34);
     const pentPoints: [number, number][] = Array.from({ length: pts }, (_, i) => [
       cx + Math.cos(((Math.PI * 2) / pts) * i - Math.PI / 2) * outerR,
       cy + Math.sin(((Math.PI * 2) / pts) * i - Math.PI / 2) * outerR,
@@ -647,17 +808,17 @@ export class MapBuilder {
       const angle = ((Math.PI * 2) / 8) * i;
       const mx = cx + Math.cos(angle) * midR;
       const my = cy + Math.sin(angle) * midR;
-      markerG.fillStyle(0xcc0000, 0.7); markerG.fillRect(mx - 2, my - 2, 4, 4);
-      markerG.fillStyle(0xff2200, 0.4); markerG.fillRect(mx - 1, my - 1, 2, 2);
+      markerG.fillStyle(0xff6b3d, 0.68); markerG.fillRect(mx - 2, my - 2, 4, 4);
+      markerG.fillStyle(0xd7ff4a, 0.42); markerG.fillRect(mx - 1, my - 1, 2, 2);
     }
     scene.tweens.add({ targets: markerG, alpha: 0.2, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // Void-eye center — layered black / dark-red / bright-red
     const eye = scene.add.graphics().setDepth(3);
     eye.fillStyle(0x000000, 1.0); eye.fillCircle(cx, cy, 10);
-    eye.fillStyle(0x330011, 0.8); eye.fillCircle(cx, cy, 7);
-    eye.fillStyle(0x880022, 0.6); eye.fillCircle(cx, cy, 4);
-    eye.fillStyle(0xff0033, 0.9); eye.fillCircle(cx, cy, 2);
+    eye.fillStyle(0x16312c, 0.8); eye.fillCircle(cx, cy, 7);
+    eye.fillStyle(0x287a6b, 0.6); eye.fillCircle(cx, cy, 4);
+    eye.fillStyle(0xd7ff4a, 0.9); eye.fillCircle(cx, cy, 2);
     scene.tweens.add({ targets: eye, alpha: 0.25, duration: 700, yoyo: true, repeat: -1 });
 
     // 5 pentagram-vertex rune markers with staggered pulsing
@@ -667,8 +828,8 @@ export class MapBuilder {
       const mx = cx + Math.cos(a) * outerR;
       const my = cy + Math.sin(a) * outerR;
       const m  = scene.add.graphics().setDepth(2);
-      m.fillStyle(0xdd0000, 0.8); m.fillRect(-3, -1, 6, 2); m.fillRect(-1, -3, 2, 6);
-      m.fillStyle(0xff3300, 0.4); m.fillCircle(0, 0, 3);
+      m.fillStyle(0xff6b3d, 0.8); m.fillRect(-3, -1, 6, 2); m.fillRect(-1, -3, 2, 6);
+      m.fillStyle(0xd7ff4a, 0.36); m.fillCircle(0, 0, 3);
       m.setPosition(mx, my);
       scene.tweens.add({ targets: m, alpha: 0.1, duration: 600 + i * 150, yoyo: true, repeat: -1 });
       markers.push(m);
@@ -678,18 +839,20 @@ export class MapBuilder {
   }
 
   // ── Cave atmosphere: ash motes, fog wisps, braziers, entrance arch ────────
-  private static drawCaveAtmosphere(scene: Phaser.Scene): void {
+  private static drawCaveAtmosphere(scene: Phaser.Scene): Phaser.GameObjects.GameObject[] {
     const caveTop    = 54 * TILE;
-    const caveBottom = 77 * TILE;
+    const caveBottom = 91 * TILE;
     const caveLeft   = 7 * TILE;
     const caveRight  = 41 * TILE;
+    const effects: Phaser.GameObjects.GameObject[] = [];
 
     // ── Floating ash / dust motes ──────────────────────────────────────────
     for (let i = 0; i < 40; i++) {
       const mote  = scene.add.graphics().setDepth(2);
+      effects.push(mote);
       const isRed = Math.random() < 0.3;
       const isTeal = !isRed && Math.random() < 0.4;
-      const color = isRed ? 0x660011 : isTeal ? 0x004433 : 0x2a1a3a;
+      const color = isRed ? 0x7a2e25 : isTeal ? 0x267568 : 0x273b38;
       const alpha = 0.15 + Math.random() * 0.3;
       mote.fillStyle(color, alpha);
       mote.fillCircle(0, 0, 0.8 + Math.random() * 1.2);
@@ -720,7 +883,8 @@ export class MapBuilder {
     const fogY = 53 * TILE;
     for (let i = 0; i < 6; i++) {
       const fog = scene.add.graphics().setDepth(3);
-      fog.fillStyle(0x1a0e2a, 0.18);
+      effects.push(fog);
+      fog.fillStyle(0x1b3431, 0.18);
       fog.fillEllipse(0, 0, 48 + Math.random() * 32, 10 + Math.random() * 6);
       const fx = 15 * TILE + Math.random() * 14 * TILE;
       fog.setPosition(fx, fogY + Math.random() * 8);
@@ -735,39 +899,48 @@ export class MapBuilder {
 
     // ── Void crack floor glow in arena ────────────────────────────────────
     const aCx = 24 * TILE;
-    const aCy = 74 * TILE;
+    const aCy = BOSS_CORE_ROW * TILE;
     const arenaGlow = scene.add.graphics().setDepth(1);
+    effects.push(arenaGlow);
     const crackAngles = [15, 72, 130, 200, 255, 310];
     crackAngles.forEach(deg => {
       const rad = Phaser.Math.DegToRad(deg);
       const len = 40 + Math.random() * 20;
       const ex  = aCx + Math.cos(rad) * len;
       const ey  = aCy + Math.sin(rad) * len;
-      arenaGlow.lineStyle(1, 0x550020, 0.5);
+      arenaGlow.lineStyle(1, 0xff6b3d, 0.38);
       arenaGlow.lineBetween(aCx, aCy, ex, ey);
-      arenaGlow.lineStyle(1, 0x220010, 0.3);
+      arenaGlow.lineStyle(1, 0x49dfbf, 0.18);
       arenaGlow.lineBetween(aCx + 1, aCy, ex + 1, ey);
     });
-    arenaGlow.fillStyle(0x1a0008, 0.35); arenaGlow.fillCircle(aCx, aCy, 22);
-    arenaGlow.fillStyle(0x2d0012, 0.2);  arenaGlow.fillCircle(aCx, aCy, 12);
+    arenaGlow.fillStyle(0x2b1713, 0.34); arenaGlow.fillCircle(aCx, aCy, 22);
+    arenaGlow.fillStyle(0x17332d, 0.22); arenaGlow.fillCircle(aCx, aCy, 12);
     scene.tweens.add({ targets: arenaGlow, alpha: 0.5, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // ── Brazier / torch glow points ────────────────────────────────────────
     const braziers: [number, number, number][] = [
       [15 * TILE, 53 * TILE, 0xff4400],  // entrance left
       [27 * TILE, 53 * TILE, 0xff4400],  // entrance right
-      [12 * TILE, 68 * TILE, 0xff2200],  // pillar left
-      [35 * TILE, 68 * TILE, 0xff2200],  // pillar right
-      [11 * TILE, 76 * TILE, 0xcc0044],  // arena back left
-      [37 * TILE, 76 * TILE, 0xcc0044],  // arena back right
+      [11 * TILE, 66 * TILE, 0xff2200],  // west chamber
+      [38 * TILE, 69 * TILE, 0xff2200],  // east chamber
+      [16 * TILE, 78 * TILE, 0xcc0044],  // antechamber left
+      [33 * TILE, 79 * TILE, 0xcc0044],  // antechamber right
+      [10 * TILE, 89 * TILE, 0xff2200],  // arena back left
+      [38 * TILE, 89 * TILE, 0xff2200],  // arena back right
     ];
     braziers.forEach(([bx, by, col]) => {
       const outer = scene.add.graphics().setDepth(2);
-      outer.fillStyle(col, 0.12); outer.fillCircle(bx, by, 18);
+      outer.setPosition(bx, by);
+      outer.fillStyle(col, 0.045); outer.fillCircle(0, 0, 18);
+      outer.lineStyle(1, col, 0.22); outer.strokeCircle(0, 0, 15);
       const inner = scene.add.graphics().setDepth(3);
-      inner.fillStyle(col, 0.35); inner.fillCircle(bx, by, 7);
+      inner.setPosition(bx, by);
+      inner.fillStyle(col, 0.24); inner.fillCircle(0, 0, 7);
+      inner.fillStyle(0xff6b3d, 0.58); inner.fillRect(-2, -6, 4, 9);
       const dot   = scene.add.graphics().setDepth(3);
-      dot.fillStyle(0xffcc44, 0.8); dot.fillCircle(bx, by, 2);
+      dot.setPosition(bx, by);
+      effects.push(outer, inner, dot);
+      dot.fillStyle(0xffcc44, 0.9); dot.fillCircle(0, -3, 2);
       scene.tweens.add({ targets: outer, alpha: 0.04, scaleX: 1.15, scaleY: 1.1, duration: 180 + Math.random() * 120, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       scene.tweens.add({ targets: inner, alpha: 0.15, scaleX: 0.9,  scaleY: 1.1, duration: 220 + Math.random() * 100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       scene.tweens.add({ targets: dot,   alpha: 0.4,  scaleX: 1.3,  scaleY: 1.4, duration: 130 + Math.random() * 80,  yoyo: true, repeat: -1 });
@@ -777,21 +950,23 @@ export class MapBuilder {
     // arc(x, y, radius, startAngle, endAngle, anticlockwise):
     // From PI (left) clockwise to 0 (right) traces the upper semicircle arch.
     const archCx = 24 * TILE;
-    const archCy = 70 * TILE;
+    const archCy = 83 * TILE;
     const archR  = 8 * TILE;
     const arch   = scene.add.graphics().setDepth(3);
+    effects.push(arch);
 
-    arch.lineStyle(8, 0x1e1630, 0.9);
+    arch.lineStyle(8, 0x18292a, 0.9);
     arch.beginPath(); arch.arc(archCx, archCy, archR,      Math.PI, 0, false); arch.strokePath();
 
-    arch.lineStyle(4, 0x2a2248, 0.8);
+    arch.lineStyle(4, 0x2c4342, 0.8);
     arch.beginPath(); arch.arc(archCx, archCy, archR - 4,  Math.PI, 0, false); arch.strokePath();
 
-    arch.lineStyle(2, 0x7a5800, 0.5);
+    arch.lineStyle(2, 0xff6b3d, 0.46);
     arch.beginPath(); arch.arc(archCx, archCy, archR - 8,  Math.PI + 0.15, -0.15, false); arch.strokePath();
 
     arch.lineStyle(1, 0x004433, 0.3);
     arch.beginPath(); arch.arc(archCx, archCy, archR - 12, Math.PI, 0, false); arch.strokePath();
+    return effects;
   }
 
   // ── Animate crystal tiles with gentle glow pulse ─────────────────────────

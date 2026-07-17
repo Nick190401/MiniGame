@@ -278,10 +278,17 @@ export function MapEditor() {
   const tooltipY = Math.max(mousePos.y - 36, 0);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: '#0a0814', fontFamily: '"Press Start 2P", monospace', fontSize: 10, color: '#ccccee' }}>
+    <div className="editor-shell" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: '#060b09', fontFamily: '"DM Mono", monospace', fontSize: 10, color: '#becbc1' }}>
 
       {/* ══ TOOLBAR ══════════════════════════════════════════════════════ */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', height: 46, flexShrink: 0, background: '#13102a', borderBottom: '1px solid #2a2448', overflowX: 'auto', overflowY: 'hidden' }}>
+      <div className="editor-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', height: 56, flexShrink: 0, background: '#0a1410', borderBottom: '1px solid #28392f', overflowX: 'auto', overflowY: 'hidden' }}>
+
+        <div className="editor-brand">
+          <span>SQ</span>
+          <div><strong>World Lab</strong><small>Map protocol</small></div>
+        </div>
+
+        <Sep />
 
         {/* Tools */}
         {(['paint', 'erase', 'fill', 'eyedropper', 'select'] as EditorTool[]).map(tool => (
@@ -301,7 +308,7 @@ export function MapEditor() {
         <Sep />
 
         {/* Brush size */}
-        <span style={{ fontSize: 8, color: '#555577', whiteSpace: 'nowrap' }}>Brush:</span>
+        <span style={{ fontSize: 8, color: '#68766d', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 1 }}>Brush:</span>
         {([1, 3, 5] as const).map(s => (
           <Btn key={s} active={brushSize === s} title={`${s}×${s} brush [${s === 1 ? '[' : s === 3 ? ']' : ']]'}]`}
             onClick={() => { setBrushSize(s); sceneRef.current?.setBrushSize(s); }}>
@@ -319,7 +326,7 @@ export function MapEditor() {
 
         {/* Zoom */}
         <Btn onClick={handleZoomOut} title="Zoom out">−</Btn>
-        <span style={{ fontSize: 8, color: '#9999cc', minWidth: 36, textAlign: 'center', whiteSpace: 'nowrap' }}>{zoomPct}%</span>
+        <span style={{ fontSize: 8, color: '#d7ff4a', minWidth: 36, textAlign: 'center', whiteSpace: 'nowrap' }}>{zoomPct}%</span>
         <Btn onClick={handleZoomIn} title="Zoom in">+</Btn>
         <Btn onClick={handleFit} title="Fit to screen [Home]">⊡</Btn>
 
@@ -348,7 +355,7 @@ export function MapEditor() {
 
       {/* ══ RECENT TILES ══════════════════════════════════════════════════ */}
       {recentTiles.length > 0 && (
-        <div style={{ height: 34, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, padding: '0 10px', background: '#0f0d24', borderBottom: '1px solid #1a1838', overflowX: 'auto' }}>
+        <div style={{ height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', background: '#08100d', borderBottom: '1px solid #202f27', overflowX: 'auto' }}>
           <span style={{ fontSize: 7, color: '#444466', whiteSpace: 'nowrap', marginRight: 4 }}>RECENT</span>
           {recentTiles.map(id => {
             const tile = TILE_TYPES.find(t => t.id === id);
@@ -357,8 +364,8 @@ export function MapEditor() {
               <div key={id} title={tile.name} onClick={() => selectTile(id)} style={{
                 width: 22, height: 22, flexShrink: 0, cursor: 'pointer',
                 background: tile.color,
-                border: `2px solid ${id === selectedTileId ? '#ffd700' : '#2a2448'}`,
-                outline: id === selectedTileId ? '1px solid #aa8800' : 'none',
+                border: `2px solid ${id === selectedTileId ? '#d7ff4a' : '#28372f'}`,
+                outline: id === selectedTileId ? '1px solid #6f8429' : 'none',
               }} />
             );
           })}
@@ -369,18 +376,18 @@ export function MapEditor() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
         {/* ── Sidebar ──────────────────────────────────────────────────── */}
-        <div style={{ width: 200, flexShrink: 0, background: '#0e0c22', borderRight: '1px solid #2a2448', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="editor-sidebar" style={{ width: 220, flexShrink: 0, background: '#09110e', borderRight: '1px solid #26372d', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           {/* Zone visibility */}
-          <div style={{ padding: '7px 8px 6px', borderBottom: '1px solid #1e1a38', flexShrink: 0 }}>
-            <div style={{ fontSize: 7, color: '#555577', letterSpacing: 1, marginBottom: 5, textTransform: 'uppercase' }}>Zones</div>
+          <div style={{ padding: '13px 12px 10px', borderBottom: '1px solid #213027', flexShrink: 0 }}>
+            <div style={{ fontSize: 7, color: '#77857b', letterSpacing: 1.4, marginBottom: 8, textTransform: 'uppercase' }}>World zones</div>
             {ZONE_DEFS.map((zone, i) => (
               <div key={zone.name} onClick={() => toggleZone(i)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', cursor: 'pointer' }}>
                 <div style={{ width: 8, height: 8, flexShrink: 0, background: zone.color }} />
-                <span style={{ fontSize: 7, flex: 1, color: zoneVisible[i] ? '#aaaacc' : '#3a3a5a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 8, flex: 1, color: zoneVisible[i] ? '#aebbb1' : '#465149', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {zone.name}
                 </span>
-                <span style={{ fontSize: 8, color: zoneVisible[i] ? '#44aa44' : '#3a3a5a' }}>
+                <span style={{ fontSize: 8, color: zoneVisible[i] ? '#d7ff4a' : '#465149' }}>
                   {zoneVisible[i] ? '●' : '○'}
                 </span>
               </div>
@@ -388,12 +395,12 @@ export function MapEditor() {
           </div>
 
           {/* Tile search */}
-          <div style={{ padding: '6px 8px 4px', flexShrink: 0 }}>
+          <div style={{ padding: '10px 12px 6px', flexShrink: 0 }}>
             <input
               placeholder="Search tiles..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', background: '#1a1830', border: '1px solid #3a3468', color: '#ccccee', padding: '5px 7px', fontSize: 9, outline: 'none', fontFamily: 'inherit' }}
+              style={{ width: '100%', boxSizing: 'border-box', background: '#101a15', border: '1px solid #34483b', color: '#dbe5dd', padding: '8px 9px', fontSize: 9, outline: 'none', fontFamily: 'inherit' }}
             />
           </div>
 
@@ -404,7 +411,7 @@ export function MapEditor() {
               if (!tiles.length) return null;
               return (
                 <div key={cat}>
-                  <div style={{ fontSize: 7, color: '#6666aa', letterSpacing: 1, padding: '7px 2px 3px', textTransform: 'uppercase' }}>{cat}</div>
+                  <div style={{ fontSize: 7, color: '#49dfbf', letterSpacing: 1.2, padding: '10px 6px 5px', textTransform: 'uppercase' }}>{cat}</div>
                   {tiles.map(tile => (
                     <PaletteEntry key={tile.id} tile={tile} selected={tile.id === selectedTileId} onClick={() => selectTile(tile.id)} />
                   ))}
@@ -425,7 +432,7 @@ export function MapEditor() {
           <div ref={canvasParentRef} style={{ width: '100%', height: '100%' }} />
 
           {/* ── Minimap ─────────────────────────────────────────────── */}
-          <div style={{ position: 'absolute', top: 10, right: 10, background: '#0a0818', border: '1px solid #3a3468', padding: 2 }}>
+          <div style={{ position: 'absolute', top: 14, right: 14, background: '#07100c', border: '1px solid #425848', padding: 4, boxShadow: '0 16px 40px rgba(0,0,0,.38)' }}>
             <canvas
               ref={minimapRef}
               width={MINIMAP_W}
@@ -437,7 +444,7 @@ export function MapEditor() {
           </div>
 
           {/* ── Keyboard shortcut hint ──────────────────────────────── */}
-          <div style={{ position: 'absolute', bottom: 6, right: 10, fontSize: 7, color: '#333355', lineHeight: 1.8, textAlign: 'right', pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', bottom: 10, right: 14, fontSize: 7, color: '#4e5a52', lineHeight: 1.8, textAlign: 'right', pointerEvents: 'none' }}>
             P=Paint E=Erase F=Fill I=Pick S=Select G=Grid<br />
             [/]=Brush Ctrl+C/V=Copy/Paste Del=Delete Sel Home=Fit
           </div>
@@ -445,7 +452,7 @@ export function MapEditor() {
       </div>
 
       {/* ══ STATUS BAR ════════════════════════════════════════════════════ */}
-      <div style={{ height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 16, fontSize: 8, background: '#0d0b20', borderTop: '1px solid #1e1a38', color: '#7777aa' }}>
+      <div style={{ height: 30, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 16, fontSize: 8, background: '#08100d', borderTop: '1px solid #213027', color: '#718078' }}>
         {hoverInfo && hoverInfo.col >= 0 ? (
           <>
             <span>Col: {hoverInfo.col}  Row: {hoverInfo.row}</span>
@@ -458,7 +465,7 @@ export function MapEditor() {
           </>
         ) : <span>Hover over the map</span>}
         <div style={{ flex: 1 }} />
-        <span style={{ color: '#4a4a7a' }}>
+        <span style={{ color: '#526058' }}>
           {TILE_TYPES.find(t => t.id === selectedTileId)?.name ?? '?'} · {activeTool} · {brushSize}×{brushSize} · {zoomPct}%
         </span>
       </div>
@@ -483,11 +490,11 @@ function Btn({ children, active, disabled, onClick, title, style }: {
 }) {
   return (
     <button title={title} disabled={disabled} onClick={onClick} style={{
-      fontFamily: '"Press Start 2P", monospace', fontSize: 8,
-      padding: '4px 7px', whiteSpace: 'nowrap', cursor: disabled ? 'default' : 'pointer',
-      background: active ? '#2a2260' : '#1a1838',
-      border: `1px solid ${active ? '#6655cc' : '#3a3468'}`,
-      color: disabled ? '#444466' : active ? '#ccaaff' : '#aaaacc',
+      fontFamily: '"DM Mono", monospace', fontSize: 8,
+      padding: '6px 8px', whiteSpace: 'nowrap', cursor: disabled ? 'default' : 'pointer',
+      background: active ? '#21351f' : '#101a15',
+      border: `1px solid ${active ? '#d7ff4a' : '#33463a'}`,
+      color: disabled ? '#465149' : active ? '#d7ff4a' : '#aebbb1',
       flexShrink: 0,
       ...style,
     }}>
@@ -497,14 +504,14 @@ function Btn({ children, active, disabled, onClick, title, style }: {
 }
 
 function Sep() {
-  return <div style={{ width: 1, height: 28, background: '#2a2448', flexShrink: 0 }} />;
+  return <div style={{ width: 1, height: 30, background: '#2a3b30', flexShrink: 0 }} />;
 }
 
 function PaletteEntry({ tile, selected, onClick }: { tile: TileType; selected: boolean; onClick: () => void }) {
   return (
-    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 4px', background: selected ? '#1e1a44' : 'transparent', border: `1px solid ${selected ? '#5544bb' : 'transparent'}`, cursor: 'pointer', marginBottom: 1 }}>
+    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 6px', background: selected ? '#18271d' : 'transparent', border: `1px solid ${selected ? '#6f8429' : 'transparent'}`, cursor: 'pointer', marginBottom: 1 }}>
       <div style={{ width: 14, height: 14, flexShrink: 0, background: tile.color, border: '1px solid rgba(255,255,255,0.15)', imageRendering: 'pixelated' }} />
-      <span style={{ fontSize: 8, color: selected ? '#ccaaff' : '#aaaacc', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tile.name}</span>
+      <span style={{ fontSize: 8, color: selected ? '#d7ff4a' : '#aab7ad', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tile.name}</span>
       <span style={{ fontSize: 7, flexShrink: 0, color: tile.passable ? '#44aa44' : '#aa4444' }}>{tile.passable ? '✓' : '✕'}</span>
     </div>
   );

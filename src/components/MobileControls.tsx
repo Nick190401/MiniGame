@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
 import { MobileInput } from '../game/input/MobileInput';
 
+type Direction = keyof typeof MobileInput;
+
+const ARROWS: Record<Direction, string> = {
+  up: '↑',
+  right: '→',
+  down: '↓',
+  left: '←',
+};
+
 export function MobileControls() {
   const [visible, setVisible] = useState(false);
+  const [activeDirection, setActiveDirection] = useState<Direction | null>(null);
 
   useEffect(() => {
-    // Show on touch devices
-    const isTouch = window.matchMedia('(pointer: coarse)').matches;
-    setVisible(isTouch);
-
-    // Also show if touch events are fired
+    setVisible(window.matchMedia('(pointer: coarse)').matches);
     const onTouch = () => setVisible(true);
     window.addEventListener('touchstart', onTouch, { once: true });
     return () => window.removeEventListener('touchstart', onTouch);
@@ -17,143 +23,45 @@ export function MobileControls() {
 
   if (!visible) return null;
 
-  const setDir = (dir: keyof typeof MobileInput, val: boolean) => {
-    MobileInput[dir] = val;
+  const setDirection = (direction: Direction, active: boolean) => {
+    if (active) {
+      (Object.keys(MobileInput) as Direction[]).forEach(key => {
+        MobileInput[key] = false;
+      });
+    }
+    MobileInput[direction] = active;
+    setActiveDirection(active ? direction : null);
   };
 
-  const btnProps = (dir: keyof typeof MobileInput) => ({
-    className: 'dpad-btn select-none',
-    onPointerDown: (e: React.PointerEvent) => {
-      e.preventDefault();
-      setDir(dir, true);
+  const buttonProps = (direction: Direction) => ({
+    className: `mobile-dpad__button mobile-dpad__button--${direction}`,
+    'aria-label': `Move ${direction}`,
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setDirection(direction, true);
     },
-    onPointerUp: (e: React.PointerEvent) => {
-      e.preventDefault();
-      setDir(dir, false);
+    onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      setDirection(direction, false);
     },
-    onPointerLeave: (e: React.PointerEvent) => {
-      e.preventDefault();
-      setDir(dir, false);
-    },
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    onPointerCancel: () => setDirection(direction, false),
+    onPointerLeave: () => setDirection(direction, false),
+    onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
   });
 
   return (
-    <div
-      className="absolute bottom-6 left-6 z-30 pointer-events-auto"
-      style={{ userSelect: 'none', touchAction: 'none' }}
-    >
-      {/* D-pad layout */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '48px 48px 48px',
-          gridTemplateRows: '48px 48px 48px',
-          gap: 4,
-        }}
-      >
-        {/* Up */}
-        <div />
-        <button
-          {...btnProps('up')}
-          style={{
-            gridColumn: 2,
-            gridRow: 1,
-            background: 'rgba(255,255,255,0.12)',
-            border: '2px solid rgba(255,255,255,0.2)',
-            borderRadius: 6,
-            fontSize: 20,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          ▲
-        </button>
-        <div />
-
-        {/* Left / center / Right */}
-        <button
-          {...btnProps('left')}
-          style={{
-            gridColumn: 1,
-            gridRow: 2,
-            background: 'rgba(255,255,255,0.12)',
-            border: '2px solid rgba(255,255,255,0.2)',
-            borderRadius: 6,
-            fontSize: 20,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          ◀
-        </button>
-
-        {/* Center (decoration) */}
-        <div
-          style={{
-            gridColumn: 2,
-            gridRow: 2,
-            background: 'rgba(255,255,255,0.06)',
-            border: '2px solid rgba(255,255,255,0.1)',
-            borderRadius: 6,
-          }}
-        />
-
-        <button
-          {...btnProps('right')}
-          style={{
-            gridColumn: 3,
-            gridRow: 2,
-            background: 'rgba(255,255,255,0.12)',
-            border: '2px solid rgba(255,255,255,0.2)',
-            borderRadius: 6,
-            fontSize: 20,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          ▶
-        </button>
-
-        {/* Down */}
-        <div />
-        <button
-          {...btnProps('down')}
-          style={{
-            gridColumn: 2,
-            gridRow: 3,
-            background: 'rgba(255,255,255,0.12)',
-            border: '2px solid rgba(255,255,255,0.2)',
-            borderRadius: 6,
-            fontSize: 20,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          ▼
-        </button>
-        <div />
+    <div className="mobile-control-wrap">
+      <div className="mobile-control-label"><span>Nav</span><small>Touch input</small></div>
+      <div className="mobile-dpad">
+        <div className="mobile-dpad__ring" />
+        {(Object.keys(ARROWS) as Direction[]).map((direction) => (
+          <button key={direction} {...buttonProps(direction)}>{ARROWS[direction]}</button>
+        ))}
+        <div className={`mobile-dpad__core ${activeDirection ? 'is-active' : ''}`}>
+          <span>{activeDirection ? ARROWS[activeDirection] : 'SQ'}</span>
+        </div>
       </div>
-
-      {/* Hint */}
-      <p
-        className="text-center mt-2"
-        style={{
-          fontFamily: '"Press Start 2P"',
-          fontSize: '5px',
-          color: 'rgba(255,255,255,0.3)',
-        }}
-      >
-        MOVE
-      </p>
     </div>
   );
 }

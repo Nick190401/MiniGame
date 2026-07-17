@@ -3,258 +3,370 @@ import { useGameStore } from '../../store/gameStore';
 import { EventBus, EVENTS } from '../EventBus';
 
 /**
- * Full-screen death overlay — retro RPG "Game Over" with animation.
- * Launched over WorldScene when the player dies in battle.
+ * Full-screen broadcast-failure sequence shown over the paused world.
+ * The world remains recoverable: reconnecting restores HP and returns the
+ * player to the Echo Village checkpoint.
  */
 export class DeathScene extends Phaser.Scene {
+  private canRespawn = false;
+  private respawning = false;
+  private reconnectLabel?: Phaser.GameObjects.Text;
+
   constructor() {
     super({ key: 'DeathScene' });
   }
 
   create(): void {
+    this.canRespawn = false;
+    this.respawning = false;
+    EventBus.emit(EVENTS.PLAYER_DIED);
+    EventBus.emit(EVENTS.DEATH_UI_STATE, { ready: false, reconnecting: false });
+    EventBus.on(EVENTS.DEATH_UI_ACTION, this.onDeathUiAction);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      EventBus.off(EVENTS.DEATH_UI_ACTION, this.onDeathUiAction);
+    });
+
     const W = this.scale.width;
     const H = this.scale.height;
+    const store = useGameStore.getState();
+    const playerName = (store.playerName || 'Sound Keeper').toUpperCase();
 
-    // ── Full-screen dark overlay ──────────────────────────────────
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0);
-    bg.fillRect(0, 0, W, H);
-    bg.setAlpha(0);
+    const text = (
+      x: number,
+      y: number,
+      value: string,
+      style: Phaser.Types.GameObjects.Text.TextStyle,
+    ) => {
+      const label = this.add.text(x, y, value, style).setResolution(2);
+      label.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      return label;
+    };
 
-    this.tweens.add({
-      targets: bg,
-      alpha: 1,
-      duration: 800,
-      ease: 'Power2',
-      onUpdate: () => {
-        bg.clear();
-        bg.fillStyle(0x000000, bg.alpha * 0.92);
-        bg.fillRect(0, 0, W, H);
-      },
+    // Near-black broadcast layer: the paused world is only faintly perceptible.
+    const backdrop = this.add.graphics().setName('death-backdrop');
+    backdrop.fillStyle(0x030605, 0.965);
+    backdrop.fillRect(0, 0, W, H);
+    backdrop.fillGradientStyle(0x2d0d0b, 0x030605, 0x030605, 0x17261f, 0.44, 0, 0, 0.22);
+    backdrop.fillRect(0, 0, W, H);
+    backdrop.lineStyle(1, 0x4c6659, 0.075);
+    for (let x = 20; x < W; x += 32) backdrop.lineBetween(x, 0, x, H);
+    for (let y = 16; y < H; y += 32) backdrop.lineBetween(0, y, W, y);
+    backdrop.lineStyle(1, 0xff6b3d, 0.12);
+    backdrop.lineBetween(22, 82, W - 22, 82);
+    backdrop.lineBetween(22, H - 42, W - 22, H - 42);
+    backdrop.setAlpha(0);
+    this.tweens.add({ targets: backdrop, alpha: 1, duration: 380, ease: 'Quad.easeOut' });
+
+    const scanlines = this.add.graphics().setName('death-scanlines').setAlpha(0);
+    scanlines.lineStyle(1, 0xd7ff4a, 0.028);
+    for (let y = 1; y < H; y += 5) scanlines.lineBetween(0, y, W, y);
+    this.tweens.add({ targets: scanlines, alpha: 1, duration: 720 });
+
+    // Sparse dead pixels create signal noise without obscuring the layout.
+    const noise = this.add.graphics().setName('death-noise').setAlpha(0);
+    for (let index = 0; index < 58; index++) {
+      const color = index % 11 === 0 ? 0xff6b3d : index % 7 === 0 ? 0x49dfbf : 0x718078;
+      noise.fillStyle(color, index % 11 === 0 ? 0.32 : 0.16);
+      noise.fillRect(Phaser.Math.Between(18, W - 18), Phaser.Math.Between(18, H - 18), index % 9 === 0 ? 3 : 1, 1);
+    }
+    this.tweens.add({ targets: noise, alpha: 1, duration: 500, delay: 180 });
+
+    // Header preserves the game's archive/control-room visual language.
+    const header = this.add.container(0, -8).setName('death-header').setAlpha(0);
+    const brand = this.add.graphics();
+    brand.fillStyle(0xff6b3d, 1);
+    brand.fillRect(24, 23, 32, 32);
+    brand.fillStyle(0x07100c, 1);
+    brand.fillRect(48, 23, 8, 8);
+    header.add(brand);
+    header.add(text(40, 39, 'SQ', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#07100c',
+    }).setOrigin(0.5));
+    header.add(text(69, 25, 'SOUND QUEST', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#eef5e9', letterSpacing: 2,
+    }));
+    header.add(text(69, 43, 'SYSTEM // BROADCAST FAILURE', {
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#718078', letterSpacing: 1,
+    }));
+
+    const status = this.add.graphics();
+    status.fillStyle(0xff6b3d, 0.08);
+    status.fillRoundedRect(W - 145, 27, 119, 24, 3);
+    status.lineStyle(1, 0xff6b3d, 0.5);
+    status.strokeRoundedRect(W - 145, 27, 119, 24, 3);
+    status.fillStyle(0xff6b3d, 1);
+    status.fillCircle(W - 129, 39, 3);
+    header.add(status);
+    header.add(text(W - 117, 34, 'LINK LOST', {
+      fontFamily: 'DM Mono', fontSize: '7px', color: '#ff8a66', letterSpacing: 1,
+    }));
+    this.tweens.add({ targets: header, y: 0, alpha: 1, duration: 420, delay: 120, ease: 'Cubic.easeOut' });
+
+    // Editorial title block: fast, legible and recognisable at game resolution.
+    const accentRule = this.add.rectangle(35, 128, 3, 146, 0xff6b3d, 1)
+      .setOrigin(0, 0)
+      .setScale(1, 0)
+      .setName('death-accent-rule');
+    this.tweens.add({ targets: accentRule, scaleY: 1, duration: 480, delay: 220, ease: 'Cubic.easeOut' });
+
+    const eyebrow = text(52, 113, 'TRANSMISSION 00 // TERMINATED', {
+      fontFamily: 'DM Mono', fontSize: '7px', color: '#a2afa7', letterSpacing: 2,
+    }).setAlpha(0);
+    const signalTitle = text(48, 132, 'SIGNAL', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '49px', color: '#eef5e9', letterSpacing: -2,
+    }).setAlpha(0);
+    const lostTitle = text(48, 177, 'LOST', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '67px', color: '#ff6b3d', letterSpacing: -3,
+    }).setAlpha(0);
+    [
+      { target: eyebrow, x: 52, delay: 260 },
+      { target: signalTitle, x: 48, delay: 340 },
+      { target: lostTitle, x: 48, delay: 440 },
+    ].forEach(({ target, x, delay }) => {
+      target.setX(x - 16);
+      this.tweens.add({ targets: target, x, alpha: 1, duration: 440, delay, ease: 'Cubic.easeOut' });
     });
 
-    // ── Falling music note particles ─────────────────────────────
-    const noteChars = ['♪', '♫', '♩', '♬'];
-    for (let i = 0; i < 14; i++) {
-      const note = this.add.text(
-        Phaser.Math.Between(40, W - 40),
-        -20 - Phaser.Math.Between(0, 200),
-        noteChars[i % 4],
-        {
-          fontFamily: 'serif',
-          fontSize: `${Phaser.Math.Between(10, 18)}px`,
-          color: '#aa3344',
+    const description = text(52, 258,
+      'Your channel dropped below recoverable levels.\nThe sonic archive retained your progress.', {
+        fontFamily: 'DM Mono', fontSize: '8px', color: '#9ba8a0', lineSpacing: 6,
+      }).setAlpha(0);
+    this.tweens.add({ targets: description, alpha: 1, y: 254, duration: 460, delay: 620, ease: 'Quad.easeOut' });
+
+    // Useful context replaces the old generic death sentence.
+    const archivePanel = this.add.graphics().setAlpha(0);
+    archivePanel.fillStyle(0x07100c, 0.9);
+    archivePanel.fillRoundedRect(52, 311, 267, 62, 4);
+    archivePanel.lineStyle(1, 0x34483e, 0.85);
+    archivePanel.strokeRoundedRect(52, 311, 267, 62, 4);
+    archivePanel.fillStyle(0xff6b3d, 0.8);
+    archivePanel.fillRect(52, 311, 3, 62);
+    this.tweens.add({ targets: archivePanel, alpha: 1, duration: 380, delay: 760 });
+
+    const metaLabels = [
+      text(68, 323, 'CALLSIGN', { fontFamily: 'DM Mono', fontSize: '5px', color: '#65746b', letterSpacing: 1 }),
+      text(202, 323, 'LEVEL', { fontFamily: 'DM Mono', fontSize: '5px', color: '#65746b', letterSpacing: 1 }),
+      text(68, 352, 'RECOVERY POINT', { fontFamily: 'DM Mono', fontSize: '5px', color: '#65746b', letterSpacing: 1 }),
+      text(68, 333, playerName, { fontFamily: 'Syne', fontStyle: 'bold', fontSize: '9px', color: '#eef5e9' }),
+      text(202, 333, String(store.level).padStart(2, '0'), { fontFamily: 'Syne', fontStyle: 'bold', fontSize: '10px', color: '#d7ff4a' }),
+      text(168, 349, 'ECHO VILLAGE // FULL HP', { fontFamily: 'DM Mono', fontSize: '6px', color: '#49dfbf', letterSpacing: 1 }),
+    ];
+    metaLabels.forEach((label, index) => {
+      label.setAlpha(0);
+      this.tweens.add({ targets: label, alpha: 1, duration: 300, delay: 800 + index * 35 });
+    });
+
+    // Broken record / receiver visual on the right.
+    const receiver = this.add.container(468, 231).setName('death-receiver').setAlpha(0).setScale(0.9);
+    const receiverGlow = this.add.graphics();
+    receiverGlow.fillStyle(0xff6b3d, 0.035);
+    receiverGlow.fillCircle(0, 0, 132);
+    receiverGlow.fillStyle(0x49dfbf, 0.025);
+    receiverGlow.fillCircle(0, 0, 96);
+    receiver.add(receiverGlow);
+
+    const rings = this.add.graphics().setName('death-broken-rings');
+    rings.lineStyle(1, 0x49dfbf, 0.3);
+    rings.beginPath(); rings.arc(0, 0, 112, -2.9, -0.38); rings.strokePath();
+    rings.beginPath(); rings.arc(0, 0, 112, 0.08, 2.35); rings.strokePath();
+    rings.lineStyle(1, 0xff6b3d, 0.72);
+    rings.beginPath(); rings.arc(0, 0, 84, -2.3, -0.12); rings.strokePath();
+    rings.beginPath(); rings.arc(0, 0, 84, 0.35, 1.85); rings.strokePath();
+    rings.lineStyle(2, 0xd7ff4a, 0.3);
+    rings.beginPath(); rings.arc(0, 0, 55, -2.8, -1.2); rings.strokePath();
+    rings.beginPath(); rings.arc(0, 0, 55, -0.82, 1.95); rings.strokePath();
+    rings.lineStyle(1, 0x50665a, 0.28);
+    rings.lineBetween(-132, 0, 132, 0);
+    rings.lineBetween(0, -132, 0, 132);
+    for (let index = 0; index < 28; index++) {
+      const angle = (index / 28) * Math.PI * 2;
+      const inner = index % 4 === 0 ? 119 : 124;
+      rings.lineStyle(index % 4 === 0 ? 2 : 1, index % 4 === 0 ? 0xff6b3d : 0x43584d, index % 4 === 0 ? 0.68 : 0.34);
+      rings.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * 131, Math.sin(angle) * 131);
+    }
+    receiver.add(rings);
+    this.tweens.add({ targets: rings, angle: -360, duration: 24000, repeat: -1, ease: 'Linear' });
+
+    const platform = this.add.graphics();
+    platform.fillStyle(0x000000, 0.55);
+    platform.fillEllipse(0, 62, 82, 17);
+    platform.lineStyle(1, 0xff6b3d, 0.38);
+    platform.strokeEllipse(0, 62, 70, 12);
+    receiver.add(platform);
+
+    const playerGhost = this.add.sprite(0, 61, 'player-overworld-v2', 0)
+      .setOrigin(169 / 313, 291 / 313)
+      .setScale(0.34)
+      .setTint(0x7b8a81)
+      .setAlpha(0.48);
+    playerGhost.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    receiver.add(playerGhost);
+    this.tweens.add({ targets: playerGhost, alpha: 0.18, duration: 680, yoyo: true, repeat: -1, ease: 'Stepped' });
+
+    const waveform = this.add.graphics().setName('death-flatline');
+    receiver.add(waveform);
+    const drawWaveform = (amplitude: number) => {
+      waveform.clear();
+      let previous: Phaser.Math.Vector2 | undefined;
+      for (let x = -104; x <= 104; x += 4) {
+        const envelope = Math.max(0.16, 1 - Math.abs(x) / 130);
+        const dropout = x > 18 && x < 42;
+        const y = Math.sin(x * 0.31) * amplitude * envelope + Math.sin(x * 0.67) * amplitude * 0.24;
+        if (!dropout && previous) {
+          waveform.lineStyle(1, Math.abs(x) < 18 ? 0xd7ff4a : 0x49dfbf, dropout ? 0 : 0.72);
+          waveform.lineBetween(previous.x, previous.y, x, y);
         }
-      ).setOrigin(0.5).setAlpha(0);
+        previous = dropout ? undefined : new Phaser.Math.Vector2(x, y);
+      }
+      waveform.fillStyle(0xff6b3d, 0.9);
+      waveform.fillRect(24, -2, 4, 4);
+      waveform.fillRect(34, -1, 2, 2);
+    };
+    drawWaveform(18);
+    this.time.delayedCall(420, () => this.tweens.addCounter({
+      from: 18,
+      to: 1.5,
+      duration: 880,
+      ease: 'Cubic.easeIn',
+      onUpdate: tween => drawWaveform(tween.getValue() ?? 1.5),
+    }));
 
-      this.tweens.add({
-        targets: note,
-        alpha: { from: 0, to: 0.3 + Math.random() * 0.3 },
-        y: H + 40,
-        x: note.x + Phaser.Math.Between(-60, 60),
-        angle: Phaser.Math.Between(-180, 180),
-        duration: 3000 + Math.random() * 2000,
-        delay: 400 + i * 150,
-        ease: 'Sine.easeIn',
-      });
-    }
+    const receiverLabel = text(0, 94, 'NO CARRIER // 00.0 HZ', {
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#ff8a66', letterSpacing: 1,
+    }).setOrigin(0.5);
+    receiver.add(receiverLabel);
+    this.tweens.add({ targets: receiverLabel, alpha: 0.35, duration: 420, yoyo: true, repeat: -1 });
+    this.tweens.add({ targets: receiver, alpha: 1, scaleX: 1, scaleY: 1, duration: 620, delay: 280, ease: 'Back.easeOut' });
 
-    // ── Horizontal scan line glitch ──────────────────────────────
-    for (let i = 0; i < 5; i++) {
-      const line = this.add.graphics();
-      const ly = Phaser.Math.Between(60, H - 60);
-      line.fillStyle(0xff2244, 0.15);
-      line.fillRect(0, ly, W, 2);
-      line.setAlpha(0);
-
-      this.tweens.add({
-        targets: line,
-        alpha: { from: 0, to: 0.6 },
-        duration: 120,
-        delay: 800 + i * 200,
-        yoyo: true,
-        repeat: 2,
-        onComplete: () => line.destroy(),
-      });
-    }
-
-    // ── "THE SOUND FADES..." text ────────────────────────────────
-    const fadeText = this.add.text(W / 2, H * 0.28, 'THE SOUND FADES...', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '8px',
-      color: '#882233',
-    }).setOrigin(0.5).setAlpha(0);
-
+    // A single scanning fault line gives the screen motion after the reveal.
+    const scanner = this.add.rectangle(W / 2, -3, W, 2, 0xff6b3d, 0.18).setName('death-scan-fault');
     this.tweens.add({
-      targets: fadeText,
-      alpha: 0.8,
-      duration: 1200,
-      delay: 600,
-      ease: 'Power2',
+      targets: scanner,
+      y: H + 3,
+      alpha: { from: 0.26, to: 0 },
+      duration: 1900,
+      delay: 520,
+      repeat: -1,
+      repeatDelay: 900,
+      ease: 'Linear',
     });
 
-    // ── GAME OVER title ──────────────────────────────────────────
-    const titleText = this.add.text(W / 2, H * 0.44, 'GAME OVER', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '22px',
-      color: '#cc1133',
-    }).setOrigin(0.5).setAlpha(0).setScale(2.5);
-
-    this.tweens.add({
-      targets: titleText,
-      alpha: 1,
-      scaleX: 1,
-      scaleY: 1,
-      duration: 900,
-      delay: 1000,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        // Subtle glow pulse on title
-        this.tweens.add({
-          targets: titleText,
-          alpha: 0.6,
-          duration: 1200,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      },
+    // Recovery action appears quickly, but input is briefly gated against key carry-over.
+    const button = this.add.container(52, 401).setName('death-reconnect').setAlpha(0).setY(413);
+    const buttonBg = this.add.graphics();
+    const drawButton = (hovered: boolean) => {
+      buttonBg.clear();
+      buttonBg.fillStyle(hovered ? 0xd7ff4a : 0x0a1511, 0.98);
+      buttonBg.fillRoundedRect(0, 0, 267, 39, 4);
+      buttonBg.lineStyle(hovered ? 2 : 1, hovered ? 0xd7ff4a : 0x49dfbf, hovered ? 1 : 0.75);
+      buttonBg.strokeRoundedRect(0, 0, 267, 39, 4);
+      buttonBg.fillStyle(hovered ? 0x07100c : 0x49dfbf, 1);
+      buttonBg.fillRect(0, 0, 4, 39);
+    };
+    drawButton(false);
+    this.reconnectLabel = text(17, 12, 'RECONNECT SIGNAL', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#eef5e9', letterSpacing: 1,
     });
-
-    // ── Red vignette edges ───────────────────────────────────────
-    const vignette = this.add.graphics();
-    vignette.setAlpha(0);
-    // Top
-    vignette.fillGradientStyle(0x880011, 0x880011, 0x000000, 0x000000, 0.5, 0.5, 0, 0);
-    vignette.fillRect(0, 0, W, 60);
-    // Bottom
-    vignette.fillGradientStyle(0x000000, 0x000000, 0x880011, 0x880011, 0, 0, 0.5, 0.5);
-    vignette.fillRect(0, H - 60, W, 60);
-
-    this.tweens.add({
-      targets: vignette,
-      alpha: 1,
-      duration: 1500,
-      delay: 800,
-    });
-
-    // ── Subtitle line ────────────────────────────────────────────
-    const subText = this.add.text(W / 2, H * 0.56, 'The silence swallows everything.', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#665566',
-    }).setOrigin(0.5).setAlpha(0);
-
-    this.tweens.add({
-      targets: subText,
-      alpha: 0.8,
-      duration: 800,
-      delay: 1800,
-    });
-
-    // ── "Try Again" button ───────────────────────────────────────
-    const btnY = H * 0.72;
-
-    const btnBg = this.add.graphics();
-    btnBg.fillStyle(0x1a0a2e, 0.9);
-    btnBg.fillRoundedRect(W / 2 - 80, btnY - 14, 160, 28, 4);
-    btnBg.lineStyle(1, 0xcc1133, 0.8);
-    btnBg.strokeRoundedRect(W / 2 - 80, btnY - 14, 160, 28, 4);
-    btnBg.setAlpha(0);
-
-    const btnText = this.add.text(W / 2, btnY, '▸ TRY AGAIN', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '9px',
-      color: '#ffd700',
-    }).setOrigin(0.5).setAlpha(0);
-
-    // Fade in button
-    this.tweens.add({
-      targets: [btnBg, btnText],
-      alpha: 1,
-      duration: 600,
-      delay: 2600,
-      onComplete: () => {
-        // Pulse the button border
-        this.tweens.add({
-          targets: btnBg,
-          alpha: 0.5,
-          duration: 800,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      },
-    });
-
-    // ── Make button interactive ──────────────────────────────────
-    const hitZone = this.add.zone(W / 2, btnY, 180, 36).setInteractive({ useHandCursor: true });
+    const keyBg = this.add.graphics();
+    keyBg.fillStyle(0x050908, 0.9);
+    keyBg.fillRoundedRect(207, 10, 48, 19, 3);
+    keyBg.lineStyle(1, 0x718078, 0.45);
+    keyBg.strokeRoundedRect(207, 10, 48, 19, 3);
+    const keyText = text(231, 16, 'ENTER', {
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#aab5ae', letterSpacing: 1,
+    }).setOrigin(0.5, 0);
+    const hitZone = this.add.zone(133.5, 19.5, 267, 39).setInteractive({ useHandCursor: true });
+    button.add([buttonBg, this.reconnectLabel, keyBg, keyText, hitZone]);
 
     hitZone.on('pointerover', () => {
-      btnText.setColor('#ffffff');
-      btnBg.clear();
-      btnBg.fillStyle(0x2a1040, 0.95);
-      btnBg.fillRoundedRect(W / 2 - 80, btnY - 14, 160, 28, 4);
-      btnBg.lineStyle(2, 0xffd700, 1);
-      btnBg.strokeRoundedRect(W / 2 - 80, btnY - 14, 160, 28, 4);
+      if (!this.canRespawn) return;
+      drawButton(true);
+      this.reconnectLabel?.setColor('#07100c');
     });
-
     hitZone.on('pointerout', () => {
-      btnText.setColor('#ffd700');
-      btnBg.clear();
-      btnBg.fillStyle(0x1a0a2e, 0.9);
-      btnBg.fillRoundedRect(W / 2 - 80, btnY - 14, 160, 28, 4);
-      btnBg.lineStyle(1, 0xcc1133, 0.8);
-      btnBg.strokeRoundedRect(W / 2 - 80, btnY - 14, 160, 28, 4);
+      drawButton(false);
+      this.reconnectLabel?.setColor('#eef5e9');
     });
+    hitZone.on('pointerdown', () => this.respawn());
+    this.tweens.add({ targets: button, y: 401, alpha: 1, duration: 420, delay: 720, ease: 'Cubic.easeOut' });
 
-    hitZone.on('pointerdown', () => {
-      this.respawn();
+    const footer = text(W - 24, H - 29, 'SPACE / ENTER / TAP  //  ARCHIVE SAFE', {
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#66736b', letterSpacing: 1,
+    }).setOrigin(1, 0.5).setAlpha(0);
+    this.tweens.add({ targets: footer, alpha: 0.72, duration: 420, delay: 900 });
+
+    this.time.delayedCall(850, () => {
+      this.canRespawn = true;
+      EventBus.emit(EVENTS.DEATH_UI_STATE, { ready: true, reconnecting: false });
     });
-
-    // ── Also allow keyboard ──────────────────────────────────────
     if (this.input.keyboard) {
-      this.input.keyboard.once('keydown-SPACE', () => this.respawn());
-      this.input.keyboard.once('keydown-ENTER', () => this.respawn());
+      this.input.keyboard.on('keydown-SPACE', () => this.respawn());
+      this.input.keyboard.on('keydown-ENTER', () => this.respawn());
     }
 
-    // ── Hint text ────────────────────────────────────────────────
-    const hintText = this.add.text(W / 2, H * 0.88, 'PRESS SPACE OR CLICK', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
-      color: '#444444',
-    }).setOrigin(0.5).setAlpha(0);
+    this.time.addEvent({
+      delay: 1180,
+      loop: true,
+      callback: () => this.playGlitchBurst(W, signalTitle, lostTitle, receiver),
+    });
+  }
 
-    this.tweens.add({
-      targets: hintText,
-      alpha: 0.6,
-      duration: 600,
-      delay: 3200,
-      onComplete: () => {
-        this.tweens.add({
-          targets: hintText,
-          alpha: 0.2,
-          duration: 1000,
-          yoyo: true,
-          repeat: -1,
-        });
-      },
+  private playGlitchBurst(
+    width: number,
+    signalTitle: Phaser.GameObjects.Text,
+    lostTitle: Phaser.GameObjects.Text,
+    receiver: Phaser.GameObjects.Container,
+  ): void {
+    const glitch = this.add.graphics().setName('death-glitch-burst').setDepth(30);
+    for (let index = 0; index < 5; index++) {
+      const y = Phaser.Math.Between(92, 378);
+      const x = Phaser.Math.Between(24, width - 150);
+      glitch.fillStyle(index % 2 === 0 ? 0xff6b3d : 0x49dfbf, 0.12 + index * 0.025);
+      glitch.fillRect(x, y, Phaser.Math.Between(28, 132), index % 3 === 0 ? 2 : 1);
+    }
+    const direction = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+    signalTitle.setX(48 + direction * 2);
+    lostTitle.setX(48 - direction * 3);
+    receiver.setX(468 + direction * 2);
+    this.time.delayedCall(70, () => {
+      signalTitle.setX(48);
+      lostTitle.setX(48);
+      receiver.setX(468);
+      glitch.destroy();
     });
   }
 
   private respawn(): void {
-    // Flash white on transition
-    this.cameras.main.flash(400, 255, 255, 255);
+    if (!this.canRespawn || this.respawning) return;
+    this.respawning = true;
+    this.canRespawn = false;
+    EventBus.emit(EVENTS.DEATH_UI_STATE, { ready: false, reconnecting: true });
+    this.reconnectLabel?.setText('RECONNECTING...').setColor('#d7ff4a');
 
-    this.cameras.main.fadeOut(500, 0, 0, 0);
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const reconnectWave = this.add.graphics()
+      .setName('death-reconnect-wave')
+      .setDepth(60)
+      .setPosition(W / 2, H / 2)
+      .setScale(0, 1);
+    reconnectWave.fillStyle(0x49dfbf, 0.18);
+    reconnectWave.fillRect(-W / 2, -14, W, 28);
+    reconnectWave.fillStyle(0xd7ff4a, 0.9);
+    reconnectWave.fillRect(-W / 2, -1, W, 2);
+    this.tweens.add({ targets: reconnectWave, scaleX: 1, duration: 180, ease: 'Cubic.easeOut' });
+
+    this.cameras.main.flash(130, 73, 223, 191, false);
+    this.time.delayedCall(150, () => this.cameras.main.fadeOut(420, 5, 9, 8));
     this.time.delayedCall(500, () => {
-      // Restore player HP
-      useGameStore.getState().restoreHp(useGameStore.getState().maxHp);
-
-      // Tell WorldScene to respawn
+      const store = useGameStore.getState();
+      store.restoreHp(store.maxHp);
       EventBus.emit(EVENTS.RESPAWN);
-
       this.scene.stop('DeathScene');
     });
   }
+
+  private onDeathUiAction = (): void => {
+    this.respawn();
+  };
 }

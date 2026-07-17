@@ -1,12 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import { gameConfig } from '../game/config';
 import { HUD } from './HUD';
 import { MobileControls } from './MobileControls';
+import { DialogueOverlay } from './DialogueOverlay';
+import { BattleOverlay } from './BattleOverlay';
+import { DeathOverlay } from './DeathOverlay';
+import { GameNoticeOverlay } from './GameNoticeOverlay';
+import { LoadingOverlay } from './LoadingOverlay';
+import { ZoneOverlay } from './ZoneOverlay';
 import { RewardModal } from './RewardModal';
 import { useGameStore } from '../store/gameStore';
 import { getAttacksForLevel } from '../game/systems/AttackSystem';
 import { MAX_LEVEL, XP_THRESHOLDS } from '../game/systems/XPSystem';
+import { EventBus, EVENTS } from '../game/EventBus';
 
 interface GameContainerProps {
   visible: boolean;
@@ -15,6 +22,34 @@ interface GameContainerProps {
 export function GameContainer({ visible }: GameContainerProps) {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [battleActive, setBattleActive] = useState(false);
+  const [deathActive, setDeathActive] = useState(false);
+  const [worldReady, setWorldReady] = useState(false);
+
+  useEffect(() => {
+    const showBattle = () => {
+      setBattleActive(true);
+      setDeathActive(false);
+    };
+    const hideBattle = () => setBattleActive(false);
+    const showDeath = () => setDeathActive(true);
+    const hideDeath = () => setDeathActive(false);
+    const handleSceneReady = (sceneKey: string) => {
+      if (sceneKey === 'WorldScene') setWorldReady(true);
+    };
+    EventBus.on(EVENTS.BATTLE_START, showBattle);
+    EventBus.on(EVENTS.BATTLE_END, hideBattle);
+    EventBus.on(EVENTS.PLAYER_DIED, showDeath);
+    EventBus.on(EVENTS.RESPAWN, hideDeath);
+    EventBus.on(EVENTS.SCENE_READY, handleSceneReady);
+    return () => {
+      EventBus.off(EVENTS.BATTLE_START, showBattle);
+      EventBus.off(EVENTS.BATTLE_END, hideBattle);
+      EventBus.off(EVENTS.PLAYER_DIED, showDeath);
+      EventBus.off(EVENTS.RESPAWN, hideDeath);
+      EventBus.off(EVENTS.SCENE_READY, handleSceneReady);
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -29,6 +64,13 @@ export function GameContainer({ visible }: GameContainerProps) {
         parent: containerRef.current,
       });
 
+      // Phaser reads the parent size during construction. Production CSS can
+      // arrive from cache a frame later, so refresh once the full-screen stage
+      // has settled instead of keeping the 640x480 fallback display size.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => gameRef.current?.scale.refresh());
+      });
+
       // Expose game instance for console commands
       (window as unknown as Record<string, unknown>).game = gameRef.current;
 
@@ -37,6 +79,22 @@ export function GameContainer({ visible }: GameContainerProps) {
     }, 50);
 
     return () => clearTimeout(timer);
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !containerRef.current) return;
+
+    const refreshScale = () => gameRef.current?.scale.refresh();
+    const resizeObserver = new ResizeObserver(refreshScale);
+    resizeObserver.observe(containerRef.current);
+    window.addEventListener('resize', refreshScale);
+    window.visualViewport?.addEventListener('resize', refreshScale);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', refreshScale);
+      window.visualViewport?.removeEventListener('resize', refreshScale);
+    };
   }, [visible]);
 
   // Destroy on unmount
@@ -53,13 +111,21 @@ export function GameContainer({ visible }: GameContainerProps) {
   useEffect(() => {
     return () => {
       delete (window as any).bossfight;
+      delete (window as any).reward;
     };
   }, []);
 
   return (
     <div
-      className="absolute inset-0"
+      className={`game-stage absolute inset-0${deathActive ? ' game-stage--death' : ''}`}
       style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100dvh',
+        minWidth: 0,
+        minHeight: 0,
+        overflow: 'hidden',
         visibility: visible ? 'visible' : 'hidden',
         opacity: visible ? 1 : 0,
         transition: 'opacity 0.5s ease',
@@ -68,16 +134,34 @@ export function GameContainer({ visible }: GameContainerProps) {
       {/* Phaser canvas container */}
       <div
         ref={containerRef}
-        className="w-full h-full"
+        className="game-canvas w-full h-full"
         id="game-container"
-        style={{ position: 'relative' }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       />
+
+      <div className="game-stage__frame" aria-hidden="true">
+        <span className="game-stage__corner game-stage__corner--tl" />
+        <span className="game-stage__corner game-stage__corner--tr" />
+        <span className="game-stage__corner game-stage__corner--bl" />
+        <span className="game-stage__corner game-stage__corner--br" />
+        {!battleActive && (
+          <span className="game-stage__mode">
+            {deathActive ? 'Signal state // lost' : 'Field mode // live'}
+          </span>
+        )}
+      </div>
 
       {/* React UI overlays */}
       {visible && (
         <>
-          <HUD />
-          <MobileControls />
+          {worldReady && !battleActive && !deathActive && <HUD />}
+          {worldReady && !battleActive && !deathActive && <MobileControls />}
+          {worldReady && !battleActive && !deathActive && <DialogueOverlay canvasParentRef={containerRef} />}
+          {!worldReady && <LoadingOverlay canvasParentRef={containerRef} />}
+          {worldReady && !battleActive && !deathActive && <ZoneOverlay canvasParentRef={containerRef} />}
+          {battleActive && !deathActive && <BattleOverlay canvasParentRef={containerRef} />}
+          {worldReady && !deathActive && <GameNoticeOverlay canvasParentRef={containerRef} />}
+          {deathActive && <DeathOverlay canvasParentRef={containerRef} />}
           <RewardModal />
         </>
       )}
@@ -89,6 +173,15 @@ export function GameContainer({ visible }: GameContainerProps) {
 
 function registerCheatCommands(gameRef: React.MutableRefObject<Phaser.Game | null>) {
   const TILE = 16;
+
+  (window as any).reward = () => {
+    useGameStore.setState({
+      bossDefeated: true,
+      bonusSongUnlocked: true,
+      gamePhase: 'reward',
+    });
+    console.log('%c LOST TRACK UNLOCKED ', 'background: #d7ff4a; color: #050908; font-weight: bold');
+  };
 
   (window as any).bossfight = () => {
     const game = gameRef.current;
@@ -119,18 +212,12 @@ function registerCheatCommands(gameRef: React.MutableRefObject<Phaser.Game | nul
       return;
     }
 
-    // Open the gate visually (remove gate tiles)
-    worldScene.gateOpen = true;
-    const walls = worldScene.walls as Phaser.Physics.Arcade.StaticGroup;
-    walls.getChildren().forEach((child: any) => {
-      if (child.texture?.key === 'tile-gate') {
-        walls.remove(child, true, true);
-      }
-    });
+    // Open the physical blockers and the coherent sliding-door artwork.
+    worldScene.openGate(false);
 
-    // Teleport player just outside boss zone (y=69 tiles, center x=24 tiles)
+    // Teleport player into the final antechamber, just outside the Core.
     const player = worldScene.player as Phaser.Physics.Arcade.Sprite;
-    player.setPosition(24 * TILE, 69 * TILE);
+    player.setPosition(24 * TILE, 81 * TILE);
 
     // Reset boss encounter flag so it triggers on entry
     worldScene.bossEncounterStarted = false;

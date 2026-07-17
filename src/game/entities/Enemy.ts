@@ -61,7 +61,7 @@ export const ENEMY_DEFINITIONS: EnemyData[] = [
     xpReward: 15,
     textureKey: 'enemy-static-noise',
     isBoss: false,
-    color: 0x00ccff,
+    color: 0x49dfbf,
     attacks: [
       { name: 'White Noise', damage: 6 },
       { name: 'Frequency Jab', damage: 9 },
@@ -74,7 +74,7 @@ export const ENEMY_DEFINITIONS: EnemyData[] = [
     xpReward: 20,
     textureKey: 'enemy-broken-signal',
     isBoss: false,
-    color: 0xff4444,
+    color: 0xff6b3d,
     attacks: [
       { name: 'Signal Burst', damage: 8 },
       { name: 'Distortion', damage: 12 },
@@ -87,7 +87,7 @@ export const ENEMY_DEFINITIONS: EnemyData[] = [
     xpReward: 25,
     textureKey: 'enemy-silence',
     isBoss: false,
-    color: 0xcc44ff,
+    color: 0xff5c66,
     attacks: [
       { name: 'Void Touch', damage: 10 },
       { name: 'Mute', damage: 15 },
@@ -103,7 +103,7 @@ export const BOSS_DEFINITION: EnemyData = {
   xpReward: 80,
   textureKey: 'boss-gatekeeper',
   isBoss: true,
-  color: 0xffd700,
+  color: 0xd7ff4a,
   attacks: [
     { name: 'Silence Wave', damage: 10 },
     { name: 'Void Crush', damage: 15 },

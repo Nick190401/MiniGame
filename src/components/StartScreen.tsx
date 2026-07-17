@@ -1,34 +1,60 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 
-// Stars are memoised so they don't re-render on every keystroke
-function Stars() {
-  const stars = useMemo(() =>
-    Array.from({ length: 70 }, (_, i) => ({
-      size:  Math.random() > 0.8 ? 2 : 1,
-      left:  Math.random() * 100,
-      top:   Math.random() * 100,
-      opacity: Math.random() * 0.6 + 0.2,
-      duration: 1 + Math.random() * 3,
-      delay:    Math.random() * 3,
-    })), []
+function SignalField() {
+  const particles = useMemo(
+    () => Array.from({ length: 24 }, (_, index) => ({
+      id: index,
+      x: (index * 37 + 11) % 100,
+      y: (index * 53 + 7) % 100,
+      delay: (index % 7) * 0.42,
+      duration: 5 + (index % 5),
+      size: index % 6 === 0 ? 3 : 1,
+    })),
+    [],
   );
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {stars.map((s, i) => (
-        <div
-          key={i}
-          className="absolute bg-white rounded-full"
+    <div className="signal-field" aria-hidden="true">
+      <div className="signal-field__grid" />
+      <div className="signal-field__glow signal-field__glow--lime" />
+      <div className="signal-field__glow signal-field__glow--orange" />
+      <div className="signal-field__sweep" />
+      {particles.map((particle) => (
+        <span
+          key={particle.id}
+          className="signal-particle"
           style={{
-            width: s.size, height: s.size,
-            left: `${s.left}%`, top: `${s.top}%`,
-            opacity: s.opacity,
-            animation: `pixel-blink ${s.duration}s step-end infinite`,
-            animationDelay: `${s.delay}s`,
+            left: `${particle.x}%`,
+            top: `${particle.y}%`,
+            width: particle.size,
+            height: particle.size,
+            animationDelay: `${particle.delay}s`,
+            animationDuration: `${particle.duration}s`,
           }}
         />
       ))}
+    </div>
+  );
+}
+
+function Waveform() {
+  return (
+    <svg className="waveform" viewBox="0 0 520 84" role="img" aria-label="Animated audio waveform">
+      <path className="waveform__ghost" d="M2 42h52l12-18 13 36 16-48 18 61 14-31h41l13-13 14 26 16-40 16 54 14-27h42l10-18 13 37 18-49 18 62 14-32h38l16-23 13 44 14-30 14 10h35" />
+      <path className="waveform__line" pathLength="1" d="M2 42h52l12-18 13 36 16-48 18 61 14-31h41l13-13 14 26 16-40 16 54 14-27h42l10-18 13 37 18-49 18 62 14-32h38l16-23 13 44 14-30 14 10h35" />
+    </svg>
+  );
+}
+
+function RecordGlyph() {
+  return (
+    <div className="signal-disc" aria-hidden="true">
+      <span className="signal-disc__orbit signal-disc__orbit--one" />
+      <span className="signal-disc__orbit signal-disc__orbit--two" />
+      <span className="signal-disc__label">SQ</span>
+      <span className="signal-disc__needle" />
+      <span className="signal-disc__readout">96.4</span>
     </div>
   );
 }
@@ -44,187 +70,97 @@ export function StartScreen() {
   };
 
   return (
-    <div
-      className="absolute inset-0 flex flex-col items-center justify-center scanlines"
-      style={{ background: 'radial-gradient(ellipse at center, #1a0a2e 0%, #000008 100%)' }}
-    >
-      <Stars />
+    <div className="start-screen">
+      <SignalField />
 
-      {/* Scrollable content column */}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          // Responsive gap: tight on small/landscape, generous on big screens
-          gap: 'clamp(8px, 2.5vh, 28px)',
-          // Responsive side padding
-          padding: 'clamp(12px, 3vh, 32px) clamp(16px, 5vw, 48px)',
-          width: '100%',
-          maxWidth: 720,
-          // Allow scrolling if content taller than viewport (landscape mobile)
-          maxHeight: '100dvh',
-          overflowY: 'auto',
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* Pre-title */}
-        <p style={{
-          fontFamily: '"Press Start 2P"',
-          fontSize: 'clamp(8px, 1.2vmin, 13px)',
-          color: '#8844cc',
-          letterSpacing: '5px',
-          textTransform: 'uppercase',
-          margin: 0,
-        }}>
-          A Musical Journey
-        </p>
-
-        {/* Main title — scales with vmin so it fits portrait AND landscape */}
-        <div className="animate-title-glitch" style={{ textAlign: 'center', lineHeight: 1.2 }}>
-          <h1 style={{
-            fontFamily: '"Press Start 2P"',
-            fontSize: 'clamp(32px, 10vmin, 96px)',
-            color: '#ffd700',
-            textShadow: '4px 4px #b8860b, -3px -3px #ff0080, 0 0 60px rgba(255,215,0,0.4)',
-            lineHeight: 1.25,
-            letterSpacing: '2px',
-            margin: 0,
-          }}>
-            SOUND<br />QUEST
-          </h1>
-        </div>
-
-        {/* Subtitle */}
-        <p style={{
-          fontFamily: '"Press Start 2P"',
-          fontSize: 'clamp(9px, 1.8vmin, 16px)',
-          color: '#00ccff',
-          textShadow: '0 0 16px #00ccff',
-          textAlign: 'center',
-          lineHeight: 2,
-          margin: 0,
-        }}>
-          Find the Lost Track
-        </p>
-
-        {/* Separator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', maxWidth: 480 }}>
-          <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, transparent, #ffd700)' }} />
-          <span style={{ fontFamily: '"Press Start 2P"', fontSize: 'clamp(11px, 2vmin, 18px)', color: '#ffd700' }}>♪</span>
-          <div style={{ flex: 1, height: 1, background: 'linear-gradient(to left, transparent, #ffd700)' }} />
-        </div>
-
-        {/* Lore — hidden on very short viewports (landscape phone) */}
-        <div
-          style={{
-            fontFamily: '"Press Start 2P"',
-            fontSize: 'clamp(7px, 1.2vmin, 12px)',
-            color: '#888899',
-            lineHeight: 2.4,
-            textAlign: 'center',
-            maxWidth: 460,
-          }}
-          // Hide lore when screen height is very small (landscape mobile ≤ 500px)
-          className="hide-on-short"
-        >
-          A hidden song was lost<br />
-          beyond the Void Gate.<br />
-          <br />
-          Defeat The Gatekeeper.<br />
-          Claim what was silenced.
-        </div>
-
-        {/* Name input */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%', maxWidth: 320 }}>
-          <label style={{
-            fontFamily: '"Press Start 2P"',
-            fontSize: 'clamp(7px, 1vmin, 10px)',
-            color: '#8888aa',
-            letterSpacing: '2px',
-          }}>
-            ENTER YOUR NAME
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value.slice(0, 16))}
-            onKeyDown={e => { if (e.key === 'Enter') handleStart(); }}
-            placeholder="Sound Keeper"
-            maxLength={16}
-            style={{
-              fontFamily: '"Press Start 2P"',
-              fontSize: 'clamp(9px, 1.5vmin, 14px)',
-              color: '#ffd700',
-              background: '#0a0818',
-              border: '2px solid #4a3a6a',
-              padding: 'clamp(7px, 1.2vh, 12px) clamp(10px, 2vw, 20px)',
-              width: '100%',
-              textAlign: 'center',
-              outline: 'none',
-              caretColor: '#ffd700',
-              letterSpacing: '1px',
-              boxShadow: '0 0 12px rgba(138,68,204,0.3) inset',
-              boxSizing: 'border-box',
-            }}
-          />
-          <span style={{ fontFamily: '"Press Start 2P"', fontSize: 'clamp(6px, 0.9vmin, 8px)', color: '#44445a' }}>
-            {name.length}/16
+      <header className="launch-header">
+        <a className="brand-lockup" href="#main-menu" aria-label="Sound Quest home">
+          <span className="brand-lockup__mark">SQ</span>
+          <span className="brand-lockup__copy">
+            <strong>Sound Quest</strong>
+            <small>Sonic archive // 01</small>
           </span>
+        </a>
+        <div className="signal-status">
+          <span className="signal-status__dot" />
+          Signal acquired
+          <span className="signal-status__code">48.06 N / 11.58 E</span>
         </div>
+      </header>
 
-        {/* Buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'clamp(4px, 1vh, 10px)', width: '100%' }}>
-          <button
-            className="btn-pixel btn-gold animate-float"
-            onClick={handleStart}
-            style={{
-              fontSize: 'clamp(9px, 1.8vmin, 16px)',
-              padding: 'clamp(12px, 2vh, 20px) clamp(24px, 4vw, 48px)',
-            }}
-          >
-            ▶ BEGIN JOURNEY
+      <main id="main-menu" className="launch-layout">
+        <section className="launch-hero">
+          <p className="launch-eyebrow"><span>01</span> An interactive sound odyssey</p>
+          <h1 className="launch-title" aria-label="Sound Quest">
+            <span>Sound</span>
+            <span className="launch-title__accent">Quest</span>
+          </h1>
+          <p className="launch-intro">
+            A hidden frequency vanished beyond the Void Gate.
+            Trace the distortion, face the silence, and bring the lost track home.
+          </p>
+          <Waveform />
+          <div className="launch-meta" aria-label="Game information">
+            <div><span>Format</span><strong>Audio RPG</strong></div>
+            <div><span>Journey</span><strong>Single player</strong></div>
+            <div><span>Protocol</span><strong>WASD / Touch</strong></div>
+          </div>
+        </section>
+
+        <aside className="launch-console" aria-label="Player setup">
+          <div className="console-topline">
+            <span>Player setup</span>
+            <span className="console-topline__index">A/01</span>
+          </div>
+
+          <RecordGlyph />
+
+          <div className="console-copy">
+            <p>Identity channel</p>
+            <h2>Tune your signal.</h2>
+          </div>
+
+          <label className="callsign-field">
+            <span className="callsign-field__label">
+              Callsign <small>{name.length.toString().padStart(2, '0')} / 16</small>
+            </span>
+            <span className="callsign-field__control">
+              <span className="callsign-field__prefix">@</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value.slice(0, 16))}
+                onKeyDown={(event) => { if (event.key === 'Enter') handleStart(); }}
+                placeholder="Sound Keeper"
+                maxLength={16}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </span>
+          </label>
+
+          <button className="launch-primary" onClick={handleStart}>
+            <span>Enter the frequency</span>
+            <span className="launch-primary__icon" aria-hidden="true">↗</span>
           </button>
 
-          <button
-            className="btn-pixel"
-            onClick={() => setGamePhase('editor')}
-            style={{
-              fontSize: 'clamp(7px, 1.1vmin, 11px)',
-              padding: 'clamp(7px, 1.2vh, 10px) clamp(16px, 3vw, 24px)',
-              opacity: 0.65,
-            }}
-          >
-            ◈ MAP EDITOR
+          <button className="launch-secondary" onClick={() => setGamePhase('editor')}>
+            <span className="launch-secondary__icon" aria-hidden="true">⌗</span>
+            Open world editor
+            <span className="launch-secondary__key">E</span>
           </button>
+        </aside>
+      </main>
+
+      <footer className="launch-footer">
+        <p>Headphones recommended</p>
+        <div className="launch-footer__ticker" aria-hidden="true">
+          <span>Find the signal</span><i />
+          <span>Break the silence</span><i />
+          <span>Recover the track</span>
         </div>
-
-        {/* Controls hint */}
-        <p style={{
-          fontFamily: '"Press Start 2P"',
-          fontSize: 'clamp(6px, 0.9vmin, 9px)',
-          color: '#444455',
-          lineHeight: 2.2,
-          textAlign: 'center',
-          margin: 0,
-        }}>
-          WASD / Arrow Keys to move · Touch controls on mobile
-        </p>
-      </div>
-
-      {/* Copyright — absolute bottom */}
-      <div style={{
-        position: 'absolute', bottom: 14,
-        fontFamily: '"Press Start 2P"',
-        fontSize: 'clamp(6px, 0.8vmin, 9px)',
-        color: '#33334a',
-        letterSpacing: '2px',
-        pointerEvents: 'none',
-      }}>
-        © SOUND QUEST — A Musical Experience
-      </div>
+        <p className="launch-footer__edition">SQ-2026 // First transmission</p>
+      </footer>
     </div>
   );
 }

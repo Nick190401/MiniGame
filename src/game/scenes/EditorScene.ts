@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TextureFactory } from '../utils/TextureFactory';
+import { WorldArtFactory } from '../utils/WorldArtFactory';
 import { MapBuilder, MAP_COLS, MAP_ROWS } from '../utils/MapBuilder';
 import { EventBus, EVENTS } from '../EventBus';
 import { TILE_TYPE_MAP, TILE_TEXTURE } from '../data/tileTypes';
@@ -20,8 +20,8 @@ export const ZONE_DEFS = [
   { name: 'Signal Path',   rowStart: 14, rowEnd: 25,  color: '#68aa50' },
   { name: 'Neon Junction', rowStart: 26, rowEnd: 37,  color: '#60aa88' },
   { name: 'Fading Path',   rowStart: 38, rowEnd: 53,  color: '#4a6040' },
-  { name: 'Void Cave',     rowStart: 54, rowEnd: 69,  color: '#8844cc' },
-  { name: 'The Core',      rowStart: 70, rowEnd: 79,  color: '#ff2200' },
+  { name: 'Void Cave',     rowStart: 54, rowEnd: 81,  color: '#8844cc' },
+  { name: 'The Core',      rowStart: 82, rowEnd: 93,  color: '#ff2200' },
 ] as const;
 
 export class EditorScene extends Phaser.Scene {
@@ -74,13 +74,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   preload(): void {
-    ['tile-grass', 'tile-grass-2', 'tile-path', 'tile-path-2', 'tile-flower', 'tile-flower-2'].forEach(key => {
-      this.load.image(key, `assets/tiles/${key}.png`);
-    });
+    // Textures are generated in create() to match the live game exactly.
   }
 
   create(): void {
-    TextureFactory.createTileTextures(this);
+    WorldArtFactory.createTileTextures(this);
     this.grid = MapBuilder.buildGridOnly();
 
     // No setBounds — allows centerOn to work even when world < canvas

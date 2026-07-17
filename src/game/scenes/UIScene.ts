@@ -2,46 +2,27 @@ import Phaser from 'phaser';
 import { EventBus, EVENTS } from '../EventBus';
 
 /**
- * Lightweight overlay scene — only handles in-world level-up flash text.
- * All persistent HUD (HP, XP, Level) is rendered by the React <HUD /> component.
+ * Lightweight Phaser bridge for global interface events.
+ * Visible information is rendered in React so it stays crisp at every scale.
  */
 export class UIScene extends Phaser.Scene {
-  private levelUpText!: Phaser.GameObjects.Text;
-
   constructor() {
     super({ key: 'UIScene' });
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
-
-    this.levelUpText = this.add.text(this.scale.width / 2, 50, '', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '10px',
-      color: '#ffd700',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(60).setAlpha(0);
-
     EventBus.on(EVENTS.LEVEL_UP, this.onLevelUp, this);
   }
 
   private onLevelUp(newLevel: number): void {
-    this.levelUpText.setText(`★ LEVEL ${newLevel}! ★`);
-
-    this.tweens.add({
-      targets: this.levelUpText,
-      alpha: 1,
-      y: 60,
-      duration: 300,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this.time.delayedCall(1500, () => {
-          this.tweens.add({
-            targets: this.levelUpText,
-            alpha: 0,
-            duration: 500,
-          });
-        });
-      },
+    EventBus.emit(EVENTS.UI_NOTICE, {
+      eyebrow: 'CHANNEL UPGRADE // COMPLETE',
+      title: `Level ${String(newLevel).padStart(2, '0')} reached`,
+      detail: 'Your signal is stronger. New tracks may now be available.',
+      accent: '#d7ff4a',
+      tone: 'success',
+      duration: 2400,
     });
   }
 
