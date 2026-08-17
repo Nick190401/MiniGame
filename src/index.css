@@ -2556,6 +2556,15 @@ a:focus-visible {
 
 /* Responsive -------------------------------------------------------------- */
 
+/* Portrait-framed artwork for title + loading screens on phones. Landscape
+   phones keep the wide wallpaper, which already fits that aspect. */
+@media (max-width: 760px) and (orientation: portrait) {
+  .title-screen,
+  .loading-overlay {
+    background-image: url('/assets/mobile-wallpaper.PNG');
+  }
+}
+
 @media (max-width: 760px) {
   .battle-card {
     min-height: 72px;
