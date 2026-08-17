@@ -1614,8 +1614,10 @@ a:focus-visible {
   animation: battle-ui-arrival 260ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 
-.battle-card--enemy { top: 3.5%; left: 2.8%; }
-.battle-card--player { top: 47.2%; right: 2.8%; animation-delay: 80ms; }
+/* Both cards are placed inside the arena band the scene reports, so they track
+   the artwork rather than a hard-coded slice of the canvas. */
+.battle-card--enemy { top: calc(var(--arena-h, 60%) * 0.058); left: 2.8%; }
+.battle-card--player { top: calc(var(--arena-h, 60%) * 0.787); right: 2.8%; animation-delay: 80ms; }
 
 /* Tucked into the corner gutter: panel padding bottoms out at 11px, so a
    5px screw inset 4px still clears the header text on the smallest layouts. */
@@ -1731,12 +1733,12 @@ a:focus-visible {
 .battle-message {
   --card-accent: var(--turn-accent);
   position: absolute;
-  top: 60%;
+  top: var(--msg-top, 60%);
   left: 1.1%;
   display: grid;
   grid-template-columns: clamp(76px, 9vw, 122px) minmax(0, 1fr);
   width: 97.8%;
-  height: 13.5%;
+  height: var(--msg-h, 13.5%);
   min-height: 60px;
   overflow: hidden;
   border-color: color-mix(in srgb, var(--turn-accent) 56%, #405047);
@@ -1823,6 +1825,7 @@ a:focus-visible {
 
 .battle-actions {
   position: absolute;
+  top: var(--menu-top, 74.6%);
   right: 1.1%;
   bottom: 1%;
   left: 1.1%;
@@ -1830,7 +1833,6 @@ a:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: clamp(6px, 0.7vw, 10px);
-  height: 25%;
   pointer-events: none;
 }
 
@@ -2719,14 +2721,18 @@ a:focus-visible {
     width: calc(100vw - 24px);
   }
 
+  /* The canvas now spans the whole phone screen, so these percentages are of
+     the viewport. Cards sit at the top and bottom edges of the arena band the
+     scene reports, clear of both combatants. */
   .battle-card {
-    width: 55%;
-    height: 12%;
-    min-height: 62px;
+    width: 56%;
+    height: 8%;
+    min-height: 58px;
+    max-height: 78px;
     padding: 8px 10px 8px 13px;
   }
-  .battle-card--enemy { top: 2%; left: 2.2%; }
-  .battle-card--player { top: 42%; right: 2.2%; }
+  .battle-card--enemy { left: 2.2%; }
+  .battle-card--player { top: calc(var(--arena-h, 60%) - 9.6%); right: 2.2%; }
   .battle-card h2 { font-size: 12px; letter-spacing: 0.025em; }
   .battle-card__header { font-size: 7px; }
   .battle-vital { gap: 6px; font-size: 7px; }
@@ -2734,26 +2740,46 @@ a:focus-visible {
   .battle-vital__track { min-width: 50px; height: 7px; }
 
   .battle-message {
-    top: 55.5%;
     left: 1.5%;
     width: 97%;
-    height: 13.5%;
-    min-height: 66px;
+    min-height: 60px;
     grid-template-columns: 58px minmax(0, 1fr);
   }
-  .battle-message__content { padding: 7px 9px; }
+  .battle-message__content { padding: 8px 11px; }
   .battle-message__content header { font-size: 7px; }
   .battle-message__content header span { max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
-  .battle-message__content p { font-size: 11px; }
+  .battle-message__content p { font-size: 12px; }
 
   .battle-actions {
     right: 1.5%;
     bottom: 1%;
     left: 1.5%;
-    height: 29%;
+    gap: 7px;
+  }
+  /* Roomy tiles: the tall screen leaves enough height to keep the track
+     descriptions that landscape has to drop. */
+  .battle-action {
+    padding: 9px 9px 9px 14px;
+    grid-template-columns: minmax(0, 1fr) 34px;
   }
   .battle-action__copy small { font-size: 7px; }
-  .battle-action__copy strong { font-size: 12px; letter-spacing: 0.03em; }
+  /* Tiles are tall here, so track names and blurbs wrap instead of being
+     ellipsed down to "BASS DR…". */
+  .battle-action__copy strong {
+    margin-top: 5px;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    line-height: 1.05;
+    white-space: normal;
+  }
+  .battle-action__copy em {
+    display: block;
+    margin-top: 6px;
+    font-size: 9px;
+    line-height: 1.3;
+    white-space: normal;
+  }
+  .battle-action kbd { width: 34px; font-size: 15px; }
 
   .loading-overlay { padding-bottom: clamp(36px, 7vh, 64px); }
 
@@ -2831,11 +2857,11 @@ a:focus-visible {
   .battle-vital { gap: 5px; font-size: 7px; }
   .battle-vital strong { font-size: 9px; }
   .battle-vital__track { height: 6px; }
-  .battle-message { top: 58%; height: 15%; min-height: 56px; }
+  .battle-message { min-height: 56px; }
   .battle-message__content { padding: 6px 9px; }
   .battle-message__content header { padding-bottom: 3px; font-size: 7px; }
   .battle-message__content p { font-size: 11px; }
-  .battle-actions { height: 25%; gap: 4px; }
+  .battle-actions { gap: 4px; }
   .battle-action { padding: 4px 6px 4px 10px; grid-template-columns: minmax(0, 1fr) 30px; }
   .battle-action__copy small { font-size: 6px; }
   .battle-action__copy strong { margin-top: 3px; font-size: 12px; }

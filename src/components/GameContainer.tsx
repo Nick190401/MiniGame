@@ -21,12 +21,26 @@ interface GameContainerProps {
 }
 
 const DESKTOP_GAME_SIZE = { width: 640, height: 480 } as const;
-const PORTRAIT_GAME_SIZE = { width: 480, height: 640 } as const;
+const PORTRAIT_GAME_WIDTH = 480;
+// Phone viewports are far taller than the old fixed 480x640 board, so FIT
+// letterboxed roughly a third of the screen away. Deriving the logical height
+// from the real viewport ratio makes the canvas fill the phone instead.
+const PORTRAIT_HEIGHT_RANGE = { min: 620, max: 1180 } as const;
+// Quantised so the URL bar sliding in and out does not thrash setGameSize.
+const PORTRAIT_HEIGHT_STEP = 16;
 
 function getResponsiveGameSize() {
-  return window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches
-    ? PORTRAIT_GAME_SIZE
-    : DESKTOP_GAME_SIZE;
+  if (!window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches) {
+    return DESKTOP_GAME_SIZE;
+  }
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  const ratio = viewportHeight / Math.max(1, viewportWidth);
+  const stepped = Math.round((PORTRAIT_GAME_WIDTH * ratio) / PORTRAIT_HEIGHT_STEP) * PORTRAIT_HEIGHT_STEP;
+  return {
+    width: PORTRAIT_GAME_WIDTH,
+    height: Math.min(PORTRAIT_HEIGHT_RANGE.max, Math.max(PORTRAIT_HEIGHT_RANGE.min, stepped)),
+  };
 }
 
 export function GameContainer({ visible }: GameContainerProps) {

@@ -58,6 +58,10 @@ export class BattleScene extends Phaser.Scene {
   private enemyPlatform = { x: 0, y: 0 };
   private enemyTargetHeight = 0;
 
+  // Arena/controls split, as fractions of the canvas, handed to the DOM
+  // overlay so both halves of the battle UI stay in step at any aspect ratio.
+  private uiLayout = { arena: 0.6, messageTop: 0.6, messageHeight: 0.1375, menuTop: 0.7458 };
+
   // Ambient particles
   private ambientParticles: Phaser.GameObjects.Graphics[] = [];
 
@@ -92,24 +96,14 @@ export class BattleScene extends Phaser.Scene {
     const H = this.scale.height;  // 480
     EventBus.emit(EVENTS.BATTLE_START, { enemyId: this.enemyData.id, isBoss: this.isBoss });
 
-    // ── Layout constants ──────────────────────────────────────────────────
-    // Give the actual encounter clear visual priority. The DOM controls below
-    // are intentionally compact so the arena owns roughly 60% of the screen.
-    const BATTLE_H   = Math.floor(H * 0.60);
-    this.battleH     = BATTLE_H;
-    const MSG_Y      = BATTLE_H;
-    const MSG_H      = 66;
-    const MENU_Y     = MSG_Y + MSG_H + 4;
-    const MENU_H     = H - MENU_Y - 4;
-
     // ── Background art ───────────────────────────────────────────────────
-    // Hand-painted arenas (one per encounter type), cover-fitted to the arena
-    // so they always fill it in both portrait and landscape. Whatever
-    // overflows is cropped: horizontally from both sides (centred), and
-    // vertically by `cropTopSrc`, which picks which slice of the source
-    // survives. That is deliberately per-artwork — the boss dais sits high in
-    // its piece, so cropping the top there would eat exactly the headroom its
-    // tall silhouette needs and clip the creature.
+    // Hand-painted arenas (one per encounter type). In landscape the artwork
+    // is cover-fitted to the arena. Whatever overflows is cropped:
+    // horizontally from both sides (centred), and vertically by `cropTopSrc`,
+    // which picks which slice of the source survives. That is deliberately
+    // per-artwork — the boss dais sits high in its piece, so cropping the top
+    // there would eat exactly the headroom its tall silhouette needs and clip
+    // the creature.
     const BG_SRC_W = 1672;
     const BG_SRC_H = 941;
 
@@ -130,14 +124,70 @@ export class BattleScene extends Phaser.Scene {
         player: { x: 0.33, y: 0.73 },
       };
 
-    const bgScale = Math.max(W / BG_SRC_W, BATTLE_H / BG_SRC_H);
+    // A phone in portrait is roughly twice as tall as it is wide — far taller
+    // than the 16:9 artwork. Cover-fitting there would throw away half the
+    // painting's width, so portrait fits the art to the full width instead and
+    // sits it on the arena floor, with a sky band filling the space above.
+    const isPortrait = H > W * 1.05;
+    // Mild overscan so the portrait arena still has some height to it. Both
+    // platforms sit between 0.24 and 0.70 across the source, so trimming ~11%
+    // off each side never crowds a combatant.
+    const PORTRAIT_ART_OVERSCAN = 1.22;
+
+    // ── Layout constants ──────────────────────────────────────────────────
+    // Landscape gives the encounter clear visual priority: the DOM controls
+    // below are compact so the arena owns roughly 60% of the screen. Portrait
+    // only needs the arena tall enough for the art plus a HUD band above it,
+    // and hands the rest of the tall screen to the touch controls.
+    const bgScale = isPortrait
+      ? (W / BG_SRC_W) * PORTRAIT_ART_OVERSCAN
+      : Math.max(W / BG_SRC_W, (H * 0.60) / BG_SRC_H);
     const bgScaledW = BG_SRC_W * bgScale;
     const bgScaledH = BG_SRC_H * bgScale;
+    const BATTLE_H   = isPortrait
+      ? Math.round(Math.min(Math.max(H * 0.56, bgScaledH), bgScaledH + H * 0.16))
+      : Math.floor(H * 0.60);
+    this.battleH     = BATTLE_H;
+    const MSG_Y      = BATTLE_H;
+    const MSG_H      = Math.max(66, Math.round(H * 0.11));
+    const MENU_Y     = MSG_Y + MSG_H + 4;
+    const MENU_H     = H - MENU_Y - 4;
+    this.uiLayout = {
+      arena: BATTLE_H / H,
+      messageTop: MSG_Y / H,
+      messageHeight: MSG_H / H,
+      menuTop: MENU_Y / H,
+    };
+
     const bgOffsetX = (W - bgScaledW) / 2;
     const bgMaxCropSrc = Math.max(0, BG_SRC_H - BATTLE_H / bgScale);
     const bgCropTopSrc = Phaser.Math.Clamp(arena.cropTopSrc, 0, bgMaxCropSrc);
-    const bgOffsetY = -bgCropTopSrc * bgScale;
+    const bgOffsetY = isPortrait ? BATTLE_H - bgScaledH : -bgCropTopSrc * bgScale;
+
+    // Sky band: keeps the portrait artwork from floating on flat black, and
+    // gives the enemy status panel a surface to sit on.
+    if (bgOffsetY > 0) {
+      const sky = this.add.graphics().setDepth(0);
+      sky.fillGradientStyle(0x050908, 0x050908, 0x0d1a15, 0x0d1a15, 1, 1, 1, 1);
+      sky.fillRect(0, 0, W, Math.ceil(bgOffsetY) + 2);
+    }
+
     this.add.image(bgOffsetX, bgOffsetY, arena.key).setOrigin(0, 0).setScale(bgScale).setDepth(0);
+
+    // Feather the top edge of the artwork into that band so the join reads as
+    // haze rather than a cut.
+    if (bgOffsetY > 0) {
+      const seam = this.add.graphics().setDepth(1);
+      seam.fillGradientStyle(0x050908, 0x050908, 0x050908, 0x050908, 0.92, 0.92, 0, 0);
+      seam.fillRect(0, bgOffsetY, W, Math.min(64, bgScaledH * 0.22));
+    }
+
+    // The battle runs on top of a merely *paused* world scene, so everything
+    // below the arena needs an opaque floor — otherwise the map shows through
+    // the gaps between the DOM control panels, which is most of a phone screen.
+    this.add.rectangle(0, BATTLE_H, W, H - BATTLE_H, 0x050908)
+      .setOrigin(0, 0)
+      .setDepth(6);
 
     const platformPoint = (p: { x: number; y: number }) => ({
       x: bgOffsetX + p.x * bgScaledW,
@@ -227,6 +277,12 @@ export class BattleScene extends Phaser.Scene {
     const heightForPlatform = (anchorY: number, desired: number, topMargin: number) =>
       Math.max(24, Math.min(desired, anchorY - topMargin));
 
+    // Sized against the artwork rather than the arena box, so a figure keeps
+    // the same relation to its painted platform whatever the arena's shape.
+    // Portrait fits the art small, so figures get a modest boost back to stay
+    // readable on a phone.
+    const figureH = bgScaledH * (isPortrait ? 1.18 : 1);
+
     // Use high-res battle art when available, otherwise pixel sprite
     const hasSilenceArt = this.enemyData.id === 'silence' && this.textures.exists('silence-battle');
     const hasStaticNoiseArt = this.enemyData.id === 'static-noise' && this.textures.exists('staticnoise-battle');
@@ -240,7 +296,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.enemyTargetHeight = heightForPlatform(
       platformAnchors.enemy.y,
-      BATTLE_H * (this.isBoss ? 0.46 : 0.31),
+      figureH * (this.isBoss ? 0.368 : 0.248),
       10,
     );
 
@@ -281,7 +337,7 @@ export class BattleScene extends Phaser.Scene {
 
     // ── Player sprite — slides in onto its platform ──────────────────────
     // Largest of the two: its platform is the nearest thing in the artwork.
-    const playerTargetH = heightForPlatform(platformAnchors.player.y, BATTLE_H * 0.42, 10);
+    const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.336, 10);
     this.playerSprite = this.add.sprite(0, 0, 'player-battle').setDepth(5);
     this.plantOnPlatform(this.playerSprite, 'player-battle', platformAnchors.player, playerTargetH);
     const playerFinalX = this.playerSprite.x;
@@ -364,6 +420,7 @@ export class BattleScene extends Phaser.Scene {
     const payload: BattleUiPayload = {
       isBoss: this.isBoss,
       phase,
+      layout: this.uiLayout,
       enemy: {
         name: this.enemyData.name,
         hp: this.currentEnemyHp,

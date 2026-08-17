@@ -23,9 +23,19 @@ export interface BattleAttackPayload {
   unlockLevel: number;
 }
 
+/** Arena/controls split as fractions of the canvas height, so the DOM overlay
+ *  lands on the same rows the scene reserved for it at any aspect ratio. */
+export interface BattleLayoutPayload {
+  arena: number;
+  messageTop: number;
+  messageHeight: number;
+  menuTop: number;
+}
+
 export interface BattleUiPayload {
   isBoss: boolean;
   phase: string;
+  layout: BattleLayoutPayload;
   enemy: { name: string; hp: number; maxHp: number; accent: string };
   player: { name: string; hp: number; maxHp: number; level: number };
   message: string;

@@ -65,6 +65,11 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
     height: bounds.height,
     '--enemy-accent': battle.enemy.accent,
     '--turn-accent': battle.turnAccent,
+    // Rows the scene reserved for the DOM half of the battle UI.
+    '--arena-h': `${battle.layout.arena * 100}%`,
+    '--msg-top': `${battle.layout.messageTop * 100}%`,
+    '--msg-h': `${battle.layout.messageHeight * 100}%`,
+    '--menu-top': `${battle.layout.menuTop * 100}%`,
   } as CSSProperties;
 
   return (
