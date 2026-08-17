@@ -8,6 +8,18 @@ import type { EnemyData, Attack } from '../../types/game.types';
 
 type TurnState = 'player-choose' | 'player-attack' | 'enemy-attack' | 'phase-change' | 'battle-end';
 
+/** Bounding box of a texture's non-transparent pixels, in source-image space. */
+interface ContentBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+}
+
 // Attack‑type icons drawn as small pixel glyphs
 const ATTACK_ICONS: Record<string, string[]> = {
   'bass-drop':    ['  ██  ', ' ████ ', '██████', '██████', ' ████ ', '  ██  '],
@@ -43,9 +55,15 @@ export class BattleScene extends Phaser.Scene {
 
   // Layout refs for animations
   private battleH = 0;
+  private enemyPlatform = { x: 0, y: 0 };
+  private enemyTargetHeight = 0;
 
   // Ambient particles
   private ambientParticles: Phaser.GameObjects.Graphics[] = [];
+
+  // Opaque-pixel bounds per texture, so characters can be sized and planted
+  // by what is actually *visible* rather than by their padded canvas.
+  private static contentBoundsCache = new Map<string, ContentBounds>();
 
   // Typewriter state
   private typewriterTimer?: Phaser.Time.TimerEvent;
@@ -84,45 +102,64 @@ export class BattleScene extends Phaser.Scene {
     const MENU_Y     = MSG_Y + MSG_H + 4;
     const MENU_H     = H - MENU_Y - 4;
 
-    // ── Background ────────────────────────────────────────────────────────
-    const bg = this.add.graphics();
-    bg.fillStyle(0x050908);
-    bg.fillRect(0, 0, W, H);
+    // ── Background art ───────────────────────────────────────────────────
+    // Hand-painted arenas (one per encounter type), cover-fitted to the arena
+    // so they always fill it in both portrait and landscape. Whatever
+    // overflows is cropped: horizontally from both sides (centred), and
+    // vertically by `cropTopSrc`, which picks which slice of the source
+    // survives. That is deliberately per-artwork — the boss dais sits high in
+    // its piece, so cropping the top there would eat exactly the headroom its
+    // tall silhouette needs and clip the creature.
+    const BG_SRC_W = 1672;
+    const BG_SRC_H = 941;
+
+    // Platform centres measured off the artwork itself (fractions of the
+    // 1672x941 source). Combatants are anchored to these instead of generic
+    // layout percentages, and sized against them for correct perspective.
+    const arena = this.isBoss
+      ? {
+        key: 'battle-bg-boss',
+        cropTopSrc: 0,
+        enemy: { x: 0.645, y: 0.385 },
+        player: { x: 0.24, y: 0.68 },
+      }
+      : {
+        key: 'battle-bg-normal',
+        cropTopSrc: 60,
+        enemy: { x: 0.70, y: 0.505 },
+        player: { x: 0.33, y: 0.73 },
+      };
+
+    const bgScale = Math.max(W / BG_SRC_W, BATTLE_H / BG_SRC_H);
+    const bgScaledW = BG_SRC_W * bgScale;
+    const bgScaledH = BG_SRC_H * bgScale;
+    const bgOffsetX = (W - bgScaledW) / 2;
+    const bgMaxCropSrc = Math.max(0, BG_SRC_H - BATTLE_H / bgScale);
+    const bgCropTopSrc = Phaser.Math.Clamp(arena.cropTopSrc, 0, bgMaxCropSrc);
+    const bgOffsetY = -bgCropTopSrc * bgScale;
+    this.add.image(bgOffsetX, bgOffsetY, arena.key).setOrigin(0, 0).setScale(bgScale).setDepth(0);
+
+    const platformPoint = (p: { x: number; y: number }) => ({
+      x: bgOffsetX + p.x * bgScaledW,
+      y: bgOffsetY + p.y * bgScaledH,
+    });
+    const platformAnchors = { enemy: platformPoint(arena.enemy), player: platformPoint(arena.player) };
 
     // Subtle gradient overlay — darker at top, lighter at bottom of arena
-    const gradient = this.add.graphics();
-    gradient.fillGradientStyle(0x102019, 0x102019, 0x050908, 0x050908, 0.42, 0.42, 0, 0);
+    const gradient = this.add.graphics().setDepth(1);
+    gradient.fillGradientStyle(0x0a1410, 0x0a1410, 0x050908, 0x050908, 0.26, 0.26, 0, 0);
     gradient.fillRect(0, 0, W, BATTLE_H);
 
     // Two-tone atmosphere: a warm glow behind the hostile signal, a cool
     // glow behind the player's side — the same confrontation mood as the
-    // game's key art, echoed abstractly instead of using that art directly.
+    // game's key art, echoed abstractly (and centered on the actual
+    // platforms) instead of using that art directly.
     const signalColor = this.isBoss ? 0xff5a2e : this.enemyData.color;
-    const atmosphere = this.add.graphics();
-    atmosphere.fillStyle(signalColor, 0.055);
-    atmosphere.fillCircle(W * 0.72, BATTLE_H * 0.42, BATTLE_H * 0.62);
+    const atmosphere = this.add.graphics().setDepth(1);
+    atmosphere.fillStyle(signalColor, 0.06);
+    atmosphere.fillCircle(platformAnchors.enemy.x, platformAnchors.enemy.y, BATTLE_H * 0.55);
     atmosphere.fillStyle(0x49dfbf, 0.045);
-    atmosphere.fillCircle(W * 0.2, BATTLE_H * 0.8, BATTLE_H * 0.5);
-
-    // Oscilloscope environment: the opponent is staged inside a live signal field.
-    const signalField = this.add.graphics().setDepth(1);
-    for (let radius = 28; radius <= 150; radius += 24) {
-      signalField.lineStyle(1, signalColor, Math.max(0.035, 0.18 - radius * 0.0008));
-      signalField.strokeEllipse(W * 0.7, BATTLE_H * 0.5, radius * 1.6, radius * 0.72);
-    }
-    signalField.lineStyle(1, 0xd7ff4a, 0.1);
-    for (let x = 0; x <= W; x += 32) signalField.lineBetween(x, 0, x, BATTLE_H);
-    for (let y = 0; y <= BATTLE_H; y += 32) signalField.lineBetween(0, y, W, y);
-    signalField.lineStyle(1.5, 0xd7ff4a, 0.28);
-    signalField.beginPath();
-    signalField.moveTo(20, BATTLE_H * 0.47);
-    signalField.lineTo(52, BATTLE_H * 0.47);
-    signalField.lineTo(60, BATTLE_H * 0.38);
-    signalField.lineTo(69, BATTLE_H * 0.57);
-    signalField.lineTo(80, BATTLE_H * 0.43);
-    signalField.lineTo(92, BATTLE_H * 0.47);
-    signalField.lineTo(134, BATTLE_H * 0.47);
-    signalField.strokePath();
+    atmosphere.fillCircle(platformAnchors.player.x, platformAnchors.player.y, BATTLE_H * 0.45);
 
     this.add.text(W - 18, 14, `LIVE ENCOUNTER // ${this.isBoss ? 'TERMINAL' : 'WILD SIGNAL'}`, {
       fontFamily: 'DM Mono', fontSize: '7px', color: '#9aa79f', letterSpacing: 1,
@@ -132,8 +169,8 @@ export class BattleScene extends Phaser.Scene {
     }).setOrigin(1, 0).setDepth(3).setVisible(false);
 
     if (this.isBoss) {
-      const aura = this.add.graphics();
-      aura.fillStyle(0x330000, 0.25);
+      const aura = this.add.graphics().setDepth(1);
+      aura.fillStyle(0x330000, 0.14);
       aura.fillRect(0, 0, W, H);
     }
 
@@ -175,45 +212,44 @@ export class BattleScene extends Phaser.Scene {
     border.lineBetween(3, 3, 46, 3); border.lineBetween(3, 3, 3, 28);
     border.lineBetween(W - 46, H - 3, W - 3, H - 3); border.lineBetween(W - 3, H - 28, W - 3, H - 3);
 
-    // ── Ground platforms (GBA Pokémon style) ──────────────────────────────
-    // Tinted per side — hostile signal warmth under the enemy, cool signal
-    // under the player — echoing the fire-vs-signal duality of the key art.
-    const ground = this.add.graphics().setDepth(2);
-    // Enemy platform — ellipse, upper right
-    ground.fillStyle(0x1a2a21, 0.62);
-    ground.fillEllipse(W * 0.70, BATTLE_H * 0.70, 190, 28);
-    ground.lineStyle(1.5, signalColor, 0.26);
-    ground.strokeEllipse(W * 0.70, BATTLE_H * 0.70, 190, 28);
-    // Player platform — ellipse, lower left
-    ground.fillStyle(0x1a2a21, 0.62);
-    ground.fillEllipse(W * 0.24, BATTLE_H * 0.93, 170, 22);
-    ground.lineStyle(1.5, 0x49dfbf, 0.24);
-    ground.strokeEllipse(W * 0.24, BATTLE_H * 0.93, 170, 22);
+    // Ground platforms now live in the background art itself — the
+    // combatants below are anchored directly to those painted circles.
 
-    // ── Enemy sprite (upper right) — slides in from right ──────────────
-    const enemySpriteY = BATTLE_H * 0.48;
-    const enemyFinalX = W * 0.70;
+    // ── Combatant sizing ────────────────────────────────────────────────
+    // Sizes are driven by target on-screen height rather than per-texture
+    // scale factors, so wildly different source art lands at a consistent
+    // size. The enemy reads smaller than the player because its platform
+    // sits further back in the artwork — that ratio is the perspective.
+    // Everything is then clamped to the headroom actually available above
+    // each platform, which is what guarantees nothing gets clipped.
+    // Clamped to the headroom actually available above each platform, which
+    // is what guarantees even the tallest silhouette stays inside the arena.
+    const heightForPlatform = (anchorY: number, desired: number, topMargin: number) =>
+      Math.max(24, Math.min(desired, anchorY - topMargin));
 
     // Use high-res battle art when available, otherwise pixel sprite
     const hasSilenceArt = this.enemyData.id === 'silence' && this.textures.exists('silence-battle');
     const hasStaticNoiseArt = this.enemyData.id === 'static-noise' && this.textures.exists('staticnoise-battle');
     const hasBrokenSignalArt = this.enemyData.id === 'broken-signal' && this.textures.exists('brokensignal-battle');
     const hasBossBattleArt = this.isBoss && this.textures.exists('boss-gatekeeper-battle-phase1');
-    const hasBattleArt = hasSilenceArt || hasStaticNoiseArt || hasBrokenSignalArt || hasBossBattleArt;
     const enemyTexture = hasBossBattleArt ? 'boss-gatekeeper-battle-phase1'
       : hasSilenceArt ? 'silence-battle'
       : hasStaticNoiseArt ? 'staticnoise-battle'
       : hasBrokenSignalArt ? 'brokensignal-battle'
       : this.enemyData.textureKey;
-    // Broken Signal PNG is landscape (~2:1), needs different scale
-    const enemyScale = hasBossBattleArt ? 0.16
-      : hasBrokenSignalArt ? 0.17
-      : hasBattleArt ? 0.115
-      : (this.isBoss ? 3.9 : 4.25);
 
-    this.enemySprite = this.add.sprite(W + 60, enemySpriteY, enemyTexture);
-    this.enemySprite.setScale(enemyScale);
-    this.enemySprite.setDepth(5);
+    this.enemyTargetHeight = heightForPlatform(
+      platformAnchors.enemy.y,
+      BATTLE_H * (this.isBoss ? 0.46 : 0.31),
+      10,
+    );
+
+    this.enemySprite = this.add.sprite(0, 0, enemyTexture).setDepth(5);
+    this.plantOnPlatform(this.enemySprite, enemyTexture, platformAnchors.enemy, this.enemyTargetHeight);
+    this.enemyPlatform = platformAnchors.enemy;
+    const enemyFinalX = this.enemySprite.x;
+    const enemySpriteY = this.enemySprite.y;
+    this.enemySprite.x = W + 60;
 
     this.tweens.add({
       targets: this.enemySprite,
@@ -243,12 +279,13 @@ export class BattleScene extends Phaser.Scene {
       },
     });
 
-    // ── Player sprite — slides in from left ──────────────────────────────
-    const playerFinalX = W * 0.24;
-    this.playerSprite = this.add.sprite(-40, BATTLE_H * 0.72, 'player-battle');
-    const playerSource = this.textures.get('player-battle').getSourceImage() as HTMLImageElement | HTMLCanvasElement;
-    this.playerSprite.setScale(playerSource.width > 100 ? 0.12 : 2.35);
-    this.playerSprite.setDepth(5);
+    // ── Player sprite — slides in onto its platform ──────────────────────
+    // Largest of the two: its platform is the nearest thing in the artwork.
+    const playerTargetH = heightForPlatform(platformAnchors.player.y, BATTLE_H * 0.42, 10);
+    this.playerSprite = this.add.sprite(0, 0, 'player-battle').setDepth(5);
+    this.plantOnPlatform(this.playerSprite, 'player-battle', platformAnchors.player, playerTargetH);
+    const playerFinalX = this.playerSprite.x;
+    this.playerSprite.x = -40;
 
     this.tweens.add({
       targets: this.playerSprite,
@@ -730,6 +767,83 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Bounding box of a texture's opaque pixels. Character art here is exported
+   * on a padded canvas — the Gatekeeper in particular has a wide transparent
+   * margin below its feet — so raw texture height would both undersize the
+   * creature and leave it hovering above the ground it is meant to stand on.
+   * Sampled at every other pixel: plenty precise for placement, 4x cheaper.
+   */
+  private getContentBounds(key: string): ContentBounds {
+    const cached = BattleScene.contentBoundsCache.get(key);
+    if (cached) return cached;
+
+    const source = this.textures.get(key).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const sourceWidth = source.width;
+    const sourceHeight = source.height;
+    const full: ContentBounds = {
+      left: 0, right: sourceWidth - 1, top: 0, bottom: sourceHeight - 1,
+      width: sourceWidth, height: sourceHeight, sourceWidth, sourceHeight,
+    };
+
+    let bounds = full;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = sourceWidth;
+      canvas.height = sourceHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (ctx) {
+        ctx.drawImage(source as CanvasImageSource, 0, 0);
+        const { data } = ctx.getImageData(0, 0, sourceWidth, sourceHeight);
+        let left = sourceWidth, right = -1, top = sourceHeight, bottom = -1;
+        for (let y = 0; y < sourceHeight; y += 2) {
+          for (let x = 0; x < sourceWidth; x += 2) {
+            if (data[(y * sourceWidth + x) * 4 + 3] > 12) {
+              if (x < left) left = x;
+              if (x > right) right = x;
+              if (y < top) top = y;
+              if (y > bottom) bottom = y;
+            }
+          }
+        }
+        if (bottom >= 0) {
+          bounds = {
+            left, right, top, bottom,
+            width: right - left + 1, height: bottom - top + 1,
+            sourceWidth, sourceHeight,
+          };
+        }
+      }
+    } catch {
+      // Cross-origin or context unavailable — the untrimmed frame is a safe
+      // fallback; art simply sits as it did before.
+    }
+
+    BattleScene.contentBoundsCache.set(key, bounds);
+    return bounds;
+  }
+
+  /**
+   * Scales a sprite so its *visible* art is `targetHeight` tall, then places
+   * it so that art is horizontally centred on the platform with its feet on
+   * the platform's centre point. Returns the resulting on-screen height.
+   */
+  private plantOnPlatform(
+    sprite: Phaser.GameObjects.Sprite,
+    textureKey: string,
+    platform: { x: number; y: number },
+    targetHeight: number,
+  ): number {
+    const bounds = this.getContentBounds(textureKey);
+    const scale = targetHeight / bounds.height;
+    sprite.setScale(scale);
+
+    const contentCentreX = (bounds.left + bounds.right + 1) / 2;
+    sprite.x = platform.x - (contentCentreX - bounds.sourceWidth / 2) * scale;
+    sprite.y = platform.y - (bounds.bottom + 1 - bounds.sourceHeight / 2) * scale;
+    return targetHeight;
+  }
+
   private tryExecuteAttack(index: number): void {
     const entry = this.attackButtons[index];
     if (!entry?.unlocked || this.turnState !== 'player-choose' || this.inputBlocked || !this.messageReady) return;
@@ -986,7 +1100,11 @@ export class BattleScene extends Phaser.Scene {
 
     this.phaseText.setText(phaseLabels[phaseIdx]);
     this.phaseText.setColor(phaseColors[phaseIdx]);
+    // Re-plant rather than only swapping the texture: each phase render has
+    // its own transparent padding, so scale and footing must be recomputed
+    // or the later phases drift off the dais.
     this.enemySprite.setTexture(textureKeys[phaseIdx]);
+    this.plantOnPlatform(this.enemySprite, textureKeys[phaseIdx], this.enemyPlatform, this.enemyTargetHeight);
     EventBus.emit(EVENTS.UI_NOTICE, {
       eyebrow: 'BOSS SIGNAL // MUTATION DETECTED',
       title: phaseLabels[phaseIdx],
@@ -1041,6 +1159,7 @@ export class BattleScene extends Phaser.Scene {
       this.setMessage(this.isBoss
         ? 'THE GATEKEEPER\nhas been silenced!'
         : `${this.enemyData.name}\nwas defeated!`);
+      EventBus.emit(EVENTS.ENEMY_DEFEATED, this.isBoss);
 
       // Defeat animation: blink → shrink-spin → burst particles
       this.tweens.add({

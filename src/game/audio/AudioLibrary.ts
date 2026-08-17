@@ -93,13 +93,14 @@ export const SFX = {
   // Battle beats
   bossPhaseChange: track('sfx-boss-phase-change', 'sfx/battle/boss-phase-change.mp3'),
   bossDefeated: track('sfx-boss-defeated', 'sfx/battle/boss-defeated.mp3'),
+  enemyDefeated: track('sfx-enemy-defeated', 'sfx/battle/enemy-defeated.mp3'),
 
   // World / progression
   levelUp: track('sfx-level-up', 'sfx/world/level-up.mp3'),
   itemPickup: track('sfx-item-pickup', 'sfx/world/item-pickup.mp3'),
   gateOpen: track('sfx-gate-open', 'sfx/world/gate-open.mp3'),
   gateBlocked: track('sfx-gate-blocked', 'sfx/world/gate-blocked.mp3'),
-  heal: track('sfx-heal', 'sfx/world/heal.mp3'),
+  heal: track('sfx-heal', 'sfx/world/heal.wav'),
   respawn: track('sfx-respawn', 'sfx/world/respawn.mp3'),
 
   // UI
@@ -123,3 +124,8 @@ export const ATTACK_SFX_BY_ENEMY_NAME: Record<string, string> = {
 
 export const ALL_MUSIC_ASSETS: AudioAsset[] = Object.values(MUSIC);
 export const ALL_SFX_ASSETS: AudioAsset[] = Object.values(SFX);
+
+/** Lets AudioManager play a cue before Phaser exists (title screen menus). */
+export const SFX_URL_BY_KEY: Record<string, string> = Object.fromEntries(
+  ALL_SFX_ASSETS.map(asset => [asset.key, asset.url]),
+);

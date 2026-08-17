@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { EventBus, EVENTS, type ZoneUiPayload, type AttackUsedPayload, type ImpactPayload, type HealPayload } from '../EventBus';
-import { MUSIC, SFX, ATTACK_SFX_BY_ID, ATTACK_SFX_BY_ENEMY_NAME, BOSS_PHASE_MUSIC, trackForZone } from './AudioLibrary';
+import { MUSIC, SFX, ATTACK_SFX_BY_ID, ATTACK_SFX_BY_ENEMY_NAME, BOSS_PHASE_MUSIC, SFX_URL_BY_KEY, trackForZone } from './AudioLibrary';
 
 /**
  * Owns every music/SFX decision in the game. Scenes never call `sound.play`
@@ -58,6 +58,7 @@ class AudioManagerImpl {
   private settings: AudioSettings = loadSettings();
   private fadeTokens = new WeakMap<Fadeable, number>();
   private pendingSeek: { key: string; seconds: number } | null = null;
+  private preBootSfx = new Map<string, HTMLAudioElement>();
 
   /** Wire the manager up once the Phaser game instance exists. Safe to call more than once. */
   init(game: Phaser.Game): void {
@@ -76,13 +77,16 @@ class AudioManagerImpl {
     EventBus.on(EVENTS.ATTACK_USED, this.onAttackUsed, this);
     EventBus.on(EVENTS.IMPACT, this.onImpact, this);
     EventBus.on(EVENTS.HEAL, this.onHeal, this);
+    EventBus.on(EVENTS.ENEMY_DEFEATED, this.onEnemyDefeated, this);
 
-    EventBus.on(EVENTS.BOSS_DEFEATED, () => this.playSfx(SFX.bossDefeated.key));
+    EventBus.on(EVENTS.BOSS_DEFEATED, () => this.onEnemyDefeated(true));
     EventBus.on(EVENTS.LEVEL_UP, () => this.playSfx(SFX.levelUp.key));
     EventBus.on(EVENTS.ITEM_COLLECTED, () => this.playSfx(SFX.itemPickup.key));
     EventBus.on(EVENTS.GATE_OPEN, () => this.playSfx(SFX.gateOpen.key));
     EventBus.on(EVENTS.GATE_BLOCKED, () => this.playSfx(SFX.gateBlocked.key));
     EventBus.on(EVENTS.DIALOG, () => this.playSfx(SFX.dialogBlip.key, { volume: 0.5 }));
+    // Picking an attack is the game's main "select" interaction.
+    EventBus.on(EVENTS.BATTLE_UI_ACTION, () => this.playSfx(SFX.uiClick.key));
   }
 
   // ── Reactions to game events ────────────────────────────────────────────
@@ -94,17 +98,27 @@ class AudioManagerImpl {
 
   private onBattleStart(data: { isBoss: boolean }): void {
     this.mode = 'battle';
-    this.playMusic(data.isBoss ? BOSS_PHASE_MUSIC[0] : MUSIC.battle.key, { fadeMs: 350 });
+    // Boss phases have their own slots but no files yet, so the shared battle
+    // theme stands in rather than the fight starting silent.
+    const key = data.isBoss
+      ? this.resolveKey(BOSS_PHASE_MUSIC[0], MUSIC.battle.key)
+      : this.resolveKey(MUSIC.battle.key);
+    if (key) this.playMusic(key, { fadeMs: 350 });
   }
 
-  private onBattleEnd(): void {
+  private onBattleEnd(data?: { outcome?: 'win' | 'lose' }): void {
+    // On a loss the death theme is about to take over, so returning to the
+    // zone track here would stab in for a moment and immediately be replaced.
+    if (data?.outcome === 'lose') return;
     this.mode = 'world';
     this.playMusic(this.zoneTrack, { fadeMs: 500 });
   }
 
   private onBossPhaseChanged(phaseIdx: number): void {
     this.playSfx(SFX.bossPhaseChange.key);
-    const trackKey = BOSS_PHASE_MUSIC[phaseIdx];
+    // Only switch tracks if this phase actually has its own music; otherwise
+    // keep whatever is already playing instead of restarting the fallback.
+    const trackKey = this.resolveKey(BOSS_PHASE_MUSIC[phaseIdx] ?? '');
     if (trackKey) this.playMusic(trackKey, { fadeMs: 600 });
   }
 
@@ -134,10 +148,32 @@ class AudioManagerImpl {
   }
 
   private onHeal(data: HealPayload): void {
-    this.playSfx(data.source === 'respawn' ? SFX.respawn.key : SFX.heal.key);
+    // Respawn has no dedicated sound yet — the heal cue covers it, since a
+    // respawn is a full heal anyway.
+    const key = data.source === 'respawn'
+      ? this.resolveKey(SFX.respawn.key, SFX.heal.key)
+      : this.resolveKey(SFX.heal.key);
+    if (key) this.playSfx(key);
+  }
+
+  private onEnemyDefeated(isBoss: boolean): void {
+    const key = isBoss
+      ? this.resolveKey(SFX.bossDefeated.key, SFX.enemyDefeated.key)
+      : this.resolveKey(SFX.enemyDefeated.key);
+    if (key) this.playSfx(key);
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
+
+  /**
+   * First of `keys` that actually has audio loaded, or null if none do.
+   * Lets a slot that has no file yet degrade to a sensible stand-in (boss
+   * phase music → the general battle theme) instead of silence.
+   */
+  private resolveKey(...keys: string[]): string | null {
+    if (!this.game) return null;
+    return keys.find(key => this.game!.cache.audio.has(key)) ?? null;
+  }
 
   playMusic(key: string, opts: MusicOptions = {}): void {
     if (!this.game) return;
@@ -185,12 +221,35 @@ class AudioManagerImpl {
   }
 
   playSfx(key: string, opts: SfxOptions = {}): void {
-    if (!this.game || this.settings.muted) return;
+    if (this.settings.muted) return;
+    const volume = (opts.volume ?? 1) * this.settings.sfxVolume;
+
+    // Title-screen menus fire before Phaser is created, so fall back to a
+    // plain audio element there instead of dropping the cue.
+    if (!this.game) {
+      this.playSfxBeforeBoot(key, volume);
+      return;
+    }
     if (!this.game.cache.audio.has(key)) {
       console.debug(`[audio] sfx not loaded yet: ${key}`);
       return;
     }
-    this.game.sound.play(key, { volume: (opts.volume ?? 1) * this.settings.sfxVolume, rate: opts.rate ?? 1 });
+    this.game.sound.play(key, { volume, rate: opts.rate ?? 1 });
+  }
+
+  private playSfxBeforeBoot(key: string, volume: number): void {
+    const url = SFX_URL_BY_KEY[key];
+    if (!url || typeof Audio === 'undefined') return;
+    let element = this.preBootSfx.get(key);
+    if (!element) {
+      element = new Audio(`/${url}`);
+      this.preBootSfx.set(key, element);
+    }
+    element.currentTime = 0;
+    element.volume = Phaser.Math.Clamp(volume, 0, 1);
+    void element.play().catch(() => {
+      // Missing file or blocked before any gesture — nothing to recover.
+    });
   }
 
   playAttackSfx(attackId: string): void {

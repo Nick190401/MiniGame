@@ -24,6 +24,8 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('boss-gatekeeper-battle-phase1', 'assets/boss-gatekeeper-phase1-v2.png');
     this.load.image('boss-gatekeeper-battle-phase2', 'assets/boss-gatekeeper-phase2-v2.png');
     this.load.image('boss-gatekeeper-battle-phase3', 'assets/boss-gatekeeper-phase3-v2.png');
+    this.load.image('battle-bg-normal', 'assets/battle-bg-normal.png');
+    this.load.image('battle-bg-boss', 'assets/battle-bg-boss.png');
 
     // Music/SFX are optional: files may not exist yet (see AudioLibrary.ts).
     // A missing file just fails to load — it never blocks the other assets

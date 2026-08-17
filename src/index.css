@@ -1586,12 +1586,15 @@ a:focus-visible {
 .battle-message,
 .battle-action {
   border: 1px solid color-mix(in srgb, var(--card-accent, var(--acid)) 52%, #32483e);
+  /* Opaque enough to stay readable on top of the detailed arena artwork,
+     and lifted off it by a deeper shadow so panels read as hardware sitting
+     in front of the scene rather than tinted glass blending into it. */
   background:
-    linear-gradient(155deg, rgba(21, 32, 23, 0.95), rgba(5, 10, 8, 0.96) 70%),
+    linear-gradient(155deg, rgba(17, 27, 20, 0.97), rgba(4, 9, 7, 0.985) 70%),
     radial-gradient(circle at 100% 0, color-mix(in srgb, var(--card-accent, var(--acid)) 10%, transparent), transparent 46%);
   box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 44px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
     inset 0 0 0 1px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(11px);
 }
@@ -1614,20 +1617,22 @@ a:focus-visible {
 .battle-card--enemy { top: 3.5%; left: 2.8%; }
 .battle-card--player { top: 47.2%; right: 2.8%; animation-delay: 80ms; }
 
+/* Tucked into the corner gutter: panel padding bottoms out at 11px, so a
+   5px screw inset 4px still clears the header text on the smallest layouts. */
 .battle-card__screw {
   position: absolute;
   z-index: 2;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #4c574b, #12160e 74%);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
 
-.battle-card__screw--tl { top: 6px; left: 6px; }
-.battle-card__screw--tr { top: 6px; right: 6px; }
-.battle-card__screw--bl { bottom: 6px; left: 6px; }
-.battle-card__screw--br { bottom: 6px; right: 6px; }
+.battle-card__screw--tl { top: 4px; left: 4px; }
+.battle-card__screw--tr { top: 4px; right: 4px; }
+.battle-card__screw--bl { bottom: 4px; left: 4px; }
+.battle-card__screw--br { bottom: 4px; right: 4px; }
 
 .battle-card__rail,
 .battle-message__rail,
@@ -1644,6 +1649,9 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  /* Clears the decorative corner screws so status text (PHASE I, LV 01)
+     never collides with them. */
+  padding-right: 9px;
   color: #9aa79f;
   font-size: clamp(8px, 0.72vw, 12px);
   font-weight: 600;
@@ -1656,8 +1664,12 @@ a:focus-visible {
   display: flex;
   align-items: center;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.battle-card__header strong { flex: 0 0 auto; }
 
 .battle-card__header i {
   width: 7px;
@@ -1778,6 +1790,8 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  /* Same screw clearance as the combatant cards. */
+  padding-right: 9px;
   padding-bottom: clamp(5px, 0.5vw, 8px);
   border-bottom: 1px dashed rgba(217, 200, 154, 0.28);
   font-size: clamp(8px, 0.72vw, 12px);
@@ -1786,8 +1800,15 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
-.battle-message__content header strong { color: #b7c3bb; }
-.battle-message__content header span { font-weight: 700; white-space: nowrap; }
+/* The label yields first so the turn status is never pushed out of view. */
+.battle-message__content header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #b7c3bb;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.battle-message__content header span { flex: 0 0 auto; font-weight: 700; white-space: nowrap; }
 
 .battle-message__content p {
   align-self: center;

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { AudioManager } from '../game/audio/AudioManager';
+import { SFX } from '../game/audio/AudioLibrary';
 
 export function TitleScreen() {
   const setGamePhase = useGameStore(s => s.setGamePhase);
@@ -7,10 +9,14 @@ export function TitleScreen() {
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
 
-  const openModal = useCallback(() => setShowModal(true), []);
+  const openModal = useCallback(() => {
+    AudioManager.playSfx(SFX.uiClick.key);
+    setShowModal(true);
+  }, []);
   const closeModal = useCallback(() => setShowModal(false), []);
 
   const handleStart = useCallback(() => {
+    AudioManager.playSfx(SFX.uiClick.key);
     setPlayerName(name.trim() || 'Sound Keeper');
     setGamePhase('world');
   }, [name, setPlayerName, setGamePhase]);
