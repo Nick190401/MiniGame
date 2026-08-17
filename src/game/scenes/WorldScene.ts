@@ -7,6 +7,7 @@ import { BOSS_CORE_ROW, CAVE_START_ROW, CORE_START_ROW, MAP_COLS, MAP_ROWS, MapB
 import { EventBus, EVENTS, type DialogPayload } from '../EventBus';
 import { useGameStore } from '../../store/gameStore';
 import { consumeMobileAction } from '../input/MobileInput';
+import type { FootstepSurface } from '../audio/AudioLibrary';
 
 const TILE = 16;
 
@@ -104,6 +105,9 @@ export class WorldScene extends Phaser.Scene {
 
   // Input
   private interactKey!: Phaser.Input.Keyboard.Key;
+
+  // Footstep audio
+  private footstepSurface: FootstepSurface = 'none';
 
   // Tall grass
   private tallGrassZones: Phaser.Geom.Rectangle[] = [];
@@ -226,16 +230,21 @@ export class WorldScene extends Phaser.Scene {
     if (mobileAction && this.dialogActive) {
       this.handleDialogAdvance();
       (this.player?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+      this.setFootstepSurface('none');
       return;
     }
 
     if (this.worldFrozen || this.battleActive) {
       (this.player?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+      this.setFootstepSurface('none');
       return;
     }
 
     this.player.update(delta);
     this.updateWorldPresentation(delta);
+    this.setFootstepSurface(
+      this.player.isMoving() ? (this.isPlayerInTallGrass() ? 'grass' : 'ground') : 'none',
+    );
 
     // ── NPC proximity interactions ─────────────────────────────────────────
     const interactionRequested = mobileAction || Phaser.Input.Keyboard.JustDown(this.interactKey);
@@ -463,6 +472,17 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.wasInTallGrass = true;
+  }
+
+  /**
+   * Announces what the player is walking on, but only when it actually
+   * changes — the footstep loop is driven by state transitions, not by a
+   * per-frame event.
+   */
+  private setFootstepSurface(surface: FootstepSurface): void {
+    if (surface === this.footstepSurface) return;
+    this.footstepSurface = surface;
+    EventBus.emit(EVENTS.FOOTSTEPS, surface);
   }
 
   private isPlayerInTallGrass(): boolean {
@@ -907,6 +927,7 @@ export class WorldScene extends Phaser.Scene {
       fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#d7ff4a',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(12).setOrigin(0.5).setScale(0.42).setVisible(false);
+    EventBus.emit(EVENTS.ITEM_COLLECTED, 'sound-fragment');
     EventBus.emit(EVENTS.UI_NOTICE, {
       eyebrow: 'ARCHIVE PICKUP // RESONANCE',
       title: '+10 resonance',
@@ -1528,7 +1549,9 @@ export class WorldScene extends Phaser.Scene {
     const cy = item.y;
     this.lostTrackItem = undefined;
     this.player.freeze();
+    this.setFootstepSurface('none');
     this.tweens.killTweensOf(item);
+    EventBus.emit(EVENTS.ITEM_COLLECTED, 'lost-track');
 
     this.cameras.main.flash(520, 215, 255, 74, false);
     this.cameras.main.shake(720, 0.006);
@@ -2277,6 +2300,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.setFootstepSurface('none');
     EventBus.off(EVENTS.BATTLE_END, this.onBattleEnd, this);
     EventBus.off(EVENTS.RESPAWN, this.onRespawn, this);
     EventBus.off(EVENTS.ZONE_UI_REQUEST, this.onZoneUiRequest, this);

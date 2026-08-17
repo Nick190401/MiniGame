@@ -97,11 +97,16 @@ export const SFX = {
 
   // World / progression
   levelUp: track('sfx-level-up', 'sfx/world/level-up.mp3'),
-  itemPickup: track('sfx-item-pickup', 'sfx/world/item-pickup.mp3'),
+  itemPickup: track('sfx-item-pickup', 'sfx/world/collect_disc.wav'),
   gateOpen: track('sfx-gate-open', 'sfx/world/gate-open.mp3'),
   gateBlocked: track('sfx-gate-blocked', 'sfx/world/gate-blocked.mp3'),
   heal: track('sfx-heal', 'sfx/world/heal.wav'),
   respawn: track('sfx-respawn', 'sfx/world/respawn.mp3'),
+
+  // Footsteps — looped for as long as the player is walking, swapped by the
+  // surface underfoot (see FOOTSTEP_SFX_BY_SURFACE).
+  footstepsGround: track('sfx-footsteps-ground', 'sfx/world/footsteps_minimalistic.wav'),
+  footstepsGrass: track('sfx-footsteps-grass', 'sfx/world/walking_in_grass.wav'),
 
   // UI
   dialogBlip: track('sfx-dialog-blip', 'sfx/ui/dialog-blip.mp3'),
@@ -121,6 +126,17 @@ export const ATTACK_SFX_BY_ID: Record<string, string> = {
 export const ATTACK_SFX_BY_ENEMY_NAME: Record<string, string> = {
   'Void Touch': SFX.enemyVoidTouch.key,
 };
+
+/** What the player is walking on; `none` means standing still. */
+export type FootstepSurface = 'none' | 'ground' | 'grass';
+
+export const FOOTSTEP_SFX_BY_SURFACE: Record<Exclude<FootstepSurface, 'none'>, string> = {
+  ground: SFX.footstepsGround.key,
+  grass: SFX.footstepsGrass.key,
+};
+
+/** Footsteps sit under the music rather than on top of it. */
+export const FOOTSTEP_VOLUME = 0.4;
 
 export const ALL_MUSIC_ASSETS: AudioAsset[] = Object.values(MUSIC);
 export const ALL_SFX_ASSETS: AudioAsset[] = Object.values(SFX);

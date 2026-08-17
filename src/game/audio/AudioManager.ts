@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { EventBus, EVENTS, type ZoneUiPayload, type AttackUsedPayload, type ImpactPayload, type HealPayload } from '../EventBus';
-import { MUSIC, SFX, ATTACK_SFX_BY_ID, ATTACK_SFX_BY_ENEMY_NAME, BOSS_PHASE_MUSIC, SFX_URL_BY_KEY, trackForZone } from './AudioLibrary';
+import {
+  MUSIC, SFX, ATTACK_SFX_BY_ID, ATTACK_SFX_BY_ENEMY_NAME, BOSS_PHASE_MUSIC,
+  SFX_URL_BY_KEY, FOOTSTEP_SFX_BY_SURFACE, FOOTSTEP_VOLUME, trackForZone,
+  type FootstepSurface,
+} from './AudioLibrary';
 
 /**
  * Owns every music/SFX decision in the game. Scenes never call `sound.play`
@@ -59,6 +63,8 @@ class AudioManagerImpl {
   private fadeTokens = new WeakMap<Fadeable, number>();
   private pendingSeek: { key: string; seconds: number } | null = null;
   private preBootSfx = new Map<string, HTMLAudioElement>();
+  private footstepSound: Fadeable | null = null;
+  private footstepSurface: FootstepSurface = 'none';
 
   /** Wire the manager up once the Phaser game instance exists. Safe to call more than once. */
   init(game: Phaser.Game): void {
@@ -78,6 +84,7 @@ class AudioManagerImpl {
     EventBus.on(EVENTS.IMPACT, this.onImpact, this);
     EventBus.on(EVENTS.HEAL, this.onHeal, this);
     EventBus.on(EVENTS.ENEMY_DEFEATED, this.onEnemyDefeated, this);
+    EventBus.on(EVENTS.FOOTSTEPS, this.onFootsteps, this);
 
     EventBus.on(EVENTS.BOSS_DEFEATED, () => this.onEnemyDefeated(true));
     EventBus.on(EVENTS.LEVEL_UP, () => this.playSfx(SFX.levelUp.key));
@@ -98,6 +105,8 @@ class AudioManagerImpl {
 
   private onBattleStart(data: { isBoss: boolean }): void {
     this.mode = 'battle';
+    // The world stops updating during a fight, so it can't tell us to stop.
+    this.onFootsteps('none');
     // Boss phases have their own slots but no files yet, so the shared battle
     // theme stands in rather than the fight starting silent.
     const key = data.isBoss
@@ -124,6 +133,7 @@ class AudioManagerImpl {
 
   private onPlayerDied(): void {
     this.mode = 'death';
+    this.onFootsteps('none');
     this.playMusic(MUSIC.death.key, { fadeMs: 400, loop: false });
   }
 
@@ -163,6 +173,35 @@ class AudioManagerImpl {
     if (key) this.playSfx(key);
   }
 
+  /**
+   * Footsteps are a sustained loop rather than one-shots, swapped when the
+   * player moves between surfaces and faded out the moment they stop — so
+   * the loop is only ever audible while they are actually walking.
+   */
+  private onFootsteps(surface: FootstepSurface): void {
+    if (surface === this.footstepSurface) return;
+    this.footstepSurface = surface;
+    this.stopFootsteps();
+    if (surface === 'none' || !this.game) return;
+
+    const key = this.resolveKey(FOOTSTEP_SFX_BY_SURFACE[surface], SFX.footstepsGround.key);
+    if (!key) return;
+
+    const sound = this.game.sound.add(key, { loop: true, volume: 0 }) as unknown as Fadeable;
+    sound.play();
+    this.footstepSound = sound;
+    this.fade(sound, 0, FOOTSTEP_VOLUME * this.settings.sfxVolume, 110);
+  }
+
+  private stopFootsteps(): void {
+    const sound = this.footstepSound;
+    this.footstepSound = null;
+    // Destroy, not just stop: every start/stop creates a new Sound, and
+    // stopped ones stay registered with the manager forever otherwise —
+    // a long walk would pile up hundreds of them.
+    if (sound) this.fade(sound, sound.volume, 0, 90, () => sound.destroy());
+  }
+
   // ── Public API ───────────────────────────────────────────────────────────
 
   /**
@@ -184,7 +223,7 @@ class AudioManagerImpl {
     const previous = this.music;
     this.music = null;
     this.musicKey = null;
-    if (previous) this.fade(previous, previous.volume, 0, fadeMs, () => previous.stop());
+    if (previous) this.fade(previous, previous.volume, 0, fadeMs, () => previous.destroy());
 
     if (!this.game.cache.audio.has(key)) {
       console.debug(`[audio] music track not loaded yet: ${key}`);
@@ -217,7 +256,7 @@ class AudioManagerImpl {
     const sound = this.music;
     this.music = null;
     this.musicKey = null;
-    this.fade(sound, sound.volume, 0, fadeMs, () => sound.stop());
+    this.fade(sound, sound.volume, 0, fadeMs, () => sound.destroy());
   }
 
   playSfx(key: string, opts: SfxOptions = {}): void {

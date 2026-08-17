@@ -113,6 +113,7 @@ export const EVENTS = {
   BOSS_PHASE_CHANGED: 'boss-phase-changed',
   HEAL: 'heal',
   ENEMY_DEFEATED: 'enemy-defeated',
+  FOOTSTEPS: 'footsteps',
   // Map editor — canvas events
   EDITOR_READY:         'editor-ready',
   EDITOR_HOVER:         'editor-hover',
