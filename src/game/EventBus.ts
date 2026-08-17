@@ -1,10 +1,14 @@
-import Phaser from 'phaser';
+import EventEmitter from 'eventemitter3';
 
 /**
  * Singleton EventEmitter used as a bridge between Phaser scenes and React components.
  * Phaser scenes emit events; React components subscribe and update accordingly.
+ *
+ * This is the same emitter Phaser itself uses internally, imported directly so
+ * that the React side of the app — which lives on this bus — does not drag the
+ * 1.5 MB engine into the initial page load just to listen for events.
  */
-export const EventBus = new Phaser.Events.EventEmitter();
+export const EventBus = new EventEmitter();
 
 export interface DialogPayload {
   text: string;

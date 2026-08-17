@@ -38,7 +38,7 @@ export function ZoneOverlay({ canvasParentRef }: ZoneOverlayProps) {
 
         <div className="zone-card__topbar">
           <span className="zone-card__topbar-icon" aria-hidden="true">↺</span>
-          <small>Current frequency</small>
+          <small>Freq</small>
           <span className="zone-card__topbar-line" aria-hidden="true" />
           <span className="zone-card__topbar-arrow" aria-hidden="true">→</span>
           <span className="zone-card__signal" aria-hidden="true"><i /><i /><i /><i /></span>

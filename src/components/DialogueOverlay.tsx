@@ -26,7 +26,7 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
   useEffect(() => {
     const onDialog = (payload: DialogPayload | string) => {
       setDialog(typeof payload === 'string'
-        ? { text: payload, speaker: 'FIELD TRANSMISSION', accent: '#d7ff4a' }
+        ? { text: payload, speaker: 'FIELD TRANSMISSION', accent: '#ff7a2b' }
         : payload);
     };
     const onClear = () => setDialog(null);
@@ -106,7 +106,7 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
       <div className="dialog-overlay__content">
         <header className="dialog-overlay__header">
           <strong>{dialog.speaker}</strong>
-          <span>VOICE CHANNEL // LIVE</span>
+          <span>Voice // Live</span>
         </header>
         <p>{dialog.text}</p>
         <div className="dialog-overlay__continue">

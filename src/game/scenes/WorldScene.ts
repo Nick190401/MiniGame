@@ -23,15 +23,15 @@ interface NpcVisualConfig {
 const NPC_VISUALS: Record<'elder' | 'guard' | 'musician', NpcVisualConfig> = {
   elder: {
     texture: 'npc-elder-muse-v2', worldScale: 0.0297, portraitScale: 0.0463,
-    originX: 618 / 1254, originY: 1152 / 1254, accent: 0x49dfbf,
+    originX: 618 / 1254, originY: 1152 / 1254, accent: 0x6ea8d8,
   },
   guard: {
     texture: 'npc-junction-guard-v2', worldScale: 0.0343, portraitScale: 0.0536,
-    originX: 627 / 1254, originY: 1084 / 1254, accent: 0xd7ff4a,
+    originX: 627 / 1254, originY: 1084 / 1254, accent: 0xff7a2b,
   },
   musician: {
     texture: 'npc-wandering-musician-v2', worldScale: 0.0321, portraitScale: 0.0502,
-    originX: 622 / 1254, originY: 1114 / 1254, accent: 0xff6b3d,
+    originX: 622 / 1254, originY: 1114 / 1254, accent: 0xe8b465,
   },
 };
 
@@ -336,7 +336,7 @@ export class WorldScene extends Phaser.Scene {
     const viewW = this.scale.width;
     const viewH = this.scale.height;
 
-    this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 1.5, 14, 5, 0x07100c, 0.34);
+    this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 1.5, 14, 5, 0x110906, 0.34);
     this.playerShadow.setDepth(4);
 
     this.waterTiles = this.children.getChildren().filter(
@@ -359,7 +359,7 @@ export class WorldScene extends Phaser.Scene {
     // Slow luminous pollen gives the open world depth without hiding the pixel art.
     for (let index = 0; index < 34; index++) {
       const mote = this.add.graphics().setDepth(3);
-      const color = index % 7 === 0 ? 0x49dfbf : index % 5 === 0 ? 0xff6b3d : 0xd7ff4a;
+      const color = index % 7 === 0 ? 0x6ea8d8 : index % 5 === 0 ? 0xe8b465 : 0xff7a2b;
       mote.fillStyle(color, 0.26);
       mote.fillRect(0, 0, index % 9 === 0 ? 2 : 1, index % 9 === 0 ? 2 : 1);
       const startX = 2 * TILE + Math.random() * 44 * TILE;
@@ -379,28 +379,28 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const vignette = this.add.graphics().setDepth(44).setScrollFactor(0);
-    vignette.fillGradientStyle(0x050908, 0x050908, 0x050908, 0x050908, 0.34, 0.34, 0, 0);
+    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0.34, 0.34, 0, 0);
     vignette.fillRect(0, 0, viewW, 56);
-    vignette.fillGradientStyle(0x050908, 0x050908, 0x050908, 0x050908, 0, 0, 0.3, 0.3);
+    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0, 0, 0.3, 0.3);
     vignette.fillRect(0, viewH - 72, viewW, 72);
-    vignette.fillGradientStyle(0x050908, 0x050908, 0x050908, 0x050908, 0.2, 0, 0.2, 0);
+    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0.2, 0, 0.2, 0);
     vignette.fillRect(0, 0, 34, viewH);
-    vignette.fillGradientStyle(0x050908, 0x050908, 0x050908, 0x050908, 0, 0.2, 0, 0.2);
+    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0, 0.2, 0, 0.2);
     vignette.fillRect(viewW - 34, 0, 34, viewH);
 
     this.zoneWash = this.add.graphics().setDepth(43).setScrollFactor(0);
 
     const panel = this.add.graphics();
-    panel.fillStyle(0x050908, 0.84);
+    panel.fillStyle(0x0a0605, 0.84);
     panel.fillRect(0, 0, 148, 39);
-    panel.lineStyle(1, 0xd7ff4a, 0.2);
+    panel.lineStyle(1, 0xff7a2b, 0.2);
     panel.strokeRect(0, 0, 148, 39);
     this.zoneHudAccent = this.add.graphics();
     this.zoneHudTitle = this.add.text(12, 7, '', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '9px', color: '#eef5e9',
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '9px', color: '#f8ece2',
     });
     this.zoneHudMeta = this.add.text(12, 23, '', {
-      fontFamily: 'DM Mono', fontSize: '5px', color: '#718078', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '5px', color: '#82776f', letterSpacing: 1,
     });
     this.zoneHud = this.add.container(viewW - 166, 20, [panel, this.zoneHudAccent, this.zoneHudTitle, this.zoneHudMeta]);
     this.zoneHud.setDepth(46).setScrollFactor(0).setAlpha(0).setVisible(false);
@@ -424,7 +424,7 @@ export class WorldScene extends Phaser.Scene {
       this.footstepTimer = 0;
       const dust = this.add.graphics().setDepth(4);
       const inCave = this.player.y >= 52 * TILE;
-      dust.fillStyle(inCave ? 0x49dfbf : 0xd2bd80, inCave ? 0.35 : 0.32);
+      dust.fillStyle(inCave ? 0x6ea8d8 : 0xd2bd80, inCave ? 0.35 : 0.32);
       dust.fillRect(-3, 0, 2, 1);
       dust.fillRect(2, 1, 1, 1);
       dust.setPosition(this.player.x, this.player.y + 1.5);
@@ -527,7 +527,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spawnGrassRustle(count: number): void {
-    const colors = [0x9ab568, 0x769653, 0x4f713e];
+    const colors = [0xa78a76, 0x8e705b, 0x744e3b];
     for (let index = 0; index < count; index++) {
       const side = index % 2 === 0 ? -1 : 1;
       const leaf = this.add.graphics().setName('grass-rustle').setDepth(this.player.depth + 0.012);
@@ -559,16 +559,16 @@ export class WorldScene extends Phaser.Scene {
     this.currentZoneIndex = zoneIndex;
 
     const zones = [
-      { title: 'Echo Village', meta: 'ORIGIN // OPEN SIGNAL', accent: 0xd7ff4a, wash: 0x5e7848, alpha: 0.025 },
-      { title: 'Signal Path', meta: 'WILD BAND // CH. 02', accent: 0x9ebd6a, wash: 0x4f6b42, alpha: 0.035 },
-      { title: 'Neon Junction', meta: 'RELAY DISTRICT // CH. 03', accent: 0x49dfbf, wash: 0x315b55, alpha: 0.045 },
-      { title: 'Fading Path', meta: 'WEAK SIGNAL // CH. 04', accent: 0x8da662, wash: 0x263b2d, alpha: 0.07 },
+      { title: 'Echo Village', meta: 'ORIGIN // OPEN SIGNAL', accent: 0xff7a2b, wash: 0x725d4e, alpha: 0.025 },
+      { title: 'Signal Path', meta: 'WILD BAND // CH. 02', accent: 0xab907c, wash: 0x6d4f40, alpha: 0.035 },
+      { title: 'Neon Junction', meta: 'RELAY DISTRICT // CH. 03', accent: 0x6ea8d8, wash: 0x5d3e2f, alpha: 0.045 },
+      { title: 'Fading Path', meta: 'WEAK SIGNAL // CH. 04', accent: 0x9e806b, wash: 0x3c2d25, alpha: 0.07 },
       this.cavePurified
-        ? { title: 'Resonant Cave', meta: 'SIGNAL RESTORED // CH. 05', accent: 0xd7ff4a, wash: 0x315b45, alpha: 0.065 }
-        : { title: 'Void Cave', meta: 'NO CARRIER // CH. 05', accent: 0x49dfbf, wash: 0x142f31, alpha: 0.09 },
+        ? { title: 'Resonant Cave', meta: 'SIGNAL RESTORED // CH. 05', accent: 0xff7a2b, wash: 0x5d3e2f, alpha: 0.065 }
+        : { title: 'Void Cave', meta: 'NO CARRIER // CH. 05', accent: 0x6ea8d8, wash: 0x301e15, alpha: 0.09 },
       this.cavePurified
-        ? { title: 'The Living Core', meta: 'MASTER FREQUENCY // CLEAN', accent: 0x49dfbf, wash: 0x244d3b, alpha: 0.07 }
-        : { title: 'The Core', meta: 'TERMINAL FREQUENCY', accent: 0xff6b3d, wash: 0x351612, alpha: 0.12 },
+        ? { title: 'The Living Core', meta: 'MASTER FREQUENCY // CLEAN', accent: 0x6ea8d8, wash: 0x4f3122, alpha: 0.07 }
+        : { title: 'The Core', meta: 'TERMINAL FREQUENCY', accent: 0xe8b465, wash: 0x351612, alpha: 0.12 },
     ];
     const zone = zones[zoneIndex];
     EventBus.emit(EVENTS.ZONE_UI_STATE, {
@@ -638,14 +638,14 @@ export class WorldScene extends Phaser.Scene {
 
   private createInteractLabel(x: number, y: number): Phaser.GameObjects.Container {
     const bg = this.add.graphics();
-    bg.fillStyle(0x050a08, 0.94);
+    bg.fillStyle(0x0b0604, 0.94);
     bg.fillRoundedRect(-9, -5, 18, 10, 2);
-    bg.lineStyle(1, 0xd7ff4a, 1);
+    bg.lineStyle(1, 0xff7a2b, 1);
     bg.strokeRoundedRect(-9, -5, 18, 10, 2);
 
     // Draw the key glyph as geometry so it stays unambiguous under pixel scaling.
     const glyph = this.add.graphics();
-    glyph.fillStyle(0xd7ff4a, 1);
+    glyph.fillStyle(0xff7a2b, 1);
     glyph.fillRect(-3, -4, 2, 8);
     glyph.fillRect(-1, -4, 5, 2);
     glyph.fillRect(-1, -1, 4, 2);
@@ -664,7 +664,7 @@ export class WorldScene extends Phaser.Scene {
     y: number,
     visual: NpcVisualConfig,
   ): Phaser.GameObjects.Sprite {
-    this.add.ellipse(x, y + 1, 18, 5, 0x07100c, 0.24).setDepth(3);
+    this.add.ellipse(x, y + 1, 18, 5, 0x110906, 0.24).setDepth(3);
     const sprite = this.add.sprite(x, y, visual.texture)
       .setDepth(4)
       .setOrigin(visual.originX, visual.originY)
@@ -704,18 +704,18 @@ export class WorldScene extends Phaser.Scene {
       // Ground glow beneath (visible through grass) — draw at (0,0) so tweens work from center
       const glow = this.add.graphics().setDepth(9);
       glow.setPosition(pos.x, pos.y);
-      glow.fillStyle(0x49dfbf, 0.12);
+      glow.fillStyle(0x6ea8d8, 0.12);
       glow.fillCircle(0, 0, 15);
-      glow.fillStyle(0xd7ff4a, 0.14);
+      glow.fillStyle(0xff7a2b, 0.14);
       glow.fillCircle(0, 0, 9);
       this.tweens.add({ targets: glow, alpha: 0.34, duration: 920, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
       // Pulsing ring — draw centered at (0,0) so scale works from center
       const ring = this.add.graphics().setDepth(9);
       ring.setPosition(pos.x, pos.y);
-      ring.lineStyle(1, 0x49dfbf, 0.42);
+      ring.lineStyle(1, 0x6ea8d8, 0.42);
       ring.strokeCircle(0, 0, 13);
-      ring.lineStyle(1, 0xd7ff4a, 0.22);
+      ring.lineStyle(1, 0xff7a2b, 0.22);
       ring.strokeCircle(0, 0, 9);
       this.tweens.add({
         targets: ring, alpha: 0, scaleX: 1.8, scaleY: 1.8,
@@ -725,8 +725,8 @@ export class WorldScene extends Phaser.Scene {
 
       // Two orbiting signal pips make the object read as an active audio source.
       const orbit = this.add.graphics().setDepth(10).setPosition(pos.x, pos.y);
-      orbit.fillStyle(0xd7ff4a, 0.9); orbit.fillRect(-16, -1, 2, 2);
-      orbit.fillStyle(0xff6b3d, 0.85); orbit.fillRect(14, -1, 2, 2);
+      orbit.fillStyle(0xff7a2b, 0.9); orbit.fillRect(-16, -1, 2, 2);
+      orbit.fillStyle(0xe8b465, 0.85); orbit.fillRect(14, -1, 2, 2);
       this.tweens.add({ targets: orbit, angle: 360, duration: 2600, repeat: -1, ease: 'Linear' });
 
       // Vinyl token — high depth so it remains visible above tall grass.
@@ -885,13 +885,13 @@ export class WorldScene extends Phaser.Scene {
 
     // Vinyl grooves ripple out like a struck beat.
     const flash = this.add.graphics().setDepth(12).setPosition(cx, cy);
-    flash.fillStyle(0x49dfbf, 0.2);
+    flash.fillStyle(0x6ea8d8, 0.2);
     flash.fillCircle(0, 0, 13);
-    flash.lineStyle(1, 0xd7ff4a, 0.82);
+    flash.lineStyle(1, 0xff7a2b, 0.82);
     flash.strokeCircle(0, 0, 7);
-    flash.lineStyle(1, 0x49dfbf, 0.58);
+    flash.lineStyle(1, 0x6ea8d8, 0.58);
     flash.strokeCircle(0, 0, 12);
-    flash.fillStyle(0xff6b3d, 0.9);
+    flash.fillStyle(0xe8b465, 0.9);
     flash.fillCircle(0, 0, 2);
     this.tweens.add({
       targets: flash, alpha: 0, scaleX: 2.2, scaleY: 2.2,
@@ -899,7 +899,7 @@ export class WorldScene extends Phaser.Scene {
     });
 
     // Short equalizer bars shoot out from the beat.
-    const sparkColors = [0x49dfbf, 0xd7ff4a, 0xff6b3d];
+    const sparkColors = [0x6ea8d8, 0xff7a2b, 0xe8b465];
     for (let i = 0; i < 8; i++) {
       const spark = this.add.graphics().setDepth(12);
       spark.fillStyle(sparkColors[i % sparkColors.length]);
@@ -924,7 +924,7 @@ export class WorldScene extends Phaser.Scene {
 
     // Keep the pickup wording aligned with the HUD's music-themed XP name.
     const pickup = this.add.text(cx, cy - 10, '+10 RESONANCE', {
-      fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#d7ff4a',
+      fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#ff7a2b',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(12).setOrigin(0.5).setScale(0.42).setVisible(false);
     EventBus.emit(EVENTS.ITEM_COLLECTED, 'sound-fragment');
@@ -932,7 +932,6 @@ export class WorldScene extends Phaser.Scene {
       eyebrow: 'ARCHIVE PICKUP // RESONANCE',
       title: '+10 resonance',
       detail: 'A sound fragment was added to your channel.',
-      accent: '#d7ff4a',
       tone: 'success',
       duration: 1500,
     });
@@ -945,8 +944,8 @@ export class WorldScene extends Phaser.Scene {
 
     // Notes rise on slightly offset beats to reinforce the music connection.
     [
-      { glyph: '\u266A', x: cx - 9, color: '#49dfbf', delay: 0 },
-      { glyph: '\u266B', x: cx + 9, color: '#d7ff4a', delay: 90 },
+      { glyph: '\u266A', x: cx - 9, color: '#6ea8d8', delay: 0 },
+      { glyph: '\u266B', x: cx + 9, color: '#ff7a2b', delay: 90 },
     ].forEach(({ glyph, x, color, delay }) => {
       const note = this.add.text(x, cy, glyph, {
         fontFamily: 'serif', fontSize: '10px', color,
@@ -1156,16 +1155,16 @@ export class WorldScene extends Phaser.Scene {
     });
 
     const backplate = this.add.graphics().setDepth(-9).setAlpha(0);
-    backplate.fillGradientStyle(0x244a3b, 0x244a3b, 0x152f28, 0x152f28, 1, 1, 1, 1);
+    backplate.fillGradientStyle(0x4c3022, 0x4c3022, 0x301d14, 0x301d14, 1, 1, 1, 1);
     backplate.fillRect(0, CAVE_START_ROW * TILE, worldWidth, caveHeight);
     this.purifiedCaveEffects.push(backplate);
     this.tweens.add({ targets: backplate, alpha: 0.96, duration: 1900, ease: 'Sine.easeInOut' });
 
     // A broad wavefront visibly leaves the Core and travels back through the dungeon.
     const sweep = this.add.graphics().setDepth(12).setPosition(0, cy + 28);
-    sweep.fillGradientStyle(0x49dfbf, 0x49dfbf, 0xd7ff4a, 0xd7ff4a, 0, 0, 0.36, 0.36);
+    sweep.fillGradientStyle(0x6ea8d8, 0x6ea8d8, 0xff7a2b, 0xff7a2b, 0, 0, 0.36, 0.36);
     sweep.fillRect(0, -12, worldWidth, 24);
-    sweep.lineStyle(2, 0xeef5e9, 0.9); sweep.lineBetween(0, 0, worldWidth, 0);
+    sweep.lineStyle(2, 0xf8ece2, 0.9); sweep.lineBetween(0, 0, worldWidth, 0);
     this.tweens.add({
       targets: sweep,
       y: CAVE_START_ROW * TILE - 24,
@@ -1175,7 +1174,7 @@ export class WorldScene extends Phaser.Scene {
       onComplete: () => sweep.destroy(),
     });
 
-    [0x49dfbf, 0xd7ff4a, 0xeef5e9].forEach((color, index) => {
+    [0x6ea8d8, 0xff7a2b, 0xf8ece2].forEach((color, index) => {
       const ring = this.add.graphics().setDepth(11).setPosition(cx, cy).setScale(0.35).setAlpha(0.9);
       ring.lineStyle(index === 2 ? 2 : 3, color, 0.82 - index * 0.14);
       ring.strokeCircle(0, 0, 12 + index * 3);
@@ -1276,7 +1275,7 @@ export class WorldScene extends Phaser.Scene {
     this.runeGraphics = [];
 
     const backplate = this.add.graphics().setDepth(-9);
-    backplate.fillGradientStyle(0x244a3b, 0x244a3b, 0x152f28, 0x152f28, 1, 1, 1, 1);
+    backplate.fillGradientStyle(0x4c3022, 0x4c3022, 0x301d14, 0x301d14, 1, 1, 1, 1);
     backplate.fillRect(0, CAVE_START_ROW * TILE, MAP_COLS * TILE, (MAP_ROWS - CAVE_START_ROW) * TILE);
     this.purifiedCaveEffects.push(backplate);
     this.createPurifiedCaveAtmosphere(true);
@@ -1290,14 +1289,14 @@ export class WorldScene extends Phaser.Scene {
     const cy = this.PENTAGRAM_Y;
 
     const core = this.add.graphics().setDepth(1).setPosition(cx, cy).setName('purified-core');
-    core.lineStyle(2, 0x49dfbf, 0.46); core.strokeCircle(0, 0, 74);
-    core.lineStyle(1, 0xd7ff4a, 0.36); core.strokeCircle(0, 0, 54);
-    core.lineStyle(1, 0xeef5e9, 0.2); core.strokeCircle(0, 0, 30);
+    core.lineStyle(2, 0x6ea8d8, 0.46); core.strokeCircle(0, 0, 74);
+    core.lineStyle(1, 0xff7a2b, 0.36); core.strokeCircle(0, 0, 54);
+    core.lineStyle(1, 0xf8ece2, 0.2); core.strokeCircle(0, 0, 30);
     for (let index = 0; index < 12; index++) {
       const angle = (Math.PI * 2 / 12) * index;
       const inner = 34 + (index % 3) * 5;
       const outer = inner + 7 + (index % 4) * 2;
-      core.lineStyle(index % 2 === 0 ? 2 : 1, index % 2 === 0 ? 0xd7ff4a : 0x49dfbf, 0.54);
+      core.lineStyle(index % 2 === 0 ? 2 : 1, index % 2 === 0 ? 0xff7a2b : 0x6ea8d8, 0.54);
       core.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer);
     }
     core.setAlpha(instant ? 0.62 : 0);
@@ -1305,8 +1304,8 @@ export class WorldScene extends Phaser.Scene {
     this.purifiedCaveEffects.push(core);
 
     const arch = this.add.graphics().setDepth(3).setName('purified-arch');
-    arch.lineStyle(7, 0x315548, 0.92); arch.beginPath(); arch.arc(cx, 83 * TILE, 8 * TILE, Math.PI, 0, false); arch.strokePath();
-    arch.lineStyle(2, 0x49dfbf, 0.56); arch.beginPath(); arch.arc(cx, 83 * TILE, 8 * TILE - 7, Math.PI + 0.1, -0.1, false); arch.strokePath();
+    arch.lineStyle(7, 0x573c2f, 0.92); arch.beginPath(); arch.arc(cx, 83 * TILE, 8 * TILE, Math.PI, 0, false); arch.strokePath();
+    arch.lineStyle(2, 0x6ea8d8, 0.56); arch.beginPath(); arch.arc(cx, 83 * TILE, 8 * TILE - 7, Math.PI + 0.1, -0.1, false); arch.strokePath();
     arch.setAlpha(instant ? 1 : 0);
     if (!instant) this.tweens.add({ targets: arch, alpha: 1, duration: 900 });
     this.purifiedCaveEffects.push(arch);
@@ -1314,7 +1313,7 @@ export class WorldScene extends Phaser.Scene {
     const lightPools: [number, number][] = [[20,56],[10,63],[36,66],[38,72],[15,74],[18,79],[31,80],[24,87]];
     lightPools.forEach(([col, row], index) => {
       const pool = this.add.graphics().setDepth(0.6).setPosition(col * TILE, row * TILE).setName('purified-light');
-      pool.fillStyle(index % 3 === 0 ? 0xd7ff4a : 0x49dfbf, 0.1); pool.fillEllipse(0, 0, 34, 12);
+      pool.fillStyle(index % 3 === 0 ? 0xff7a2b : 0x6ea8d8, 0.1); pool.fillEllipse(0, 0, 34, 12);
       pool.setAlpha(instant ? 0.72 : 0);
       this.tweens.add({ targets: pool, alpha: { from: instant ? 0.52 : 0, to: 0.86 }, scaleX: 1.14, duration: 1400 + index * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       this.purifiedCaveEffects.push(pool);
@@ -1322,7 +1321,7 @@ export class WorldScene extends Phaser.Scene {
 
     for (let index = 0; index < 34; index++) {
       const mote = this.add.graphics().setDepth(3).setName('purified-mote');
-      const color = index % 5 === 0 ? 0xd7ff4a : index % 3 === 0 ? 0xeef5e9 : 0x49dfbf;
+      const color = index % 5 === 0 ? 0xff7a2b : index % 3 === 0 ? 0xf8ece2 : 0x6ea8d8;
       mote.fillStyle(color, 0.76); mote.fillRect(0, 0, index % 7 === 0 ? 2 : 1, index % 7 === 0 ? 2 : 1);
       const startX = Phaser.Math.Between(6 * TILE, 42 * TILE);
       const startY = Phaser.Math.Between(CAVE_START_ROW * TILE, 91 * TILE);
@@ -1344,7 +1343,7 @@ export class WorldScene extends Phaser.Scene {
 
   private spawnPurificationSpark(x: number, y: number): void {
     const spark = this.add.graphics().setDepth(13).setPosition(x, y);
-    spark.fillStyle(0xeef5e9, 0.96); spark.fillRect(-1, -4, 2, 8); spark.fillRect(-4, -1, 8, 2);
+    spark.fillStyle(0xf8ece2, 0.96); spark.fillRect(-1, -4, 2, 8); spark.fillRect(-4, -1, 8, 2);
     this.tweens.add({
       targets: spark,
       alpha: 0,
@@ -1361,7 +1360,6 @@ export class WorldScene extends Phaser.Scene {
       eyebrow: 'VOID CAVE // PURIFICATION COMPLETE',
       title: 'Signal restored',
       detail: 'Corruption cleared. The original frequency is returning.',
-      accent: '#49dfbf',
       tone: 'success',
       variant: 'hero',
       duration: 2800,
@@ -1373,15 +1371,15 @@ export class WorldScene extends Phaser.Scene {
     const centerY = 118;
     const panel = ui.add.graphics();
     panel.setScrollFactor(0);
-    panel.fillStyle(0x07100c, 0.92); panel.fillRect(centerX - width / 2, centerY - 22, width, 44);
-    panel.lineStyle(1, 0x49dfbf, 0.72); panel.strokeRect(centerX - width / 2, centerY - 22, width, 44);
-    panel.fillStyle(0xd7ff4a, 0.9); panel.fillRect(centerX - width / 2, centerY - 22, 46, 2);
-    panel.fillStyle(0x49dfbf, 0.9); panel.fillRect(centerX + width / 2 - 82, centerY + 20, 82, 2);
+    panel.fillStyle(0x110906, 0.92); panel.fillRect(centerX - width / 2, centerY - 22, width, 44);
+    panel.lineStyle(1, 0x6ea8d8, 0.72); panel.strokeRect(centerX - width / 2, centerY - 22, width, 44);
+    panel.fillStyle(0xff7a2b, 0.9); panel.fillRect(centerX - width / 2, centerY - 22, 46, 2);
+    panel.fillStyle(0x6ea8d8, 0.9); panel.fillRect(centerX + width / 2 - 82, centerY + 20, 82, 2);
     const title = ui.add.text(centerX, centerY - 11, 'SIGNAL RESTORED', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '14px', color: '#d7ff4a', letterSpacing: 2,
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '14px', color: '#ff7a2b', letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0);
     const meta = ui.add.text(centerX, centerY + 9, 'VOID CAVE // PURIFICATION COMPLETE', {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#9ecfbc', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#8fbdde', letterSpacing: 1,
     }).setOrigin(0.5).setScrollFactor(0);
     const banner = ui.add.container(0, 0, [panel, title, meta])
       .setDepth(96)
@@ -1404,28 +1402,28 @@ export class WorldScene extends Phaser.Scene {
     const cy = this.PENTAGRAM_Y;
 
     const pedestal = this.add.graphics().setDepth(3).setPosition(cx, cy + 7);
-    pedestal.fillStyle(0x07100c, 0.58); pedestal.fillEllipse(0, 0, 78, 20);
-    pedestal.lineStyle(2, 0x49dfbf, 0.52); pedestal.strokeEllipse(0, 0, 66, 16);
-    pedestal.lineStyle(1, 0xd7ff4a, 0.42); pedestal.strokeEllipse(0, 0, 48, 11);
-    pedestal.fillStyle(0xd7ff4a, 0.08); pedestal.fillEllipse(0, 0, 42, 9);
+    pedestal.fillStyle(0x110906, 0.58); pedestal.fillEllipse(0, 0, 78, 20);
+    pedestal.lineStyle(2, 0x6ea8d8, 0.52); pedestal.strokeEllipse(0, 0, 66, 16);
+    pedestal.lineStyle(1, 0xff7a2b, 0.42); pedestal.strokeEllipse(0, 0, 48, 11);
+    pedestal.fillStyle(0xff7a2b, 0.08); pedestal.fillEllipse(0, 0, 42, 9);
     this.tweens.add({ targets: pedestal, alpha: 0.48, scaleX: 1.12, duration: 1250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.lostTrackEffects.push(pedestal);
 
     const beam = this.add.graphics().setDepth(3).setPosition(cx, cy);
-    beam.fillGradientStyle(0x49dfbf, 0x49dfbf, 0xd7ff4a, 0xd7ff4a, 0, 0, 0.16, 0.16);
+    beam.fillGradientStyle(0x6ea8d8, 0x6ea8d8, 0xff7a2b, 0xff7a2b, 0, 0, 0.16, 0.16);
     beam.fillRect(-13, -124, 26, 130);
-    beam.fillStyle(0xeef5e9, 0.12); beam.fillRect(-3, -124, 6, 130);
+    beam.fillStyle(0xf8ece2, 0.12); beam.fillRect(-3, -124, 6, 130);
     beam.setAlpha(cinematic ? 0 : 0.64);
     this.tweens.add({ targets: beam, alpha: { from: cinematic ? 0 : 0.4, to: 0.76 }, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.lostTrackEffects.push(beam);
 
     const waveform = this.add.graphics().setDepth(5).setPosition(cx, cy - 5);
-    waveform.lineStyle(1, 0x49dfbf, 0.72);
+    waveform.lineStyle(1, 0x6ea8d8, 0.72);
     waveform.beginPath(); waveform.moveTo(-48, 0);
     const peaks = [0,-3,2,-7,6,-13,9,-5,3,-10,14,-6,4,-2,0,3,-4,7,-9,4,0];
     peaks.forEach((peak, index) => waveform.lineTo(-48 + index * 4.8, peak));
     waveform.strokePath();
-    waveform.lineStyle(1, 0xd7ff4a, 0.32); waveform.lineBetween(-52, 0, 52, 0);
+    waveform.lineStyle(1, 0xff7a2b, 0.32); waveform.lineBetween(-52, 0, 52, 0);
     waveform.setAlpha(cinematic ? 0 : 0.82).setScale(0.4, 1);
     this.tweens.add({ targets: waveform, alpha: 0.86, scaleX: 1, duration: 1150, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: waveform, scaleY: 1.18, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -1434,13 +1432,13 @@ export class WorldScene extends Phaser.Scene {
     // Two counter-rotating mastering rings frame the record without obscuring it.
     [0, 1].forEach(index => {
       const orbit = this.add.graphics().setDepth(5).setPosition(cx, cy - 6).setName('mastering-ring');
-      orbit.lineStyle(index === 0 ? 2 : 1, index === 0 ? 0xd7ff4a : 0x49dfbf, 0.58);
+      orbit.lineStyle(index === 0 ? 2 : 1, index === 0 ? 0xff7a2b : 0x6ea8d8, 0.58);
       const radius = index === 0 ? 31 : 39;
       orbit.beginPath(); orbit.arc(0, 0, radius, 0.1, 1.55); orbit.strokePath();
       orbit.beginPath(); orbit.arc(0, 0, radius, 3.25, 4.7); orbit.strokePath();
       for (let tick = 0; tick < 8; tick++) {
         const a = (Math.PI * 2 / 8) * tick;
-        orbit.fillStyle(tick % 2 === 0 ? 0xd7ff4a : 0x49dfbf, 0.72);
+        orbit.fillStyle(tick % 2 === 0 ? 0xff7a2b : 0x6ea8d8, 0.72);
         orbit.fillRect(Math.cos(a) * radius - 1, Math.sin(a) * radius - 1, 2, 2);
       }
       orbit.setAlpha(cinematic ? 0 : 0.8).setScale(cinematic ? 0.4 : 1);
@@ -1452,7 +1450,7 @@ export class WorldScene extends Phaser.Scene {
     for (let index = 0; index < 16; index++) {
       const angle = (Math.PI * 2 / 16) * index;
       const shard = this.add.graphics().setDepth(6).setPosition(cx, cy - 6).setRotation(angle);
-      shard.fillStyle(index % 3 === 0 ? 0xd7ff4a : 0x49dfbf, 0.9);
+      shard.fillStyle(index % 3 === 0 ? 0xff7a2b : 0x6ea8d8, 0.9);
       shard.fillRect(45, -1, 5 + (index % 4) * 2, index % 2 === 0 ? 2 : 1);
       shard.setAlpha(cinematic ? 0 : 0.64).setScale(0.4);
       this.tweens.add({ targets: shard, alpha: 0.68, scaleX: 1, scaleY: 1, duration: 620, delay: index * 42, ease: 'Back.easeOut' });
@@ -1487,7 +1485,7 @@ export class WorldScene extends Phaser.Scene {
     });
 
     const label = this.add.text(cx, cy + 27, 'FINAL MASTER // 001', {
-      fontFamily: 'DM Mono', fontSize: '5px', color: '#d7ff4a', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '5px', color: '#ff7a2b', letterSpacing: 1,
     }).setOrigin(0.5).setDepth(8).setAlpha(cinematic ? 0 : 0.86);
     if (cinematic) this.tweens.add({ targets: label, alpha: 0.86, y: cy + 24, duration: 760, delay: 760, ease: 'Cubic.easeOut' });
     this.lostTrackEffects.push(label);
@@ -1498,7 +1496,6 @@ export class WorldScene extends Phaser.Scene {
       eyebrow: 'FINAL RECOVERY // MASTER SIGNAL',
       title: 'The Lost Track',
       detail: 'Original frequency restored.',
-      accent: '#d7ff4a',
       tone: 'success',
       variant: 'hero',
       duration: 3000,
@@ -1509,18 +1506,18 @@ export class WorldScene extends Phaser.Scene {
     const centerY = 154;
     const panel = ui.add.graphics();
     panel.setScrollFactor(0);
-    panel.fillStyle(0x030706, 0.94); panel.fillRect(centerX - 174, centerY - 31, 348, 62);
-    panel.lineStyle(1, 0xd7ff4a, 0.78); panel.strokeRect(centerX - 174, centerY - 31, 348, 62);
-    panel.fillStyle(0x49dfbf, 0.85); panel.fillRect(centerX - 174, centerY - 31, 104, 2);
-    panel.fillStyle(0xff6b3d, 0.72); panel.fillRect(centerX + 96, centerY + 29, 78, 2);
+    panel.fillStyle(0x080403, 0.94); panel.fillRect(centerX - 174, centerY - 31, 348, 62);
+    panel.lineStyle(1, 0xff7a2b, 0.78); panel.strokeRect(centerX - 174, centerY - 31, 348, 62);
+    panel.fillStyle(0x6ea8d8, 0.85); panel.fillRect(centerX - 174, centerY - 31, 104, 2);
+    panel.fillStyle(0xe8b465, 0.72); panel.fillRect(centerX + 96, centerY + 29, 78, 2);
     const overline = ui.add.text(centerX, centerY - 18, 'FINAL RECOVERY // MASTER SIGNAL', {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#49dfbf', letterSpacing: 2,
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#6ea8d8', letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0);
     const title = ui.add.text(centerX, centerY + 2, 'THE LOST TRACK', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '19px', color: '#eef5e9', letterSpacing: 3,
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '19px', color: '#f8ece2', letterSpacing: 3,
     }).setOrigin(0.5).setScrollFactor(0);
     const sub = ui.add.text(centerX, centerY + 21, 'ORIGINAL FREQUENCY RESTORED', {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#d7ff4a', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#ff7a2b', letterSpacing: 1,
     }).setOrigin(0.5).setScrollFactor(0);
     const banner = ui.add.container(0, 0, [panel, overline, title, sub])
       .setDepth(110)
@@ -1608,7 +1605,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spawnFinalMasterBurst(x: number, y: number): void {
-    const colors = [0xd7ff4a, 0x49dfbf, 0xeef5e9, 0xff6b3d];
+    const colors = [0xff7a2b, 0x6ea8d8, 0xf8ece2, 0xe8b465];
     for (let index = 0; index < 28; index++) {
       const angle = (Math.PI * 2 / 28) * index;
       const length = 44 + (index % 5) * 9;
@@ -1627,7 +1624,7 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
-    [0xd7ff4a, 0x49dfbf, 0xeef5e9].forEach((color, index) => {
+    [0xff7a2b, 0x6ea8d8, 0xf8ece2].forEach((color, index) => {
       const ring = this.add.graphics().setDepth(23).setPosition(x, y).setScale(0.3);
       ring.lineStyle(3 - index, color, 0.9 - index * 0.18); ring.strokeCircle(0, 0, 12 + index * 4);
       this.tweens.add({
@@ -1647,7 +1644,6 @@ export class WorldScene extends Phaser.Scene {
       eyebrow: 'FINAL OBJECTIVE // COMPLETE',
       title: 'Master acquired',
       detail: 'The Lost Track // Signal 100%',
-      accent: '#d7ff4a',
       tone: 'success',
       variant: 'hero',
       duration: 3600,
@@ -1659,28 +1655,28 @@ export class WorldScene extends Phaser.Scene {
     const width = ui.cameras.main.width;
     const height = ui.cameras.main.height;
     const wash = ui.add.graphics().setScrollFactor(0);
-    wash.fillStyle(0x07100c, 0.82); wash.fillRect(0, 0, width, height);
+    wash.fillStyle(0x110906, 0.82); wash.fillRect(0, 0, width, height);
     const frame = ui.add.graphics().setScrollFactor(0);
-    frame.lineStyle(2, 0xd7ff4a, 0.85); frame.strokeRect(22, height / 2 - 68, width - 44, 136);
-    frame.lineStyle(1, 0x49dfbf, 0.45); frame.strokeRect(28, height / 2 - 62, width - 56, 124);
-    frame.fillStyle(0xd7ff4a, 0.9); frame.fillRect(22, height / 2 - 68, 118, 3);
-    frame.fillStyle(0x49dfbf, 0.9); frame.fillRect(width - 174, height / 2 + 65, 152, 3);
+    frame.lineStyle(2, 0xff7a2b, 0.85); frame.strokeRect(22, height / 2 - 68, width - 44, 136);
+    frame.lineStyle(1, 0x6ea8d8, 0.45); frame.strokeRect(28, height / 2 - 62, width - 56, 124);
+    frame.fillStyle(0xff7a2b, 0.9); frame.fillRect(22, height / 2 - 68, 118, 3);
+    frame.fillStyle(0x6ea8d8, 0.9); frame.fillRect(width - 174, height / 2 + 65, 152, 3);
 
     const equalizer = ui.add.graphics().setScrollFactor(0);
     const centerY = height / 2 + 37;
     for (let index = 0; index < 45; index++) {
       const barHeight = 3 + ((index * 11 + index * index) % 22);
-      equalizer.fillStyle(index % 5 === 0 ? 0xd7ff4a : 0x49dfbf, 0.56);
+      equalizer.fillStyle(index % 5 === 0 ? 0xff7a2b : 0x6ea8d8, 0.56);
       equalizer.fillRect(width / 2 - 135 + index * 6, centerY - barHeight / 2, 3, barHeight);
     }
     const overline = ui.add.text(width / 2, height / 2 - 39, 'FINAL OBJECTIVE COMPLETE', {
-      fontFamily: 'DM Mono', fontSize: '7px', color: '#49dfbf', letterSpacing: 3,
+      fontFamily: 'DM Mono', fontSize: '7px', color: '#6ea8d8', letterSpacing: 3,
     }).setOrigin(0.5).setScrollFactor(0);
     const title = ui.add.text(width / 2, height / 2 - 12, 'MASTER ACQUIRED', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#eef5e9', letterSpacing: 2,
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#f8ece2', letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0);
     const meta = ui.add.text(width / 2, height / 2 + 16, 'THE LOST TRACK // SIGNAL 100%', {
-      fontFamily: 'DM Mono', fontSize: '8px', color: '#d7ff4a', letterSpacing: 2,
+      fontFamily: 'DM Mono', fontSize: '8px', color: '#ff7a2b', letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0);
     const overlay = ui.add.container(0, 0, [wash, frame, equalizer, overline, title, meta])
       .setDepth(120)
@@ -1733,7 +1729,7 @@ export class WorldScene extends Phaser.Scene {
     openPanel(leftPanel, -28);
     openPanel(rightPanel, 28);
 
-    const gateSignal = this.add.rectangle(21 * TILE, 38 * TILE, 52, 24, 0x49dfbf, 0)
+    const gateSignal = this.add.rectangle(21 * TILE, 38 * TILE, 52, 24, 0x6ea8d8, 0)
       .setDepth(4);
     this.tweens.add({
       targets: gateSignal,
@@ -1814,33 +1810,33 @@ export class WorldScene extends Phaser.Scene {
     const boxH = 72;
 
     const bg = this.add.graphics();
-    bg.fillStyle(0x030806, 0.985);
+    bg.fillStyle(0x080403, 0.985);
     bg.fillRoundedRect(0, 0, boxW, boxH, 4);
-    bg.lineStyle(1, 0x3d5145, 0.9);
+    bg.lineStyle(1, 0x54433a, 0.9);
     bg.strokeRoundedRect(0.5, 0.5, boxW - 1, boxH - 1, 4);
-    bg.fillStyle(0x09130f, 1);
+    bg.fillStyle(0x140b08, 1);
     bg.fillRoundedRect(7, 7, 52, 58, 3);
-    bg.lineStyle(1, 0x25352b, 0.95);
+    bg.lineStyle(1, 0x362a24, 0.95);
     bg.strokeRoundedRect(7.5, 7.5, 51, 57, 3);
-    bg.lineStyle(1, 0x718078, 0.08);
+    bg.lineStyle(1, 0x82776f, 0.08);
     for (let y = 8; y < boxH; y += 8) bg.lineBetween(62, y, boxW - 8, y);
 
     const accent = this.add.graphics();
     const portrait = this.add.image(32, 64, 'npc-elder-muse-v2').setVisible(false);
     const systemMark = this.add.text(33, 36, '◎', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#d7ff4a',
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#ff7a2b',
     }).setOrigin(0.5).setAlpha(0.48);
 
     const speaker = this.add.text(69, 9, 'FIELD TRANSMISSION', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '7px', color: '#d7ff4a', letterSpacing: 1,
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '7px', color: '#ff7a2b', letterSpacing: 1,
     }).setResolution(2);
 
     const channel = this.add.text(boxW - 11, 10, 'ARCHIVE SIGNAL', {
-      fontFamily: 'DM Mono', fontSize: '5px', color: '#718078', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '5px', color: '#82776f', letterSpacing: 1,
     }).setOrigin(1, 0).setResolution(2);
 
     const text = this.add.text(69, 25, '', {
-      fontFamily: 'DM Mono', fontStyle: '500', fontSize: '9px', color: '#eef5e9',
+      fontFamily: 'DM Mono', fontStyle: '500', fontSize: '9px', color: '#f8ece2',
       wordWrap: { width: boxW - 84, useAdvancedWrap: true },
       lineSpacing: 3,
       maxLines: 3,
@@ -1848,13 +1844,13 @@ export class WorldScene extends Phaser.Scene {
     }).setResolution(2);
 
     const arrow = this.add.text(boxW - 14, boxH - 14, '▼', {
-      fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#d7ff4a',
+      fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#ff7a2b',
     });
     this.tweens.add({ targets: arrow, alpha: 0, duration: 500, yoyo: true, repeat: -1 });
     arrow.setVisible(false);
 
     const prompt = this.add.text(boxW - 11, boxH - 11, 'E / SPACE / TAP   ▼', {
-      fontFamily: 'DM Mono', fontSize: '5px', color: '#d7ff4a', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '5px', color: '#ff7a2b', letterSpacing: 1,
     }).setOrigin(1, 1).setResolution(2);
     this.tweens.add({ targets: prompt, alpha: 0.38, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
@@ -1897,7 +1893,7 @@ export class WorldScene extends Phaser.Scene {
     const text = this.dialogBox.getData('text') as Phaser.GameObjects.Text;
     const visual = name ? DIALOG_SPEAKERS[name] : undefined;
     const isGatekeeper = name === 'THE GATEKEEPER';
-    const accentColor = visual?.accent ?? (isGatekeeper ? 0xff6b3d : 0xd7ff4a);
+    const accentColor = visual?.accent ?? (isGatekeeper ? 0xe8b465 : 0xff7a2b);
 
     speaker.setText((name ?? 'FIELD TRANSMISSION').toUpperCase());
     speaker.setColor(`#${accentColor.toString(16).padStart(6, '0')}`);
@@ -1989,7 +1985,7 @@ export class WorldScene extends Phaser.Scene {
     const payload: DialogPayload = {
       text: displayLine,
       speaker: speakerName,
-      accent: `#${(visual?.accent ?? (isGatekeeper ? 0xff6b3d : 0xd7ff4a)).toString(16).padStart(6, '0')}`,
+      accent: `#${(visual?.accent ?? (isGatekeeper ? 0xe8b465 : 0xff7a2b)).toString(16).padStart(6, '0')}`,
       portrait: this.activeDialogSpeaker === 'Elder Muse' ? 'elder'
         : this.activeDialogSpeaker === 'Junction Guard' ? 'guard'
           : this.activeDialogSpeaker === 'Wandering Musician' ? 'musician'
@@ -2041,7 +2037,7 @@ export class WorldScene extends Phaser.Scene {
         .setPosition(nX, sourceY)
         .setScale(0.65)
         .setAlpha(0.78);
-      ring.lineStyle(1, index === 1 ? 0xd7ff4a : accent, 1);
+      ring.lineStyle(1, index === 1 ? 0xff7a2b : accent, 1);
       ring.strokeCircle(0, 0, 5 + index * 2);
       this.tweens.add({
         targets: ring,
@@ -2061,7 +2057,7 @@ export class WorldScene extends Phaser.Scene {
       .setPosition(nX, nY - 19)
       .setScale(1, 0.2);
     [4, 8, 12, 7, 5].forEach((height, index) => {
-      equalizer.fillStyle(index === 2 ? 0xd7ff4a : index === 4 ? 0xff6b3d : accent, 0.92);
+      equalizer.fillStyle(index === 2 ? 0xff7a2b : index === 4 ? 0xe8b465 : accent, 0.92);
       equalizer.fillRect(index * 3 - 7, -height, 2, height);
     });
     this.tweens.add({
@@ -2082,8 +2078,8 @@ export class WorldScene extends Phaser.Scene {
         const note = this.add.text(nX + side * (7 + index), nY - 17, glyph, {
           fontFamily: 'serif',
           fontSize: `${8 + index}px`,
-          color: index % 2 === 0 ? accentCss : '#d7ff4a',
-          stroke: '#07100c',
+          color: index % 2 === 0 ? accentCss : '#ff7a2b',
+          stroke: '#110906',
           strokeThickness: 1,
         }).setName('healing-note').setDepth(20).setOrigin(0.5).setAlpha(0.88);
         this.tweens.add({
@@ -2110,7 +2106,7 @@ export class WorldScene extends Phaser.Scene {
         const t = step / 18;
         const x = (1 - t) * (1 - t) * nX + 2 * (1 - t) * t * controlX + t * t * pX;
         const y = (1 - t) * (1 - t) * sourceY + 2 * (1 - t) * t * controlY + t * t * targetY;
-        signalPath.lineStyle(1, step % 3 === 0 ? 0xd7ff4a : accent, step % 2 === 0 ? 0.55 : 0.25);
+        signalPath.lineStyle(1, step % 3 === 0 ? 0xff7a2b : accent, step % 2 === 0 ? 0.55 : 0.25);
         signalPath.lineBetween(previousX, previousY, x, y);
         previousX = x;
         previousY = y;
@@ -2133,8 +2129,8 @@ export class WorldScene extends Phaser.Scene {
             .setDepth(20)
             .setPosition(nX, sourceY);
           packet.fillStyle(accent, 1); packet.fillRect(-4, -1, 2, 3);
-          packet.fillStyle(0xd7ff4a, 1); packet.fillRect(-1, -3, 2, 6);
-          packet.fillStyle(0xff6b3d, 0.92); packet.fillRect(2, 0, 2, 2);
+          packet.fillStyle(0xff7a2b, 1); packet.fillRect(-1, -3, 2, 6);
+          packet.fillStyle(0xe8b465, 0.92); packet.fillRect(2, 0, 2, 2);
 
           this.tweens.addCounter({
             from: 0,
@@ -2156,7 +2152,7 @@ export class WorldScene extends Phaser.Scene {
                 .setPosition(pX, targetY)
                 .setScale(0.4)
                 .setAlpha(0.75);
-              arrival.lineStyle(1, index % 2 === 0 ? accent : 0xd7ff4a, 1);
+              arrival.lineStyle(1, index % 2 === 0 ? accent : 0xff7a2b, 1);
               arrival.strokeCircle(0, 0, 4);
               this.tweens.add({
                 targets: arrival,
@@ -2185,7 +2181,7 @@ export class WorldScene extends Phaser.Scene {
         .setAlpha(0.72);
       aura.fillStyle(accent, 0.16);
       aura.fillCircle(0, 0, 14);
-      aura.lineStyle(2, 0xd7ff4a, 0.82);
+      aura.lineStyle(2, 0xff7a2b, 0.82);
       aura.strokeCircle(0, 0, 8);
       aura.lineStyle(1, accent, 0.9);
       aura.strokeCircle(0, 0, 13);
@@ -2202,7 +2198,7 @@ export class WorldScene extends Phaser.Scene {
       for (let index = 0; index < 8; index++) {
         const angle = (index / 8) * Math.PI * 2;
         const bar = this.add.graphics().setName('healing-beat-bar').setDepth(20).setPosition(pX, targetY);
-        bar.fillStyle(index % 3 === 0 ? 0xd7ff4a : index % 3 === 1 ? accent : 0xff6b3d, 0.95);
+        bar.fillStyle(index % 3 === 0 ? 0xff7a2b : index % 3 === 1 ? accent : 0xe8b465, 0.95);
         bar.fillRect(-1, -3, index % 2 === 0 ? 2 : 1, 6);
         bar.setAngle(Phaser.Math.RadToDeg(angle));
         this.tweens.add({
@@ -2223,7 +2219,7 @@ export class WorldScene extends Phaser.Scene {
           .setDepth(18)
           .setPosition(pX + (index - 2) * 5, pY + 1)
           .setAlpha(0.72);
-        rise.fillStyle(index === 2 ? 0xd7ff4a : accent, 0.86);
+        rise.fillStyle(index === 2 ? 0xff7a2b : accent, 0.86);
         rise.fillRect(-1, -height, 2, height);
         this.tweens.add({
           targets: rise,
@@ -2249,12 +2245,12 @@ export class WorldScene extends Phaser.Scene {
       });
 
       const hpText = this.add.text(0, 0, `+${restoredAmount} HP`, {
-        fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#d7ff4a',
-        stroke: '#07100c', strokeThickness: 2,
+        fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#ff7a2b',
+        stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
       const resonanceText = this.add.text(0, 9, 'FULL RESONANCE', {
         fontFamily: '"Press Start 2P"', fontSize: '4px', color: accentCss,
-        stroke: '#07100c', strokeThickness: 2,
+        stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
       const feedback = this.add.container(pX, pY - 28, [hpText, resonanceText])
         .setName('healing-feedback')

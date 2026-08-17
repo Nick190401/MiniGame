@@ -1,4 +1,6 @@
-import Phaser from 'phaser';
+// Type-only: the audio manager talks about Phaser objects but never constructs
+// one, so importing the types keeps the engine out of the initial bundle.
+import type Phaser from 'phaser';
 import { EventBus, EVENTS, type ZoneUiPayload, type AttackUsedPayload, type ImpactPayload, type HealPayload } from '../EventBus';
 import {
   MUSIC, SFX, ATTACK_SFX_BY_ID, ATTACK_SFX_BY_ENEMY_NAME, BOSS_PHASE_MUSIC,
@@ -27,6 +29,8 @@ type Fadeable = Phaser.Sound.BaseSound & { volume: number; setVolume(value: numb
 
 const SETTINGS_KEY = 'sound-quest:audio-settings';
 const DEFAULT_FADE_MS = 500;
+
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
 interface AudioSettings {
   musicVolume: number;
@@ -285,7 +289,7 @@ class AudioManagerImpl {
       this.preBootSfx.set(key, element);
     }
     element.currentTime = 0;
-    element.volume = Phaser.Math.Clamp(volume, 0, 1);
+    element.volume = clamp01(volume);
     void element.play().catch(() => {
       // Missing file or blocked before any gesture — nothing to recover.
     });
@@ -296,13 +300,13 @@ class AudioManagerImpl {
   }
 
   setMusicVolume(value: number): void {
-    this.settings.musicVolume = Phaser.Math.Clamp(value, 0, 1);
+    this.settings.musicVolume = clamp01(value);
     this.persist();
     this.music?.setVolume(this.settings.musicVolume);
   }
 
   setSfxVolume(value: number): void {
-    this.settings.sfxVolume = Phaser.Math.Clamp(value, 0, 1);
+    this.settings.sfxVolume = clamp01(value);
     this.persist();
   }
 

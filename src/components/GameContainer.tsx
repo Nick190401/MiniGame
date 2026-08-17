@@ -180,7 +180,7 @@ export function GameContainer({ visible }: GameContainerProps) {
 
   return (
     <div
-      className={`game-stage absolute inset-0${deathActive ? ' game-stage--death' : ''}`}
+      className={`game-stage absolute inset-0${deathActive ? ' game-stage--death' : ''}${battleActive ? ' game-stage--battle' : ''}`}
       style={{
         position: 'fixed',
         inset: 0,

@@ -12,6 +12,11 @@ export default defineConfig({
     port: 5173,
   },
   build: {
+    // Phaser is a game engine in one file — there is no meaningful way to
+    // split it further, and it is deliberately its own chunk so it caches
+    // across deploys and only downloads once the player starts a game. The
+    // limit is raised past it so the warning stays useful for our own code.
+    chunkSizeWarningLimit: 1600,
     rollupOptions: {
       output: {
         manualChunks: {

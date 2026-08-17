@@ -6,6 +6,16 @@ interface GameNoticeOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
 }
 
+/** Default accent per tone, so every notice lands in the right palette role
+ *  without each caller having to remember a hex. An explicit `accent` (an
+ *  attack's own colour, an NPC's channel) still wins. */
+const TONE_ACCENT: Record<NonNullable<NoticePayload['tone']>, string> = {
+  info: 'var(--ember)',
+  success: 'var(--gold)',
+  danger: 'var(--signal)',
+  combat: 'var(--ember)',
+};
+
 export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
   const bounds = useCanvasBounds(canvasParentRef);
   const [notice, setNotice] = useState<(NoticePayload & { key: number }) | null>(null);
@@ -37,7 +47,7 @@ export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
     top: bounds.top,
     width: bounds.width,
     height: bounds.height,
-    '--notice-accent': notice.accent ?? '#d7ff4a',
+    '--notice-accent': notice.accent ?? TONE_ACCENT[notice.tone ?? 'info'],
   } as CSSProperties;
 
   return (

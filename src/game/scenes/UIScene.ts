@@ -20,7 +20,6 @@ export class UIScene extends Phaser.Scene {
       eyebrow: 'CHANNEL UPGRADE // COMPLETE',
       title: `Level ${String(newLevel).padStart(2, '0')} reached`,
       detail: 'Your signal is stronger. New tracks may now be available.',
-      accent: '#d7ff4a',
       tone: 'success',
       duration: 2400,
     });

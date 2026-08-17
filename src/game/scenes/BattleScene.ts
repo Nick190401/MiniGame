@@ -104,25 +104,33 @@ export class BattleScene extends Phaser.Scene {
     // per-artwork — the boss dais sits high in its piece, so cropping the top
     // there would eat exactly the headroom its tall silhouette needs and clip
     // the creature.
-    const BG_SRC_W = 1672;
-    const BG_SRC_H = 941;
-
-    // Platform centres measured off the artwork itself (fractions of the
-    // 1672x941 source). Combatants are anchored to these instead of generic
-    // layout percentages, and sized against them for correct perspective.
+    // Platform centres measured off the artwork itself, as fractions of the
+    // source. Combatants are anchored to these instead of generic layout
+    // percentages, and sized against them for correct perspective. Fractions,
+    // not pixels, so the numbers survive the artwork being re-exported at a
+    // different resolution.
     const arena = this.isBoss
       ? {
         key: 'battle-bg-boss',
-        cropTopSrc: 0,
+        cropTop: 0,
         enemy: { x: 0.645, y: 0.385 },
         player: { x: 0.24, y: 0.68 },
       }
       : {
         key: 'battle-bg-normal',
-        cropTopSrc: 60,
+        cropTop: 0.064,
         enemy: { x: 0.70, y: 0.505 },
         player: { x: 0.33, y: 0.73 },
       };
+
+    // Measured off the decoded texture rather than hard-coded, because the
+    // browser is the one that decides how big the image actually is. Safari
+    // halves the resolution of a PNG carrying an EXIF block, for instance —
+    // assuming the authoring size there left the arena drawn at half scale
+    // with the paused overworld showing through the gap.
+    const bgSource = this.textures.get(arena.key).getSourceImage();
+    const BG_SRC_W = bgSource.width || 1672;
+    const BG_SRC_H = bgSource.height || 941;
 
     // A phone in portrait is roughly twice as tall as it is wide — far taller
     // than the 16:9 artwork. Cover-fitting there would throw away half the
@@ -161,14 +169,20 @@ export class BattleScene extends Phaser.Scene {
 
     const bgOffsetX = (W - bgScaledW) / 2;
     const bgMaxCropSrc = Math.max(0, BG_SRC_H - BATTLE_H / bgScale);
-    const bgCropTopSrc = Phaser.Math.Clamp(arena.cropTopSrc, 0, bgMaxCropSrc);
+    const bgCropTopSrc = Phaser.Math.Clamp(arena.cropTop * BG_SRC_H, 0, bgMaxCropSrc);
     const bgOffsetY = isPortrait ? BATTLE_H - bgScaledH : -bgCropTopSrc * bgScale;
+
+    // The overworld keeps rendering underneath a paused scene, so the arena
+    // gets its own opaque ground first. Without it, anything the artwork
+    // fails to cover — a re-exported image, a browser that decodes it small —
+    // shows the map through the fight.
+    this.add.rectangle(0, 0, W, H, 0x0a0605).setOrigin(0, 0).setDepth(-1);
 
     // Sky band: keeps the portrait artwork from floating on flat black, and
     // gives the enemy status panel a surface to sit on.
     if (bgOffsetY > 0) {
       const sky = this.add.graphics().setDepth(0);
-      sky.fillGradientStyle(0x050908, 0x050908, 0x0d1a15, 0x0d1a15, 1, 1, 1, 1);
+      sky.fillGradientStyle(0x0a0605, 0x0a0605, 0x1c100b, 0x1c100b, 1, 1, 1, 1);
       sky.fillRect(0, 0, W, Math.ceil(bgOffsetY) + 2);
     }
 
@@ -178,14 +192,14 @@ export class BattleScene extends Phaser.Scene {
     // haze rather than a cut.
     if (bgOffsetY > 0) {
       const seam = this.add.graphics().setDepth(1);
-      seam.fillGradientStyle(0x050908, 0x050908, 0x050908, 0x050908, 0.92, 0.92, 0, 0);
+      seam.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0.92, 0.92, 0, 0);
       seam.fillRect(0, bgOffsetY, W, Math.min(64, bgScaledH * 0.22));
     }
 
     // The battle runs on top of a merely *paused* world scene, so everything
     // below the arena needs an opaque floor — otherwise the map shows through
     // the gaps between the DOM control panels, which is most of a phone screen.
-    this.add.rectangle(0, BATTLE_H, W, H - BATTLE_H, 0x050908)
+    this.add.rectangle(0, BATTLE_H, W, H - BATTLE_H, 0x0a0605)
       .setOrigin(0, 0)
       .setDepth(6);
 
@@ -197,22 +211,22 @@ export class BattleScene extends Phaser.Scene {
 
     // Subtle gradient overlay — darker at top, lighter at bottom of arena
     const gradient = this.add.graphics().setDepth(1);
-    gradient.fillGradientStyle(0x0a1410, 0x0a1410, 0x050908, 0x050908, 0.26, 0.26, 0, 0);
+    gradient.fillGradientStyle(0x150c09, 0x150c09, 0x0a0605, 0x0a0605, 0.26, 0.26, 0, 0);
     gradient.fillRect(0, 0, W, BATTLE_H);
 
     // Two-tone atmosphere: a warm glow behind the hostile signal, a cool
     // glow behind the player's side — the same confrontation mood as the
     // game's key art, echoed abstractly (and centered on the actual
     // platforms) instead of using that art directly.
-    const signalColor = this.isBoss ? 0xff5a2e : this.enemyData.color;
+    const signalColor = this.isBoss ? 0xf0362c : this.enemyData.color;
     const atmosphere = this.add.graphics().setDepth(1);
     atmosphere.fillStyle(signalColor, 0.06);
     atmosphere.fillCircle(platformAnchors.enemy.x, platformAnchors.enemy.y, BATTLE_H * 0.55);
-    atmosphere.fillStyle(0x49dfbf, 0.045);
+    atmosphere.fillStyle(0x6ea8d8, 0.045);
     atmosphere.fillCircle(platformAnchors.player.x, platformAnchors.player.y, BATTLE_H * 0.45);
 
     this.add.text(W - 18, 14, `LIVE ENCOUNTER // ${this.isBoss ? 'TERMINAL' : 'WILD SIGNAL'}`, {
-      fontFamily: 'DM Mono', fontSize: '7px', color: '#9aa79f', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '7px', color: '#a89f99', letterSpacing: 1,
     }).setOrigin(1, 0).setDepth(3).setVisible(false);
     this.add.text(W - 18, 27, this.enemyData.id.toUpperCase().replace(/-/g, ' '), {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '10px', color: `#${signalColor.toString(16).padStart(6, '0')}`,
@@ -235,7 +249,7 @@ export class BattleScene extends Phaser.Scene {
     // ── Ambient floating particles ───────────────────────────────────────
     for (let i = 0; i < 8; i++) {
       const p = this.add.graphics().setDepth(3);
-      const c = this.isBoss ? [0xff2244, 0xff6644, 0xcc1133, 0xffaa44][i % 4] : [0xd7ff4a, 0x49dfbf, 0xff6b3d, 0xeef5e9][i % 4];
+      const c = this.isBoss ? [0xff2244, 0xff6644, 0xcc1133, 0xffaa44][i % 4] : [0xff7a2b, 0x6ea8d8, 0xe8b465, 0xf8ece2][i % 4];
       p.fillStyle(c, 0.3);
       p.fillCircle(0, 0, 1 + Math.random());
       const sx = Math.random() * W;
@@ -256,9 +270,9 @@ export class BattleScene extends Phaser.Scene {
 
     // Restrained broadcast frame with hard signal corners.
     const border = this.add.graphics().setDepth(31);
-    border.lineStyle(1, 0x43584d, 0.72);
+    border.lineStyle(1, 0x5b4940, 0.72);
     border.strokeRect(3.5, 3.5, W - 7, H - 7);
-    border.lineStyle(2, 0xd7ff4a, 0.8);
+    border.lineStyle(2, 0xff7a2b, 0.8);
     border.lineBetween(3, 3, 46, 3); border.lineBetween(3, 3, 3, 28);
     border.lineBetween(W - 46, H - 3, W - 3, H - 3); border.lineBetween(W - 3, H - 28, W - 3, H - 3);
 
@@ -369,9 +383,15 @@ export class BattleScene extends Phaser.Scene {
       (gameObject as Phaser.GameObjects.GameObject & { setVisible?: (visible: boolean) => unknown }).setVisible?.(false);
     });
 
+    // Nothing of the overworld is visible behind an arena that fills the
+    // screen, so stop drawing it for the duration — one less full map render
+    // per frame on a phone, and it can never bleed into the fight.
+    this.scene.setVisible(false, 'WorldScene');
+
     EventBus.on(EVENTS.BATTLE_UI_ACTION, this.onBattleUiAction);
     EventBus.on(EVENTS.BATTLE_UI_REQUEST, this.emitBattleUiState, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scene.setVisible(true, 'WorldScene');
       EventBus.off(EVENTS.BATTLE_UI_ACTION, this.onBattleUiAction);
       EventBus.off(EVENTS.BATTLE_UI_REQUEST, this.emitBattleUiState, this);
     });
@@ -408,14 +428,14 @@ export class BattleScene extends Phaser.Scene {
     if (!this.enemyData || !this.attackButtons.length) return;
     const store = useGameStore.getState();
     const turnLabels: Record<TurnState, { label: string; color: string }> = {
-      'player-choose': { label: 'YOUR TURN // SELECT TRACK', color: '#d7ff4a' },
-      'player-attack': { label: 'PLAYER SIGNAL // TRANSMITTING', color: '#49dfbf' },
-      'enemy-attack': { label: 'HOSTILE SIGNAL // INBOUND', color: '#ff6b3d' },
-      'phase-change': { label: 'SIGNAL SURGE // PHASE SHIFT', color: '#ff5c66' },
-      'battle-end': { label: 'SESSION // CLOSED', color: '#91a098' },
+      'player-choose': { label: 'YOUR TURN', color: '#ff7a2b' },
+      'player-attack': { label: 'TRANSMITTING', color: '#6ea8d8' },
+      'enemy-attack': { label: 'INCOMING', color: '#f0362c' },
+      'phase-change': { label: 'PHASE SHIFT', color: '#f0362c' },
+      'battle-end': { label: 'CLOSED', color: '#a19790' },
     };
     const status = turnLabels[this.turnState];
-    const enemyAccent = this.isBoss ? 0xff5a2e : this.enemyData.color;
+    const enemyAccent = this.isBoss ? 0xf0362c : this.enemyData.color;
     const phase = this.isBoss ? ['PHASE I', 'PHASE II', 'PHASE III'][this.bossPhaseIndex] : 'LIVE';
     const payload: BattleUiPayload = {
       isBoss: this.isBoss,
@@ -456,34 +476,34 @@ export class BattleScene extends Phaser.Scene {
     const infoBoxY = 18;
     const infoBoxW = 286;
     const infoBoxH = 76;
-    const borderColor = this.isBoss ? 0xff5a2e : 0x49dfbf;
+    const borderColor = this.isBoss ? 0xf0362c : 0x6ea8d8;
     const infoBg = this.add.graphics().setDepth(8);
-    infoBg.fillStyle(0x07100c, 0.94);
+    infoBg.fillStyle(0x110906, 0.94);
     infoBg.fillRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH);
     infoBg.fillStyle(borderColor, 0.9);
     infoBg.fillRect(infoBoxX, infoBoxY, 4, infoBoxH);
     infoBg.fillRect(infoBoxX, infoBoxY, 68, 2);
-    infoBg.lineStyle(1, 0x3b5045, 0.78);
+    infoBg.lineStyle(1, 0x524139, 0.78);
     infoBg.strokeRect(infoBoxX + 0.5, infoBoxY + 0.5, infoBoxW - 1, infoBoxH - 1);
     infoBg.lineStyle(1, borderColor, 0.12);
     infoBg.lineBetween(infoBoxX + 10, infoBoxY + 47, infoBoxX + infoBoxW - 10, infoBoxY + 47);
 
     this.add.circle(infoBoxX + 16, infoBoxY + 13, 2.5, borderColor, 1).setDepth(10);
     this.add.text(infoBoxX + 25, infoBoxY + 8, 'TARGET SIGNAL // HOSTILE', {
-      fontFamily: 'DM Mono', fontSize: '7px', color: '#9aa79f', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '7px', color: '#a89f99', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
     this.enemyNameText = this.add.text(infoBoxX + 12, infoBoxY + 24, this.enemyData.name.toUpperCase(), {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '15px',
-      color: this.isBoss ? '#ff8a66' : '#eef5e9', letterSpacing: 1,
+      color: this.isBoss ? '#ff8a66' : '#f8ece2', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
     this.phaseText = this.add.text(infoBoxX + infoBoxW - 12, infoBoxY + 9, this.isBoss ? 'PHASE I' : 'LIVE', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: this.isBoss ? '#ff8a66' : '#49dfbf', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: this.isBoss ? '#ff8a66' : '#6ea8d8', letterSpacing: 1,
     }).setOrigin(1, 0).setDepth(10).setResolution(2);
 
     this.add.text(infoBoxX + 12, infoBoxY + 59, 'HP', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#aab5ae', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#b6aea9', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
     this.ehpBarX = infoBoxX + 43;
@@ -497,7 +517,7 @@ export class BattleScene extends Phaser.Scene {
     this.enemyHpText = this.add.text(
       infoBoxX + infoBoxW - 12, infoBoxY + 56,
       `${this.currentEnemyHp}/${this.enemyData.maxHp}`,
-      { fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '8px', color: '#eef5e9' }
+      { fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '8px', color: '#f8ece2' }
     ).setOrigin(1, 0).setDepth(10).setResolution(2);
   }
 
@@ -509,32 +529,32 @@ export class BattleScene extends Phaser.Scene {
     const phpBoxY = BATTLE_H - phpBoxH - 9;
 
     const phpBg = this.add.graphics().setDepth(8);
-    phpBg.fillStyle(0x07100c, 0.94);
+    phpBg.fillStyle(0x110906, 0.94);
     phpBg.fillRect(phpBoxX, phpBoxY, phpBoxW, phpBoxH);
-    phpBg.fillStyle(0x49dfbf, 0.9);
+    phpBg.fillStyle(0x6ea8d8, 0.9);
     phpBg.fillRect(phpBoxX + phpBoxW - 4, phpBoxY, 4, phpBoxH);
     phpBg.fillRect(phpBoxX + phpBoxW - 70, phpBoxY + phpBoxH - 2, 70, 2);
-    phpBg.lineStyle(1, 0x3b5045, 0.78);
+    phpBg.lineStyle(1, 0x524139, 0.78);
     phpBg.strokeRect(phpBoxX + 0.5, phpBoxY + 0.5, phpBoxW - 1, phpBoxH - 1);
-    phpBg.lineStyle(1, 0x49dfbf, 0.12);
+    phpBg.lineStyle(1, 0x6ea8d8, 0.12);
     phpBg.lineBetween(phpBoxX + 10, phpBoxY + 47, phpBoxX + phpBoxW - 10, phpBoxY + 47);
 
     const pName = store.playerName || 'PLAYER';
-    this.add.circle(phpBoxX + 16, phpBoxY + 13, 2.5, 0x49dfbf, 1).setDepth(10);
+    this.add.circle(phpBoxX + 16, phpBoxY + 13, 2.5, 0x6ea8d8, 1).setDepth(10);
     this.add.text(phpBoxX + 25, phpBoxY + 8, 'PLAYER CHANNEL // ACTIVE', {
-      fontFamily: 'DM Mono', fontSize: '7px', color: '#9aa79f', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontSize: '7px', color: '#a89f99', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
     this.add.text(phpBoxX + 12, phpBoxY + 24, pName.toUpperCase(), {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '14px', color: '#eef5e9', letterSpacing: 1,
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '14px', color: '#f8ece2', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
     this.add.text(phpBoxX + phpBoxW - 12, phpBoxY + 10, `LEVEL ${String(store.level).padStart(2, '0')}`, {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#d7ff4a', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#ff7a2b', letterSpacing: 1,
     }).setOrigin(1, 0).setDepth(10).setResolution(2);
 
     this.add.text(phpBoxX + 12, phpBoxY + 58, 'HP', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#aab5ae', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#b6aea9', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
     this.phpBarX = phpBoxX + 43;
@@ -549,29 +569,29 @@ export class BattleScene extends Phaser.Scene {
     this.playerHpText = this.add.text(
       phpBoxX + phpBoxW - 12, phpBoxY + 55,
       `${store.hp}/${store.maxHp}`,
-      { fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '8px', color: '#eef5e9' }
+      { fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '8px', color: '#f8ece2' }
     ).setOrigin(1, 0).setDepth(10).setResolution(2);
   }
 
   // ── HP bar rendering (Pokémon style with rounded ends + gradient) ──────────
 
   private hpColor(frac: number): number {
-    if (frac > 0.5) return 0x49dfbf;
-    if (frac > 0.25) return 0xd7ff4a;
-    return 0xff5c66;
+    if (frac > 0.5) return 0x6ea8d8;
+    if (frac > 0.25) return 0xff7a2b;
+    return 0xf0362c;
   }
 
   private hpColorBright(frac: number): number {
-    if (frac > 0.5) return 0x91f4dd;
-    if (frac > 0.25) return 0xeeff9a;
+    if (frac > 0.5) return 0xa1c8e4;
+    if (frac > 0.25) return 0xffbf9a;
     return 0xff9a9f;
   }
 
   private drawHpBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, frac: number): void {
     g.clear();
-    g.fillStyle(0x111a16);
+    g.fillStyle(0x1b1310);
     g.fillRect(x, y, w, h);
-    g.lineStyle(1, 0x34483e, 0.9);
+    g.lineStyle(1, 0x493a33, 0.9);
     g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
     if (frac > 0) {
@@ -582,11 +602,11 @@ export class BattleScene extends Phaser.Scene {
       g.fillRect(x + 1, y + 1, fillW, h - 2);
       g.fillStyle(bright, 0.58);
       g.fillRect(x + 1, y + 1, fillW, 2);
-      g.fillStyle(0xeef5e9, 0.9);
+      g.fillStyle(0xf8ece2, 0.9);
       g.fillRect(x + Math.max(1, fillW - 1), y + 1, 2, h - 2);
     }
 
-    g.lineStyle(1, 0x07100c, 0.42);
+    g.lineStyle(1, 0x110906, 0.42);
     for (let segment = 1; segment < 10; segment++) {
       const segmentX = x + (w / 10) * segment;
       g.lineBetween(segmentX, y + 1, segmentX, y + h - 1);
@@ -612,25 +632,25 @@ export class BattleScene extends Phaser.Scene {
 
   private buildMessageBox(W: number, MSG_Y: number, MSG_H: number): void {
     const msgBg = this.add.graphics().setDepth(12);
-    msgBg.fillStyle(0x050a08, 0.99);
+    msgBg.fillStyle(0x0b0604, 0.99);
     msgBg.fillRect(7, MSG_Y, W - 14, MSG_H);
-    msgBg.fillStyle(0xd7ff4a, 0.88);
+    msgBg.fillStyle(0xff7a2b, 0.88);
     msgBg.fillRect(7, MSG_Y, 5, MSG_H);
-    msgBg.lineStyle(1, 0x34483e, 0.92);
+    msgBg.lineStyle(1, 0x493a33, 0.92);
     msgBg.strokeRect(7.5, MSG_Y + 0.5, W - 15, MSG_H - 1);
-    msgBg.fillStyle(0xd7ff4a, 0.035);
+    msgBg.fillStyle(0xff7a2b, 0.035);
     msgBg.fillRect(12, MSG_Y + 1, 49, MSG_H - 2);
-    msgBg.lineStyle(1, 0x355046, 0.72);
+    msgBg.lineStyle(1, 0x513e34, 0.72);
     msgBg.lineBetween(62, MSG_Y + 1, 62, MSG_Y + MSG_H - 1);
-    msgBg.lineStyle(1, 0xd7ff4a, 0.16);
+    msgBg.lineStyle(1, 0xff7a2b, 0.16);
     msgBg.lineBetween(74, MSG_Y + 23, W - 19, MSG_Y + 23);
 
     // Signal portrait rail: the battle equivalent of the NPC chat portrait.
     const signalPortrait = this.add.graphics().setDepth(14).setPosition(35, MSG_Y + MSG_H / 2);
-    signalPortrait.fillStyle(0xd7ff4a, 0.08); signalPortrait.fillCircle(0, 0, 19);
-    signalPortrait.lineStyle(2, 0xd7ff4a, 0.9); signalPortrait.strokeCircle(0, 0, 11);
-    signalPortrait.lineStyle(2, 0x49dfbf, 0.78); signalPortrait.strokeCircle(0, 0, 6);
-    signalPortrait.fillStyle(0xeef5e9, 0.95); signalPortrait.fillCircle(0, 0, 2);
+    signalPortrait.fillStyle(0xff7a2b, 0.08); signalPortrait.fillCircle(0, 0, 19);
+    signalPortrait.lineStyle(2, 0xff7a2b, 0.9); signalPortrait.strokeCircle(0, 0, 11);
+    signalPortrait.lineStyle(2, 0x6ea8d8, 0.78); signalPortrait.strokeCircle(0, 0, 6);
+    signalPortrait.fillStyle(0xf8ece2, 0.95); signalPortrait.fillCircle(0, 0, 2);
     this.tweens.add({
       targets: signalPortrait,
       alpha: { from: 0.68, to: 1 },
@@ -643,22 +663,22 @@ export class BattleScene extends Phaser.Scene {
     });
 
     this.add.text(75, MSG_Y + 7, 'BATTLE COMMS // LIVE', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#aab5ae', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#b6aea9', letterSpacing: 1,
     }).setDepth(14).setResolution(2);
     this.turnStatusText = this.add.text(W - 20, MSG_Y + 7, 'STANDBY', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#d7ff4a', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: '#ff7a2b', letterSpacing: 1,
     }).setOrigin(1, 0).setDepth(14).setResolution(2);
 
     this.messageText = this.add.text(75, MSG_Y + 32, '', {
       fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '11px',
-      color: '#eef5e9',
+      color: '#f8ece2',
       wordWrap: { width: W - 112 },
       lineSpacing: 5,
     }).setDepth(14).setResolution(2);
 
     this.msgContinueIndicator = this.add.text(W - 24, MSG_Y + MSG_H - 18, '\u2193', {
       fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '11px',
-      color: '#d7ff4a',
+      color: '#ff7a2b',
     }).setDepth(14).setAlpha(0);
 
     this.tweens.add({
@@ -705,7 +725,7 @@ export class BattleScene extends Phaser.Scene {
     attack: Attack, unlocked: boolean, index: number
   ): void {
     const colorHex = '#' + attack.color.toString(16).padStart(6, '0');
-    const mutedHex = unlocked ? '#9aa79f' : '#29342d';
+    const mutedHex = unlocked ? '#a89f99' : '#372c26';
     const cardShape = [
       new Phaser.Math.Vector2(0, 0),
       new Phaser.Math.Vector2(w - 13, 0),
@@ -716,8 +736,8 @@ export class BattleScene extends Phaser.Scene {
 
     const drawBtn = (g: Phaser.GameObjects.Graphics, hover: boolean) => {
       g.clear();
-      const fillColor = unlocked ? (hover ? 0x183024 : 0x0a1511) : 0x060a08;
-      const borderColor = unlocked ? attack.color : 0x29342d;
+      const fillColor = unlocked ? (hover ? 0x312017 : 0x160c09) : 0x0b0706;
+      const borderColor = unlocked ? attack.color : 0x372c26;
       g.fillStyle(fillColor, unlocked ? 0.98 : 0.72);
       g.fillPoints(cardShape, true);
       g.lineStyle(hover ? 2 : 1, borderColor, unlocked ? (hover ? 1 : 0.58) : 0.34);
@@ -764,32 +784,32 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const metaText = this.add.text(14, 8, unlocked ? `TRACK 0${index + 1} // READY` : `TRACK 0${index + 1} // LOCKED`, {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: unlocked ? mutedHex : '#354039', letterSpacing: 1,
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: unlocked ? mutedHex : '#453730', letterSpacing: 1,
     }).setResolution(2);
 
     const nameText = this.add.text(14, 24, unlocked ? attack.name.toUpperCase() : 'UNAVAILABLE', {
       fontFamily: 'Syne', fontStyle: 'bold',
       fontSize: '13px',
-      color: unlocked ? colorHex : '#35433b',
+      color: unlocked ? colorHex : '#473831',
       letterSpacing: 0.6,
     }).setResolution(2);
 
     const detailText = this.add.text(14, 49,
       unlocked ? attack.description : `UNLOCKS AT LEVEL ${String(attack.unlockLevel).padStart(2, '0')}`,
       {
-        fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: unlocked ? '#d4ddd7' : '#3d4a42',
+        fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '7px', color: unlocked ? '#ded8d3' : '#503f37',
         wordWrap: { width: w - 110 },
         lineSpacing: 2,
       }
     ).setResolution(2);
 
     const keyBg = this.add.graphics();
-    keyBg.fillStyle(unlocked ? attack.color : 0x26312b, unlocked ? 0.14 : 0.18);
+    keyBg.fillStyle(unlocked ? attack.color : 0x332924, unlocked ? 0.14 : 0.18);
     keyBg.fillRect(w - 45, h / 2 - 16, 32, 32);
-    keyBg.lineStyle(1, unlocked ? attack.color : 0x354039, unlocked ? 0.82 : 0.35);
+    keyBg.lineStyle(1, unlocked ? attack.color : 0x453730, unlocked ? 0.82 : 0.35);
     keyBg.strokeRect(w - 44.5, h / 2 - 15.5, 31, 31);
     const keyText = this.add.text(w - 29, h / 2, unlocked ? String(index + 1) : '--', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '12px', color: unlocked ? '#eef5e9' : '#45534b',
+      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '12px', color: unlocked ? '#f8ece2' : '#5a473e',
     }).setOrigin(0.5).setResolution(2);
 
     const parts: Phaser.GameObjects.GameObject[] = [bg, icon, metaText, nameText, detailText, keyBg, keyText];
@@ -914,11 +934,11 @@ export class BattleScene extends Phaser.Scene {
     this.inputBlocked = state !== 'player-choose';
 
     const turnLabels: Record<TurnState, { label: string; color: string }> = {
-      'player-choose': { label: 'YOUR TURN // SELECT TRACK', color: '#d7ff4a' },
-      'player-attack': { label: 'PLAYER SIGNAL // TRANSMITTING', color: '#49dfbf' },
-      'enemy-attack': { label: 'HOSTILE SIGNAL // INBOUND', color: '#ff6b3d' },
-      'phase-change': { label: 'SIGNAL SURGE // PHASE SHIFT', color: '#ff5c66' },
-      'battle-end': { label: 'SESSION // CLOSED', color: '#718078' },
+      'player-choose': { label: 'YOUR TURN', color: '#ff7a2b' },
+      'player-attack': { label: 'TRANSMITTING', color: '#6ea8d8' },
+      'enemy-attack': { label: 'INCOMING', color: '#f0362c' },
+      'phase-change': { label: 'PHASE SHIFT', color: '#f0362c' },
+      'battle-end': { label: 'CLOSED', color: '#82776f' },
     };
     const status = turnLabels[state];
     this.turnStatusText?.setText(status.label).setColor(status.color);
@@ -1008,7 +1028,7 @@ export class BattleScene extends Phaser.Scene {
         const currentHp = useGameStore.getState().hp;
         EventBus.emit(EVENTS.HP_CHANGED, currentHp);
         this.updatePlayerHpBar();
-        this.playTargetImpact(this.playerSprite, 0xff5c66, true);
+        this.playTargetImpact(this.playerSprite, 0xf0362c, true);
 
         this.time.delayedCall(700, () => {
           if (currentHp <= 0) {
@@ -1026,7 +1046,7 @@ export class BattleScene extends Phaser.Scene {
     const originX = target.x;
     const originY = target.y;
     const offset = playerHit ? -11 : 11;
-    const echoColor = playerHit ? 0xff6b3d : 0x49dfbf;
+    const echoColor = playerHit ? 0xe8b465 : 0x6ea8d8;
     const reticleRadius = Math.max(25, Math.min(52, target.displayWidth * 0.44));
 
     // Two displaced copies create a short chromatic signal tear at the hit frame.
@@ -1120,7 +1140,7 @@ export class BattleScene extends Phaser.Scene {
     });
 
     const hpText = playerHit ? this.playerHpText : this.enemyHpText;
-    hpText.setColor(playerHit ? '#ff8c91' : '#eef5e9');
+    hpText.setColor(playerHit ? '#ff8c91' : '#f8ece2');
     this.tweens.add({
       targets: hpText,
       scaleX: 1.13,
@@ -1129,7 +1149,7 @@ export class BattleScene extends Phaser.Scene {
       duration: 90,
       yoyo: true,
       repeat: 1,
-      onComplete: () => hpText.setScale(1).setAlpha(1).setColor('#aab5ae'),
+      onComplete: () => hpText.setScale(1).setAlpha(1).setColor('#b6aea9'),
     });
 
     this.cameras.main.shake(playerHit ? 180 : 140, playerHit ? 0.008 : 0.006);
@@ -1141,7 +1161,8 @@ export class BattleScene extends Phaser.Scene {
     this.setTurnState('phase-change');
     EventBus.emit(EVENTS.BOSS_PHASE_CHANGED, phaseIdx);
     const phaseLabels  = ['PHASE I', 'PHASE II', 'PHASE III'];
-    const phaseColors  = ['#d7ff4a', '#ff5a2e', '#ff5c66'];
+    // Boss phases climb the hostile ramp: ember -> signal -> deep signal.
+    const phaseColors  = ['#ff7a2b', '#f0362c', '#8f1a16'];
     const hasBossBattleArt = this.textures.exists('boss-gatekeeper-battle-phase1');
     const textureKeys = hasBossBattleArt
       ? ['boss-gatekeeper-battle-phase1', 'boss-gatekeeper-battle-phase2', 'boss-gatekeeper-battle-phase3']
@@ -1341,7 +1362,7 @@ export class BattleScene extends Phaser.Scene {
       duration: 900,
     });
 
-    const veil = this.add.rectangle(0, 0, W, this.battleH, 0x020504, 0)
+    const veil = this.add.rectangle(0, 0, W, this.battleH, 0x050302, 0)
       .setOrigin(0)
       .setDepth(26)
       .setName('battle-player-prelude');
@@ -1354,7 +1375,7 @@ export class BattleScene extends Phaser.Scene {
     signalBand.setAlpha(0);
 
     const kicker = this.add.text(W / 2, this.battleH * 0.31 + 11, `TRACK 0${trackIndex} // PLAYER SIGNAL`, {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#aab5ae', letterSpacing: 2,
+      fontFamily: 'DM Mono', fontSize: '6px', color: '#b6aea9', letterSpacing: 2,
     }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setVisible(false).setName('battle-player-kicker');
     const title = this.add.text(W / 2, this.battleH * 0.31 + 27, attack.name.toUpperCase(), {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '22px', color: colorHex, letterSpacing: 2,
@@ -1883,7 +1904,7 @@ export class BattleScene extends Phaser.Scene {
               .setScale(pScaleX, pScaleY)
               .setDepth(19)
               .setAlpha(0.42 - i * 0.075)
-              .setTint(i % 2 === 0 ? color : 0x49dfbf);
+              .setTint(i % 2 === 0 ? color : 0x6ea8d8);
             afterimages.push(ghost);
             this.tweens.add({ targets: ghost, alpha: 0, duration: 300, delay: 60, onComplete: () => ghost.destroy() });
           });
@@ -1903,7 +1924,7 @@ export class BattleScene extends Phaser.Scene {
               const split = this.add.sprite(eX, eY, this.enemySprite.texture.key, this.enemySprite.frame.name)
                 .setOrigin(this.enemySprite.originX, this.enemySprite.originY)
                 .setScale(this.enemySprite.scaleX, this.enemySprite.scaleY)
-                .setTint(splitIndex === 0 ? color : 0x49dfbf)
+                .setTint(splitIndex === 0 ? color : 0x6ea8d8)
                 .setAlpha(0.34)
                 .setDepth(this.enemySprite.depth - 0.1)
                 .setName('battle-hook-signal-split');
@@ -2304,7 +2325,7 @@ export class BattleScene extends Phaser.Scene {
 
   private playEnemyAttackPrelude(attack: { name: string; damage: number }, onComplete: () => void): void {
     const W = this.scale.width;
-    const hostileColor = this.isBoss ? 0xff3d57 : 0xff6b3d;
+    const hostileColor = this.isBoss ? 0xff3d57 : 0xe8b465;
     const hostileHex = `#${hostileColor.toString(16).padStart(6, '0')}`;
     EventBus.emit(EVENTS.UI_NOTICE, {
       eyebrow: `HOSTILE TRANSMISSION // ${this.enemyData.name.toUpperCase()}`,
@@ -2325,7 +2346,7 @@ export class BattleScene extends Phaser.Scene {
     band.fillStyle(hostileColor, 0.9);
     band.fillRect(0, this.battleH * 0.31, W, 2);
     band.fillRect(0, this.battleH * 0.31 + 66, W, 2);
-    band.fillStyle(0x050908, 0.75);
+    band.fillStyle(0x0a0605, 0.75);
     for (let stripe = -20; stripe < W; stripe += 28) {
       band.fillRect(stripe, this.battleH * 0.31, 9, 2);
     }
@@ -2441,7 +2462,7 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: attackVector, alpha: 1, duration: 90 });
 
     const lock = this.add.graphics().setPosition(pX, pY).setDepth(21).setName('battle-lunge-lock');
-    lock.lineStyle(2, 0xff5c66, 0.88);
+    lock.lineStyle(2, 0xf0362c, 0.88);
     lock.strokeCircle(0, 0, 22);
     lock.lineBetween(-32, -22, -18, -22); lock.lineBetween(-32, -22, -32, -8);
     lock.lineBetween(32, 22, 18, 22); lock.lineBetween(32, 22, 32, 8);
@@ -2464,7 +2485,7 @@ export class BattleScene extends Phaser.Scene {
         const ghost = this.add.sprite(this.enemySprite.x, this.enemySprite.y, this.enemySprite.texture.key, this.enemySprite.frame.name)
           .setOrigin(this.enemySprite.originX, this.enemySprite.originY)
           .setScale(origScaleX, origScaleY)
-          .setTint(ghostIndex % 2 === 0 ? 0xff5c66 : 0xffb36b)
+          .setTint(ghostIndex % 2 === 0 ? 0xf0362c : 0xffb36b)
           .setAlpha(0.28 - ghostIndex * 0.05)
           .setDepth(this.enemySprite.depth - 0.1)
           .setName('battle-lunge-afterimage');
@@ -2540,7 +2561,7 @@ export class BattleScene extends Phaser.Scene {
         .setPosition(origX + (pX - origX) * t, origY + (pY - origY) * t)
         .setDepth(21)
         .setName('battle-zap-node');
-      node.lineStyle(1, nodeIndex % 2 === 0 ? 0xffffff : 0x00ddff, 0.82);
+      node.lineStyle(1, nodeIndex % 2 === 0 ? 0xffffff : 0x398bc6, 0.82);
       node.strokeCircle(0, 0, 3 + (nodeIndex % 2) * 2);
       node.setScale(0.25).setAlpha(0);
       this.tweens.add({
@@ -2580,11 +2601,11 @@ export class BattleScene extends Phaser.Scene {
         }
 
         // Draw glow first, then the exact same path as a white-hot core.
-        bolt.lineStyle(11, 0x00ddff, 0.14);
+        bolt.lineStyle(11, 0x398bc6, 0.14);
         bolt.beginPath();
         points.forEach((point, index) => index === 0 ? bolt.moveTo(point.x, point.y) : bolt.lineTo(point.x, point.y));
         bolt.strokePath();
-        bolt.lineStyle(3, 0x00ddff, 0.96);
+        bolt.lineStyle(3, 0x398bc6, 0.96);
         bolt.beginPath();
         points.forEach((point, index) => index === 0 ? bolt.moveTo(point.x, point.y) : bolt.lineTo(point.x, point.y));
         bolt.strokePath();
@@ -2595,7 +2616,7 @@ export class BattleScene extends Phaser.Scene {
 
         points.slice(2, -1).forEach((point, index) => {
           if ((index + frame) % 2 !== 0) return;
-          bolt.lineStyle(1, 0x91f4ff, 0.55);
+          bolt.lineStyle(1, 0xaacde6, 0.55);
           bolt.lineBetween(point.x, point.y, point.x + (index % 2 === 0 ? 12 : -12), point.y - 8 - index * 2);
         });
       },
@@ -2605,14 +2626,14 @@ export class BattleScene extends Phaser.Scene {
       bolt.destroy();
       // Impact flash
       const flash = this.add.graphics().setPosition(pX, pY).setDepth(21);
-      flash.fillStyle(0x00ddff, 0.5);
+      flash.fillStyle(0x398bc6, 0.5);
       flash.fillCircle(0, 0, 20);
       flash.fillStyle(0xffffff, 0.6);
       flash.fillCircle(0, 0, 8);
 
       for (let cageIndex = 0; cageIndex < 3; cageIndex++) {
         const cage = this.add.graphics().setPosition(pX, pY).setDepth(22).setName('battle-zap-cage');
-        cage.lineStyle(2, cageIndex === 1 ? 0xffffff : 0x00ddff, 0.82);
+        cage.lineStyle(2, cageIndex === 1 ? 0xffffff : 0x398bc6, 0.82);
         cage.strokePoints([
           new Phaser.Math.Vector2(0, -18 - cageIndex * 5),
           new Phaser.Math.Vector2(16 + cageIndex * 5, 10 + cageIndex * 3),
@@ -2811,7 +2832,7 @@ export class BattleScene extends Phaser.Scene {
 
   private playVoidAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
     const voidPurple = 0x8d4ac7;
-    const voidTeal = 0x49dfbf;
+    const voidTeal = 0x6ea8d8;
     const veil = this.add.rectangle(0, 0, this.scale.width, this.battleH, 0x050107, 0)
       .setOrigin(0)
       .setDepth(19)
@@ -2943,7 +2964,7 @@ export class BattleScene extends Phaser.Scene {
     // 1) Orbiting purple/magenta pixel squares — matches the model's floating fragments
     for (let i = 0; i < 10; i++) {
       const sq = this.add.graphics().setDepth(6);
-      const color = [0x49dfbf, 0xd7ff4a, 0x268f80, 0xff6b3d][i % 4];
+      const color = [0x6ea8d8, 0xff7a2b, 0x29638c, 0xe8b465][i % 4];
       const size = 3 + Math.random() * 4;
       sq.fillStyle(color, 0.8);
       sq.fillRect(-size / 2, -size / 2, size, size);
@@ -2976,9 +2997,9 @@ export class BattleScene extends Phaser.Scene {
     // 2) Cyan glow pulse at enemy core
     const glow = this.add.graphics().setDepth(4);
     glow.setPosition(cx, cy);
-    glow.fillStyle(0x00ffcc, 0.12);
+    glow.fillStyle(0x398bc6, 0.12);
     glow.fillCircle(0, 0, 50);
-    glow.fillStyle(0x00eeff, 0.08);
+    glow.fillStyle(0x398bc6, 0.08);
     glow.fillCircle(0, 0, 35);
     this.tweens.add({
       targets: glow,
@@ -2997,7 +3018,7 @@ export class BattleScene extends Phaser.Scene {
       callback: () => {
         if (!this.enemySprite?.active) return;
         const spark = this.add.graphics().setDepth(7);
-        const sc = [0x00ffcc, 0x00ddff, 0x44ffff][Math.floor(Math.random() * 3)];
+        const sc = [0x398bc6, 0x398bc6, 0x6eaad5][Math.floor(Math.random() * 3)];
         spark.fillStyle(sc, 0.7);
         spark.fillCircle(0, 0, 1 + Math.random());
         spark.setPosition(
@@ -3020,7 +3041,7 @@ export class BattleScene extends Phaser.Scene {
     const mistY = cy + 55;
     for (let i = 0; i < 4; i++) {
       const mist = this.add.graphics().setDepth(3);
-      mist.fillStyle(0x182c2b, 0.3);
+      mist.fillStyle(0x2d1e17, 0.3);
       mist.fillEllipse(0, 0, 30 + Math.random() * 20, 8 + Math.random() * 4);
       mist.setPosition(cx + Phaser.Math.Between(-35, 35), mistY + Phaser.Math.Between(-5, 5));
       this.tweens.add({
@@ -3197,7 +3218,7 @@ export class BattleScene extends Phaser.Scene {
     // 1) Scattered neon pixel fragments — dispersing outward like the model's glitch shards
     for (let i = 0; i < 14; i++) {
       const sq = this.add.graphics().setDepth(6);
-      const color = [0x49dfbf, 0xd7ff4a, 0xff6b3d, 0x9ebd6a, 0xff5c66, 0xeef5e9][i % 6];
+      const color = [0x6ea8d8, 0xff7a2b, 0xe8b465, 0xab907c, 0xf0362c, 0xf8ece2][i % 6];
       const size = 2 + Math.random() * 5;
       sq.fillStyle(color, 0.85);
       sq.fillRect(-size / 2, -size / 2, size, size);
@@ -3257,9 +3278,9 @@ export class BattleScene extends Phaser.Scene {
         },
       });
     };
-    drawSignalWave(-18, 0x49dfbf, 0.8);
-    drawSignalWave(6, 0xd7ff4a, 1.0);
-    drawSignalWave(28, 0xff6b3d, 0.6);
+    drawSignalWave(-18, 0x6ea8d8, 0.8);
+    drawSignalWave(6, 0xff7a2b, 1.0);
+    drawSignalWave(28, 0xe8b465, 0.6);
 
     // 3) Screen corruption — flickering horizontal glitch bars across the battle area
     const glitchBars = this.add.graphics().setDepth(4);
@@ -3274,7 +3295,7 @@ export class BattleScene extends Phaser.Scene {
         for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) {
           const barY = cy - 50 + Math.random() * 100;
           const barH = 1 + Math.random() * 3;
-          const barColor = [0xff5c66, 0x49dfbf, 0xd7ff4a, 0xff6b3d][Math.floor(Math.random() * 4)];
+          const barColor = [0xf0362c, 0x6ea8d8, 0xff7a2b, 0xe8b465][Math.floor(Math.random() * 4)];
           glitchBars.fillStyle(barColor, 0.15 + Math.random() * 0.15);
           glitchBars.fillRect(cx - 60, barY, 120, barH);
         }
@@ -3290,7 +3311,7 @@ export class BattleScene extends Phaser.Scene {
         if (!this.enemySprite?.active) return;
         for (let r = 0; r < 3; r++) {
           const ring = this.add.graphics().setDepth(4);
-          ring.lineStyle(2, 0x00ddff, 0.4);
+          ring.lineStyle(2, 0x398bc6, 0.4);
           ring.strokeCircle(0, 0, 8);
           ring.setPosition(cx, speakerY);
           this.tweens.add({
@@ -3313,7 +3334,7 @@ export class BattleScene extends Phaser.Scene {
       callback: () => {
         if (!this.enemySprite?.active) return;
         const spark = this.add.graphics().setDepth(7);
-        const sc = [0x49dfbf, 0xd7ff4a, 0xeef5e9, 0xff6b3d][Math.floor(Math.random() * 4)];
+        const sc = [0x6ea8d8, 0xff7a2b, 0xf8ece2, 0xe8b465][Math.floor(Math.random() * 4)];
         spark.fillStyle(sc, 0.8);
         const s = 1 + Math.random() * 2;
         spark.fillRect(-s / 2, -s / 2, s, s);
@@ -3337,9 +3358,9 @@ export class BattleScene extends Phaser.Scene {
     // 6) Core glow — pulsing red/cyan dual glow at center
     const glow = this.add.graphics().setDepth(3);
     glow.setPosition(cx, cy);
-    glow.fillStyle(0xff6b3d, 0.08);
+    glow.fillStyle(0xe8b465, 0.08);
     glow.fillCircle(0, 0, 55);
-    glow.fillStyle(0x49dfbf, 0.06);
+    glow.fillStyle(0x6ea8d8, 0.06);
     glow.fillCircle(0, 5, 40);
     this.tweens.add({
       targets: glow,
@@ -3353,7 +3374,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private spawnDefeatParticles(x: number, y: number): void {
-    const colors = [0xeef5e9, 0xd7ff4a, 0xff6b3d, 0x49dfbf];
+    const colors = [0xf8ece2, 0xff7a2b, 0xe8b465, 0x6ea8d8];
     for (let i = 0; i < 18; i++) {
       const particle = this.add.graphics().setDepth(25);
       const c = colors[i % colors.length];

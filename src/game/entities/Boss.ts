@@ -108,7 +108,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
 
   private updateAura(): void {
     this.auraGraphics.clear();
-    const colors = [0x49dfbf, 0xff6b3d, 0xff5c66];
+    const colors = [0x6ea8d8, 0xe8b465, 0xf0362c];
     const color = colors[this.currentPhaseIndex];
     const alpha = 0.2 + this.currentPhaseIndex * 0.1;
 

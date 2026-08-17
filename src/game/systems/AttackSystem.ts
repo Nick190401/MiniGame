@@ -6,7 +6,7 @@ export const ATTACKS: Record<string, Attack> = {
     name: 'Bass Drop',
     damage: 18,
     description: 'A deep sonic hit that rattles the soul.',
-    color: 0xd7ff4a,
+    color: 0xff7a2b,
     unlockLevel: 1,
   },
   'echo-wave': {
@@ -14,7 +14,7 @@ export const ATTACKS: Record<string, Attack> = {
     name: 'Echo Wave',
     damage: 14,
     description: 'Two rippling waves of sound. Hits twice.',
-    color: 0x49dfbf,
+    color: 0x6ea8d8,
     unlockLevel: 2,
   },
   'hook-impact': {
@@ -22,7 +22,7 @@ export const ATTACKS: Record<string, Attack> = {
     name: 'Hook Impact',
     damage: 28,
     description: 'A sharp melodic hook strikes deep.',
-    color: 0xff6b3d,
+    color: 0xe8b465,
     unlockLevel: 3,
   },
   'reverb-strike': {
@@ -30,7 +30,7 @@ export const ATTACKS: Record<string, Attack> = {
     name: 'Reverb Strike',
     damage: 38,
     description: 'Ultimate resonance — pure sound made weapon.',
-    color: 0xff5c66,
+    color: 0xf0362c,
     unlockLevel: 4,
   },
 };

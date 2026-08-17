@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { getXPProgress, getXPForNextLevel, getXPForCurrentLevel, MAX_LEVEL } from '../game/systems/XPSystem';
 
@@ -21,6 +21,25 @@ export function HUD() {
   const level = useGameStore(s => s.level);
   const unlockedAttacks = useGameStore(s => s.unlockedAttacks);
 
+  const deckRef = useRef<HTMLDivElement>(null);
+
+  // Publish the deck's real height so the rest of the rack can stack under it
+  // on a phone, where nothing fits beside a full-width deck.
+  useEffect(() => {
+    const el = deckRef.current;
+    if (!el) return;
+    const publish = () => {
+      document.documentElement.style.setProperty('--deck-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--deck-h');
+    };
+  }, []);
+
   const hpProgress = Math.max(0, (hp / maxHp) * 100);
   const xpProgress = getXPProgress(xp, level) * 100;
   const xpCurrent = xp - getXPForCurrentLevel(level);
@@ -30,7 +49,7 @@ export function HUD() {
 
   return (
     <div className="game-hud">
-      <div className="game-hud__deck">
+      <div className="game-hud__deck" ref={deckRef}>
         <i className="game-hud__screw game-hud__screw--tl" aria-hidden="true" />
         <i className="game-hud__screw game-hud__screw--tr" aria-hidden="true" />
         <i className="game-hud__screw game-hud__screw--bl" aria-hidden="true" />
@@ -46,13 +65,13 @@ export function HUD() {
           </div>
 
           <div className="game-hud__stats">
-            <div className="hud-stat hud-stat--hp">
-              <div className="hud-stat__label"><span>Vital Signal</span><strong>{hp} / {maxHp}</strong></div>
+            <div className={`hud-stat hud-stat--hp${hpProgress <= 30 ? ' is-low' : ''}`}>
+              <div className="hud-stat__label"><span>Vital</span><strong>{hp} / {maxHp}</strong></div>
               <div className="hud-stat__track"><i style={{ width: `${hpProgress}%` }} /></div>
             </div>
             <div className="hud-stat hud-stat--xp">
               <div className="hud-stat__label">
-                <span>{atMaxLevel ? 'Frequency mastered' : 'Resonance'}</span>
+                <span>{atMaxLevel ? 'Max' : 'Res'}</span>
                 <strong>{atMaxLevel ? 'MAX' : `${xpCurrent} / ${xpNeeded}`}</strong>
               </div>
               <div className="hud-stat__track"><i style={{ width: `${atMaxLevel ? 100 : xpProgress}%` }} /></div>
@@ -76,15 +95,16 @@ export function HUD() {
           <span className="game-hud__footer-label">SK-{levelLabel} · STEREO</span>
           <span className="game-hud__footer-bars" aria-hidden="true"><i /><i /><i /><i /></span>
         </div>
-      </div>
 
-      <div className="game-hud__wave" aria-hidden="true">
-        <span className="game-hud__wave-play" />
-        <span className="game-hud__wave-bars">
-          {WAVE_HEIGHTS.map((h, idx) => (
-            <i key={idx} style={{ '--h': h, '--d': `${idx * 0.08}s` } as CSSProperties} />
-          ))}
-        </span>
+        {/* Inside the chassis: nothing in the rack floats loose. */}
+        <div className="game-hud__wave" aria-hidden="true">
+          <span className="game-hud__wave-play" />
+          <span className="game-hud__wave-bars">
+            {WAVE_HEIGHTS.map((h, idx) => (
+              <i key={idx} style={{ '--h': h, '--d': `${idx * 0.08}s` } as CSSProperties} />
+            ))}
+          </span>
+        </div>
       </div>
     </div>
   );

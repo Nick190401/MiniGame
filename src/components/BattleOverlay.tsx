@@ -57,6 +57,21 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
     };
   }, [canvasParentRef]);
 
+  // Publish the comms row's band, so a combat notice can take that row over
+  // for its moment instead of covering the arena the player is watching.
+  const messageTop = battle?.layout.messageTop;
+  const messageHeight = battle?.layout.messageHeight;
+  useEffect(() => {
+    if (messageTop === undefined || messageHeight === undefined) return;
+    const root = document.documentElement.style;
+    root.setProperty('--battle-msg-top', `${messageTop}`);
+    root.setProperty('--battle-msg-h', `${messageHeight}`);
+    return () => {
+      root.removeProperty('--battle-msg-top');
+      root.removeProperty('--battle-msg-h');
+    };
+  }, [messageTop, messageHeight]);
+
   if (!battle || !bounds) return null;
   const style = {
     left: bounds.left,
@@ -81,7 +96,7 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
         <i className="battle-card__screw battle-card__screw--br" aria-hidden="true" />
         <span className="battle-card__rail" aria-hidden="true" />
         <header className="battle-card__header">
-          <span><i aria-hidden="true" /> Target signal</span>
+          <span><i aria-hidden="true" /> Target</span>
           <strong>{battle.phase}</strong>
         </header>
         <h2>{battle.enemy.name}</h2>
@@ -92,14 +107,14 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
         </div>
       </article>
 
-      <article className="battle-card battle-card--player" style={{ '--card-accent': '#49dfbf' } as CSSProperties}>
+      <article className="battle-card battle-card--player" style={{ '--card-accent': '#6ea8d8' } as CSSProperties}>
         <i className="battle-card__screw battle-card__screw--tl" aria-hidden="true" />
         <i className="battle-card__screw battle-card__screw--tr" aria-hidden="true" />
         <i className="battle-card__screw battle-card__screw--bl" aria-hidden="true" />
         <i className="battle-card__screw battle-card__screw--br" aria-hidden="true" />
         <span className="battle-card__rail" aria-hidden="true" />
         <header className="battle-card__header">
-          <span><i aria-hidden="true" /> Player channel</span>
+          <span><i aria-hidden="true" /> Player</span>
           <strong>LV {String(battle.player.level).padStart(2, '0')}</strong>
         </header>
         <h2>{battle.player.name}</h2>
@@ -119,7 +134,7 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
         <div className="battle-message__signal" aria-hidden="true"><i /><i /><b /></div>
         <div className="battle-message__content">
           <header>
-            <strong>Battle comms</strong>
+            <strong>Comms</strong>
             <span style={{ color: battle.turnAccent }}>{battle.turnStatus}</span>
           </header>
           <p>{battle.message}</p>
@@ -140,7 +155,7 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
             >
               <span className="battle-action__rail" aria-hidden="true" />
               <span className="battle-action__copy">
-                <small>Track {String(attack.key).padStart(2, '0')} // {attack.unlocked ? (usable ? 'Ready' : 'Standby') : 'Locked'}</small>
+                <small>Trk {String(attack.key).padStart(2, '0')} · {attack.unlocked ? (usable ? 'Ready' : 'Hold') : 'Locked'}</small>
                 <strong>
                   {attack.unlocked ? attack.name : (
                     <>
