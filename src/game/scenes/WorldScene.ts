@@ -2152,6 +2152,7 @@ export class WorldScene extends Phaser.Scene {
     // Phase 3: The received beat blooms around the player and restores HP.
     this.time.delayedCall(1260, () => {
       useGameStore.getState().restoreHp(healAmount);
+      EventBus.emit(EVENTS.HEAL, { amount: restoredAmount, source: 'npc' });
 
       const aura = this.add.graphics()
         .setName('healing-impact')

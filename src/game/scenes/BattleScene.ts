@@ -94,9 +94,18 @@ export class BattleScene extends Phaser.Scene {
     gradient.fillGradientStyle(0x102019, 0x102019, 0x050908, 0x050908, 0.42, 0.42, 0, 0);
     gradient.fillRect(0, 0, W, BATTLE_H);
 
+    // Two-tone atmosphere: a warm glow behind the hostile signal, a cool
+    // glow behind the player's side — the same confrontation mood as the
+    // game's key art, echoed abstractly instead of using that art directly.
+    const signalColor = this.isBoss ? 0xff5a2e : this.enemyData.color;
+    const atmosphere = this.add.graphics();
+    atmosphere.fillStyle(signalColor, 0.055);
+    atmosphere.fillCircle(W * 0.72, BATTLE_H * 0.42, BATTLE_H * 0.62);
+    atmosphere.fillStyle(0x49dfbf, 0.045);
+    atmosphere.fillCircle(W * 0.2, BATTLE_H * 0.8, BATTLE_H * 0.5);
+
     // Oscilloscope environment: the opponent is staged inside a live signal field.
     const signalField = this.add.graphics().setDepth(1);
-    const signalColor = this.isBoss ? 0xff6b3d : this.enemyData.color;
     for (let radius = 28; radius <= 150; radius += 24) {
       signalField.lineStyle(1, signalColor, Math.max(0.035, 0.18 - radius * 0.0008));
       signalField.strokeEllipse(W * 0.7, BATTLE_H * 0.5, radius * 1.6, radius * 0.72);
@@ -167,11 +176,13 @@ export class BattleScene extends Phaser.Scene {
     border.lineBetween(W - 46, H - 3, W - 3, H - 3); border.lineBetween(W - 3, H - 28, W - 3, H - 3);
 
     // ── Ground platforms (GBA Pokémon style) ──────────────────────────────
+    // Tinted per side — hostile signal warmth under the enemy, cool signal
+    // under the player — echoing the fire-vs-signal duality of the key art.
     const ground = this.add.graphics().setDepth(2);
     // Enemy platform — ellipse, upper right
     ground.fillStyle(0x1a2a21, 0.62);
     ground.fillEllipse(W * 0.70, BATTLE_H * 0.70, 190, 28);
-    ground.lineStyle(1.5, 0x49dfbf, 0.24);
+    ground.lineStyle(1.5, signalColor, 0.26);
     ground.strokeEllipse(W * 0.70, BATTLE_H * 0.70, 190, 28);
     // Player platform — ellipse, lower left
     ground.fillStyle(0x1a2a21, 0.62);
@@ -311,7 +322,7 @@ export class BattleScene extends Phaser.Scene {
       'battle-end': { label: 'SESSION // CLOSED', color: '#91a098' },
     };
     const status = turnLabels[this.turnState];
-    const enemyAccent = this.isBoss ? 0xff6b3d : this.enemyData.color;
+    const enemyAccent = this.isBoss ? 0xff5a2e : this.enemyData.color;
     const phase = this.isBoss ? ['PHASE I', 'PHASE II', 'PHASE III'][this.bossPhaseIndex] : 'LIVE';
     const payload: BattleUiPayload = {
       isBoss: this.isBoss,
@@ -351,7 +362,7 @@ export class BattleScene extends Phaser.Scene {
     const infoBoxY = 18;
     const infoBoxW = 286;
     const infoBoxH = 76;
-    const borderColor = this.isBoss ? 0xff6b3d : 0x49dfbf;
+    const borderColor = this.isBoss ? 0xff5a2e : 0x49dfbf;
     const infoBg = this.add.graphics().setDepth(8);
     infoBg.fillStyle(0x07100c, 0.94);
     infoBg.fillRect(infoBoxX, infoBoxY, infoBoxW, infoBoxH);
@@ -778,6 +789,7 @@ export class BattleScene extends Phaser.Scene {
 
     const damage = applyDamageVariance(attack.damage);
     this.setMessage(`${attack.name}!`);
+    EventBus.emit(EVENTS.ATTACK_USED, { attackId: attack.id, name: attack.name, isPlayer: true });
 
     this.playPlayerAttackAnimation(attack, () => {
       this.currentEnemyHp = Math.max(0, this.currentEnemyHp - damage);
@@ -817,6 +829,7 @@ export class BattleScene extends Phaser.Scene {
     const damage  = applyDamageVariance(rawDmg);
 
     this.setMessage(`${this.enemyData.name}\nuses ${attack.name}!`);
+    EventBus.emit(EVENTS.ATTACK_USED, { attackId: 'enemy-attack', name: attack.name, isPlayer: false });
 
     this.time.delayedCall(600, () => {
       this.playEnemyAttackAnimation(attack, () => {
@@ -838,6 +851,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private playTargetImpact(target: Phaser.GameObjects.Sprite, color: number, playerHit: boolean): void {
+    EventBus.emit(EVENTS.IMPACT, { isPlayer: playerHit });
     const originX = target.x;
     const originY = target.y;
     const offset = playerHit ? -11 : 11;
@@ -954,8 +968,9 @@ export class BattleScene extends Phaser.Scene {
 
   private triggerPhaseChange(phaseIdx: number): void {
     this.setTurnState('phase-change');
+    EventBus.emit(EVENTS.BOSS_PHASE_CHANGED, phaseIdx);
     const phaseLabels  = ['PHASE I', 'PHASE II', 'PHASE III'];
-    const phaseColors  = ['#d7ff4a', '#ff6b3d', '#ff5c66'];
+    const phaseColors  = ['#d7ff4a', '#ff5a2e', '#ff5c66'];
     const hasBossBattleArt = this.textures.exists('boss-gatekeeper-battle-phase1');
     const textureKeys = hasBossBattleArt
       ? ['boss-gatekeeper-battle-phase1', 'boss-gatekeeper-battle-phase2', 'boss-gatekeeper-battle-phase3']

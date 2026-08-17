@@ -350,7 +350,7 @@ export function MapEditor() {
         <div style={{ flex: 1 }} />
 
         <Btn onClick={handleTestInGame} title="Test in game" style={{ background: '#1a3a1a', borderColor: '#4a8a4a', color: '#88ee88' }}>▶ Test</Btn>
-        <Btn onClick={() => setGamePhase('start')} title="Exit editor" style={{ background: '#2a1a1a', borderColor: '#8a4a4a', color: '#ee8888' }}>✕ Exit</Btn>
+        <Btn onClick={() => setGamePhase('title')} title="Exit editor" style={{ background: '#2a1a1a', borderColor: '#8a4a4a', color: '#ee8888' }}>✕ Exit</Btn>
       </div>
 
       {/* ══ RECENT TILES ══════════════════════════════════════════════════ */}

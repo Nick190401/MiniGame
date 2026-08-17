@@ -70,6 +70,10 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
   return (
     <section className={`battle-overlay${battle.isBoss ? ' is-boss' : ''}`} style={style} aria-label="Battle controls">
       <article className="battle-card battle-card--enemy" style={{ '--card-accent': battle.enemy.accent } as CSSProperties}>
+        <i className="battle-card__screw battle-card__screw--tl" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--tr" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--bl" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--br" aria-hidden="true" />
         <span className="battle-card__rail" aria-hidden="true" />
         <header className="battle-card__header">
           <span><i aria-hidden="true" /> Target signal</span>
@@ -84,6 +88,10 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
       </article>
 
       <article className="battle-card battle-card--player" style={{ '--card-accent': '#49dfbf' } as CSSProperties}>
+        <i className="battle-card__screw battle-card__screw--tl" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--tr" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--bl" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--br" aria-hidden="true" />
         <span className="battle-card__rail" aria-hidden="true" />
         <header className="battle-card__header">
           <span><i aria-hidden="true" /> Player channel</span>
@@ -98,6 +106,10 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
       </article>
 
       <aside className="battle-message" role="status" aria-live="polite">
+        <i className="battle-card__screw battle-card__screw--tl" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--tr" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--bl" aria-hidden="true" />
+        <i className="battle-card__screw battle-card__screw--br" aria-hidden="true" />
         <span className="battle-message__rail" aria-hidden="true" />
         <div className="battle-message__signal" aria-hidden="true"><i /><i /><b /></div>
         <div className="battle-message__content">

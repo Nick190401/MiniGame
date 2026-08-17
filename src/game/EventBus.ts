@@ -65,6 +65,21 @@ export interface DeathUiPayload {
   reconnecting: boolean;
 }
 
+export interface AttackUsedPayload {
+  attackId: string;
+  name: string;
+  isPlayer: boolean;
+}
+
+export interface ImpactPayload {
+  isPlayer: boolean;
+}
+
+export interface HealPayload {
+  amount: number;
+  source: 'npc' | 'respawn';
+}
+
 // ---- Event constants ----
 export const EVENTS = {
   XP_GAINED: 'xp-gained',
@@ -92,6 +107,11 @@ export const EVENTS = {
   RESPAWN: 'respawn',
   SCENE_READY: 'scene-ready',
   HP_CHANGED: 'hp-changed',
+  // Audio hooks — scenes narrate what happened, AudioManager decides what to play
+  ATTACK_USED: 'attack-used',
+  IMPACT: 'battle-impact',
+  BOSS_PHASE_CHANGED: 'boss-phase-changed',
+  HEAL: 'heal',
   // Map editor — canvas events
   EDITOR_READY:         'editor-ready',
   EDITOR_HOVER:         'editor-hover',

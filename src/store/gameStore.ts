@@ -54,7 +54,7 @@ const INITIAL_STATE = {
   bossDefeated: false,
   bonusSongUnlocked: false,
   gateOpen: false,
-  gamePhase: 'start' as GamePhase,
+  gamePhase: 'title' as GamePhase,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({

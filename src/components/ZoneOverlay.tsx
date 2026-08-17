@@ -31,11 +31,29 @@ export function ZoneOverlay({ canvasParentRef }: ZoneOverlayProps) {
   return (
     <div className="zone-overlay" style={style} aria-live="polite">
       <article key={zone.key} className="zone-card">
-        <span aria-hidden="true" />
-        <div>
+        <i className="zone-card__screw zone-card__screw--tl" aria-hidden="true" />
+        <i className="zone-card__screw zone-card__screw--tr" aria-hidden="true" />
+        <i className="zone-card__screw zone-card__screw--bl" aria-hidden="true" />
+        <i className="zone-card__screw zone-card__screw--br" aria-hidden="true" />
+
+        <div className="zone-card__topbar">
+          <span className="zone-card__topbar-icon" aria-hidden="true">↺</span>
           <small>Current frequency</small>
+          <span className="zone-card__topbar-line" aria-hidden="true" />
+          <span className="zone-card__topbar-arrow" aria-hidden="true">→</span>
+          <span className="zone-card__signal" aria-hidden="true"><i /><i /><i /><i /></span>
+        </div>
+
+        <div className="zone-card__body">
+          <i className="zone-card__reel" aria-hidden="true" />
           <strong>{zone.title}</strong>
+          <i className="zone-card__reel" aria-hidden="true" />
+        </div>
+
+        <div className="zone-card__footer">
+          <span className="zone-card__grille" aria-hidden="true" />
           <p>{zone.meta}</p>
+          <span className="zone-card__grille" aria-hidden="true" />
         </div>
       </article>
     </div>

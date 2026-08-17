@@ -14,6 +14,7 @@ import { useGameStore } from '../store/gameStore';
 import { getAttacksForLevel } from '../game/systems/AttackSystem';
 import { MAX_LEVEL, XP_THRESHOLDS } from '../game/systems/XPSystem';
 import { EventBus, EVENTS } from '../game/EventBus';
+import { AudioManager } from '../game/audio/AudioManager';
 
 interface GameContainerProps {
   visible: boolean;
@@ -221,6 +222,9 @@ export function GameContainer({ visible }: GameContainerProps) {
 
 function registerCheatCommands(gameRef: React.MutableRefObject<Phaser.Game | null>) {
   const TILE = 16;
+
+  // window.audio.toggleMute() / .setMusicVolume(0.3) / .setSfxVolume(1) / .playSfx('sfx-level-up')
+  (window as any).audio = AudioManager;
 
   (window as any).reward = () => {
     useGameStore.setState({

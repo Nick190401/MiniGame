@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AudioManager } from '../audio/AudioManager';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -10,6 +11,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    AudioManager.init(this.game);
     this.scene.start('PreloadScene');
   }
 }

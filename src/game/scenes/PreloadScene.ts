@@ -3,6 +3,7 @@ import { TextureFactory } from '../utils/TextureFactory';
 import { WorldArtFactory } from '../utils/WorldArtFactory';
 import { EventBus, EVENTS } from '../EventBus';
 import { PLAYER_TEXTURE_ASSETS, PLAYER_TEXTURES } from '../assets/PlayerTextures';
+import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from '../audio/AudioLibrary';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -23,6 +24,14 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('boss-gatekeeper-battle-phase1', 'assets/boss-gatekeeper-phase1-v2.png');
     this.load.image('boss-gatekeeper-battle-phase2', 'assets/boss-gatekeeper-phase2-v2.png');
     this.load.image('boss-gatekeeper-battle-phase3', 'assets/boss-gatekeeper-phase3-v2.png');
+
+    // Music/SFX are optional: files may not exist yet (see AudioLibrary.ts).
+    // A missing file just fails to load — it never blocks the other assets
+    // or crashes the boot sequence, it only logs a quiet debug note below.
+    [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS].forEach(({ key, url }) => this.load.audio(key, url));
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+      if (file.type === 'audio') console.debug(`[audio] not found yet, skipping: ${file.src}`);
+    });
   }
 
   create(): void {

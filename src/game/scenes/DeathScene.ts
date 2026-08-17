@@ -361,7 +361,9 @@ export class DeathScene extends Phaser.Scene {
     this.time.delayedCall(150, () => this.cameras.main.fadeOut(420, 5, 9, 8));
     this.time.delayedCall(500, () => {
       const store = useGameStore.getState();
+      const healedAmount = store.maxHp - store.hp;
       store.restoreHp(store.maxHp);
+      EventBus.emit(EVENTS.HEAL, { amount: healedAmount, source: 'respawn' });
       EventBus.emit(EVENTS.RESPAWN);
       this.scene.stop('DeathScene');
     });
