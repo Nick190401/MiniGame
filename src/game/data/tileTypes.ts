@@ -36,11 +36,15 @@ export const TILE_TYPES: TileType[] = [
   { id: 25, name: 'Wall Rune',     textureKey: 'tile-wall-rune',      passable: false, category: 'Cave',     color: '#880000' },
   { id: 26, name: 'Skull',         textureKey: 'tile-skull',          passable: true,  category: 'Cave',     color: '#c8c0b0' },
   { id: 27, name: 'Stalactite',    textureKey: 'tile-stalactite',     passable: true,  category: 'Cave',     color: '#2e2548' },
+  { id: 29, name: 'Cave Pool',     textureKey: 'tile-cave-water',     passable: false, category: 'Cave',     color: '#163f49' },
+  { id: 30, name: 'Cave Stairs',   textureKey: 'tile-cave-stairs',    passable: true,  category: 'Cave',     color: '#52645f' },
+  { id: 31, name: 'Cave Boulder',  textureKey: 'tile-cave-boulder',   passable: false, category: 'Cave',     color: '#3a4b49' },
   // Decor
   { id: 6,  name: 'Sign',          textureKey: 'tile-sign',           passable: true,  category: 'Decor',    color: '#8b6020' },
   // Special
   { id: 3,  name: 'Arena Floor',   textureKey: 'tile-arena',          passable: true,  category: 'Special',  color: '#181828' },
   { id: 4,  name: 'Gate',          textureKey: 'tile-gate',           passable: false, category: 'Special',  color: '#cc9900' },
+  { id: 28, name: 'Landmark Footprint', textureKey: 'tile-grass',     passable: false, category: 'Special',  color: '#5e7848' },
 ];
 
 export const TILE_TYPE_MAP = new Map<number, TileType>(TILE_TYPES.map(t => [t.id, t]));

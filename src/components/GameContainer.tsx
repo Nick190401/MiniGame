@@ -50,6 +50,7 @@ export function GameContainer({ visible }: GameContainerProps) {
   const [battleActive, setBattleActive] = useState(false);
   const [deathActive, setDeathActive] = useState(false);
   const [worldReady, setWorldReady] = useState(false);
+  const [cutsceneActive, setCutsceneActive] = useState(false);
 
   useEffect(() => {
     const showBattle = () => {
@@ -63,6 +64,7 @@ export function GameContainer({ visible }: GameContainerProps) {
     };
     const showDeath = () => setDeathActive(true);
     const hideDeath = () => setDeathActive(false);
+    const setCutscene = (active: boolean) => setCutsceneActive(active);
     const handleSceneReady = (sceneKey: string) => {
       if (sceneKey === 'WorldScene') setWorldReady(true);
     };
@@ -70,12 +72,14 @@ export function GameContainer({ visible }: GameContainerProps) {
     EventBus.on(EVENTS.BATTLE_END, hideBattle);
     EventBus.on(EVENTS.PLAYER_DIED, showDeath);
     EventBus.on(EVENTS.RESPAWN, hideDeath);
+    EventBus.on(EVENTS.CUTSCENE_STATE, setCutscene);
     EventBus.on(EVENTS.SCENE_READY, handleSceneReady);
     return () => {
       EventBus.off(EVENTS.BATTLE_START, showBattle);
       EventBus.off(EVENTS.BATTLE_END, hideBattle);
       EventBus.off(EVENTS.PLAYER_DIED, showDeath);
       EventBus.off(EVENTS.RESPAWN, hideDeath);
+      EventBus.off(EVENTS.CUTSCENE_STATE, setCutscene);
       EventBus.off(EVENTS.SCENE_READY, handleSceneReady);
     };
   }, []);
@@ -217,11 +221,11 @@ export function GameContainer({ visible }: GameContainerProps) {
       {/* React UI overlays */}
       {visible && (
         <>
-          {worldReady && !battleActive && !deathActive && <HUD />}
-          {worldReady && !battleActive && !deathActive && <MobileControls />}
+          {worldReady && !battleActive && !deathActive && !cutsceneActive && <HUD />}
+          {worldReady && !battleActive && !deathActive && !cutsceneActive && <MobileControls />}
           {worldReady && !battleActive && !deathActive && <DialogueOverlay canvasParentRef={containerRef} />}
           {!worldReady && <LoadingOverlay canvasParentRef={containerRef} />}
-          {worldReady && !battleActive && !deathActive && <ZoneOverlay canvasParentRef={containerRef} />}
+          {worldReady && !battleActive && !deathActive && !cutsceneActive && <ZoneOverlay canvasParentRef={containerRef} />}
           {battleActive && !deathActive && <BattleOverlay canvasParentRef={containerRef} />}
           {worldReady && !deathActive && <GameNoticeOverlay canvasParentRef={containerRef} />}
           {deathActive && <DeathOverlay canvasParentRef={containerRef} />}

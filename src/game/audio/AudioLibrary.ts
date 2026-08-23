@@ -58,9 +58,11 @@ export const BOSS_PHASE_MUSIC = [MUSIC.bossPhase1.key, MUSIC.bossPhase2.key, MUS
  */
 const ZONE_TRACK_BY_TITLE: Record<string, string> = {
   'Echo Village': MUSIC.overworldDefault.key,
-  'Signal Path': MUSIC.overworldDefault.key,
+  'Signal Meadow': MUSIC.overworldDefault.key,
+  'Brookside Crossing': MUSIC.overworldDefault.key,
   'Neon Junction': MUSIC.overworldDefault.key,
-  'Fading Path': MUSIC.overworldDefault.key,
+  'Whisper Grove': MUSIC.overworldDefault.key,
+  'Fading Highlands': MUSIC.overworldDefault.key,
   'Resonant Cave': MUSIC.overworldDefault.key,
   'Void Cave': MUSIC.overworldDefault.key,
   'The Living Core': MUSIC.overworldDefault.key,

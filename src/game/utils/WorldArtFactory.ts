@@ -95,6 +95,17 @@ export class WorldArtFactory {
       f(g, c.stoneLight, 9, 9, 5, 1, 0.48); f(g, c.teal, 14, 3, 1, 1, 0.38);
     });
 
+    tile('tile-bridge', g => {
+      f(g, c.woodDark, 0, 0, 16, 16);
+      for (let y = 1; y < 16; y += 5) {
+        f(g, c.wood, 0, y, 16, 4);
+        f(g, c.woodLight, 0, y, 16, 1, 0.72);
+        f(g, c.outline, 0, y + 4, 16, 1, 0.45);
+      }
+      f(g, c.stoneDark, 2, 0, 2, 16, 0.42); f(g, c.stoneDark, 12, 0, 2, 16, 0.42);
+      f(g, c.acid, 8, 7, 1, 1, 0.35);
+    });
+
     tile('tile-water', g => {
       f(g, c.water, 0, 0, 16, 16);
       f(g, 0x2d666c, 0, 5, 16, 3);
@@ -154,39 +165,60 @@ export class WorldArtFactory {
       f(g, palette.deep, x + 6, y + 8, 1, 2);
     };
 
-    const tallGrassPalette = { deep: 0x29472f, mid: 0x4f713e, light: 0x769653, tip: 0x9ab568 };
-    const tallGrassAltPalette = { deep: 0x304b32, mid: 0x587844, light: 0x829d58, tip: 0xa3b96c };
+    const tallGrassPalettes = [
+      { deep: 0x29472f, mid: 0x4f713e, light: 0x769653, tip: 0x9ab568 },
+      { deep: 0x304b32, mid: 0x587844, light: 0x829d58, tip: 0xa3b96c },
+      { deep: 0x26432d, mid: 0x537541, light: 0x789a55, tip: 0xa1ba70 },
+      { deep: 0x314d35, mid: 0x5b7b47, light: 0x86a05d, tip: 0xa9bd72 },
+    ];
+    const grassOffsets = [
+      [2, 3, 2],
+      [3, 1, 4],
+      [4, 2, 1],
+      [1, 4, 3],
+    ];
 
-    const drawTallGrassBase = (g: Graphics, alt: boolean) => {
-      const palette = alt ? tallGrassAltPalette : tallGrassPalette;
+    const drawTallGrassBase = (g: Graphics, variant: number) => {
+      const palette = tallGrassPalettes[variant];
+      const offsets = grassOffsets[variant];
       f(g, palette.deep, 0, 11, 16, 5, 0.78);
       f(g, c.outline, 0, 15, 16, 1, 0.24);
-      drawGrassTuft(g, -2, alt ? 3 : 2, palette);
-      drawGrassTuft(g, 4, alt ? 1 : 3, palette);
-      drawGrassTuft(g, 10, alt ? 4 : 2, palette);
-      f(g, palette.tip, alt ? 1 : 8, 13, 2, 1, 0.7);
-      f(g, palette.light, alt ? 12 : 5, 15, 3, 1, 0.55);
+      drawGrassTuft(g, -2, offsets[0], palette);
+      drawGrassTuft(g, 4, offsets[1], palette);
+      drawGrassTuft(g, 10, offsets[2], palette);
+      f(g, palette.tip, variant % 2 === 0 ? 8 : 1, 13, 2, 1, 0.7);
+      f(g, palette.light, variant < 2 ? 5 : 11, 15, 3, 1, 0.55);
     };
 
-    const drawTallGrassFront = (g: Graphics, alt: boolean) => {
-      const palette = alt ? tallGrassAltPalette : tallGrassPalette;
-      drawGrassTuft(g, -2, alt ? 3 : 1, palette);
-      drawGrassTuft(g, 5, alt ? 2 : 4, palette);
-      drawGrassTuft(g, 11, alt ? 4 : 2, palette);
+    const drawTallGrassFront = (g: Graphics, variant: number) => {
+      const palette = tallGrassPalettes[variant];
+      const offsets = grassOffsets[(variant + 1) % grassOffsets.length];
+      drawGrassTuft(g, -2, offsets[0], palette);
+      drawGrassTuft(g, 5, offsets[1], palette);
+      drawGrassTuft(g, 11, offsets[2], palette);
       f(g, palette.deep, 0, 14, 16, 2, 0.34);
     };
 
-    tile('tile-tall-grass', g => drawTallGrassBase(g, false));
-    tile('tile-tall-grass-2', g => drawTallGrassBase(g, true));
-    tile('tile-tall-grass-top', g => drawTallGrassFront(g, false));
-    tile('tile-tall-grass-top-2', g => drawTallGrassFront(g, true));
+    ['', '-2', '-3', '-4'].forEach((suffix, variant) => {
+      tile(`tile-tall-grass${suffix}`, g => drawTallGrassBase(g, variant));
+      tile(`tile-tall-grass-top${suffix}`, g => drawTallGrassFront(g, variant));
+    });
 
     const flower = (g: Graphics, alt: boolean) => {
-      f(g, c.grass, 0, 0, 16, 16);
-      f(g, c.grassDark, 7, 7, 2, 8); f(g, c.grassLight, 5, 11, 3, 1); f(g, c.grassLight, 9, 10, 3, 1);
-      const petal = alt ? c.teal : c.orange;
-      f(g, petal, 6, 4, 2, 2); f(g, petal, 9, 4, 2, 2); f(g, petal, 7, 2, 3, 2); f(g, petal, 7, 6, 3, 2);
-      f(g, c.acid, 8, 4, 2, 2);
+      const petal = alt ? 0x79c8b7 : 0xe88755;
+      const center = alt ? 0xf1e6a5 : 0xffd36b;
+      const bloom = (x: number, y: number) => {
+        f(g, c.grassDark, x, y + 2, 1, 5);
+        f(g, c.grassLight, x - 2, y + 4, 2, 1);
+        f(g, c.grassLight, x + 1, y + 3, 2, 1);
+        f(g, petal, x - 1, y, 1, 2);
+        f(g, petal, x + 1, y, 1, 2);
+        f(g, petal, x, y - 1, 1, 1);
+        f(g, petal, x, y + 2, 1, 1);
+        f(g, center, x, y + 1, 1, 1);
+      };
+      bloom(5, 8);
+      bloom(10, alt ? 7 : 9);
     };
     tile('tile-flower', g => flower(g, false));
     tile('tile-flower-2', g => flower(g, true));
@@ -257,6 +289,196 @@ export class WorldArtFactory {
     tile('tile-rroof-peak-r', g => { f(g, 0x29484e, 0, 15, 16); for (let i = 0; i < 16; i++) f(g, i % 3 ? 0x426b71 : 0x669293, i, i, 1, 16 - i); });
     tile('tile-wood-bottom', g => { f(g, c.woodDark, 0, 0, 16, 16); f(g, c.wood, 0, 0, 16, 12); f(g, c.woodLight, 0, 1, 16); f(g, c.outline, 0, 12, 16, 4); });
     tile('tile-stone-bottom', g => { stoneWall(g, false); f(g, c.outline, 0, 13, 16, 3); });
+
+    // Complete landmark buildings. These are authored as single transparent
+    // pixel-art silhouettes so roofs, walls and signs never read as repeated
+    // tile boxes. Each function has its own massing and functional marker.
+    const landmark = (key: string, width: number, height: number, draw: Draw) => {
+      WorldArtFactory.texture(scene, key, width, height, draw);
+    };
+    const landmarkShadow = (g: Graphics, width: number, y: number) => {
+      f(g, c.ink, 8, y, width - 16, 5, 0.28);
+      f(g, c.ink, 14, y + 4, width - 28, 2, 0.16);
+    };
+    const window = (g: Graphics, x: number, y: number, tone: number = c.water) => {
+      f(g, c.outline, x, y, 16, 14);
+      f(g, tone, x + 2, y + 2, 12, 10);
+      f(g, c.waterBright, x + 3, y + 3, 8, 2, 0.62);
+      f(g, c.woodLight, x + 7, y + 2, 2, 10);
+      f(g, c.woodLight, x + 2, y + 6, 12, 2);
+    };
+    const door = (g: Graphics, x: number, y: number, tone: number = c.wood) => {
+      f(g, c.outline, x, y, 18, 26);
+      f(g, tone, x + 2, y + 2, 14, 24);
+      f(g, c.woodLight, x + 4, y + 3, 2, 20, 0.55);
+      f(g, c.acid, x + 12, y + 13, 2, 2);
+    };
+    const steppedRoof = (
+      g: Graphics,
+      x: number,
+      top: number,
+      width: number,
+      rows: number,
+      base: number,
+      light: number,
+      dark: number,
+    ) => {
+      for (let row = 0; row < rows; row++) {
+        const inset = (rows - row - 1) * 4;
+        f(g, dark, x + inset - 2, top + row * 4 - 2, width - inset * 2 + 4, 6);
+        f(g, base, x + inset, top + row * 4, width - inset * 2, 4);
+        f(g, light, x + inset + 2, top + row * 4, Math.max(2, width - inset * 2 - 4), 1, 0.74);
+      }
+    };
+
+    landmark('landmark-cottage', 112, 96, g => {
+      landmarkShadow(g, 112, 88);
+      f(g, c.woodDark, 13, 44, 86, 43);
+      f(g, 0xd8cfb1, 16, 47, 80, 37);
+      f(g, 0xeee4c5, 18, 49, 76, 5, 0.8);
+      steppedRoof(g, 6, 10, 100, 10, c.roof, c.roofLight, c.roofDark);
+      f(g, c.woodDark, 12, 43, 88, 5);
+      window(g, 24, 57); window(g, 72, 57);
+      door(g, 47, 58);
+      f(g, c.grassDark, 10, 84, 92, 4); f(g, c.moss, 18, 82, 14, 3, 0.7);
+    });
+
+    landmark('landmark-professor-lab', 160, 112, g => {
+      landmarkShadow(g, 160, 104);
+      f(g, c.stoneDark, 10, 44, 140, 60);
+      f(g, 0xc4c6ad, 14, 48, 132, 52);
+      f(g, 0xe3dfbd, 17, 51, 126, 7, 0.72);
+      steppedRoof(g, 5, 20, 150, 8, 0x426b71, 0x76a09f, 0x29484e);
+      f(g, c.outline, 61, 9, 38, 18);
+      f(g, 0x426b71, 64, 12, 32, 13);
+      f(g, c.teal, 70, 16, 20, 3); f(g, c.acid, 78, 13, 4, 9);
+      f(g, c.stoneDark, 120, 9, 3, 20); f(g, c.stoneLight, 121, 8, 12, 3);
+      f(g, c.teal, 132, 4, 2, 5, 0.8);
+      window(g, 25, 66, 0x38666a); window(g, 112, 66, 0x38666a);
+      door(g, 71, 72, 0x4f6c64);
+      f(g, c.outline, 52, 57, 56, 8); f(g, 0x263d38, 54, 59, 52, 4);
+      f(g, c.teal, 59, 60, 8, 2); f(g, c.orange, 70, 59, 5, 3); f(g, c.teal, 79, 58, 4, 5);
+      f(g, c.orange, 87, 60, 6, 2); f(g, c.acid, 97, 59, 4, 3);
+    });
+
+    landmark('landmark-clinic', 128, 96, g => {
+      landmarkShadow(g, 128, 88);
+      f(g, c.stoneDark, 12, 39, 104, 49);
+      f(g, 0xc8c4a8, 15, 42, 98, 43);
+      f(g, 0xe5dfbd, 18, 45, 92, 7, 0.72);
+      steppedRoof(g, 6, 15, 116, 7, 0x467e76, 0x75aa9b, 0x28564f);
+      f(g, c.outline, 51, 8, 26, 25);
+      f(g, 0x315e58, 54, 11, 20, 19);
+      f(g, c.orange, 61, 13, 6, 15); f(g, c.orange, 56, 18, 16, 6);
+      window(g, 25, 57, 0x396e70); window(g, 87, 57, 0x396e70);
+      door(g, 55, 62, 0x3e625c);
+      f(g, c.teal, 15, 84, 98, 3, 0.45);
+    });
+
+    landmark('landmark-inn', 128, 96, g => {
+      landmarkShadow(g, 128, 88);
+      f(g, c.woodDark, 12, 41, 104, 47);
+      f(g, 0x8f704f, 16, 45, 96, 39);
+      f(g, c.woodLight, 18, 47, 92, 5, 0.48);
+      steppedRoof(g, 5, 13, 118, 8, 0x6b7452, 0x98a06d, 0x424933);
+      f(g, c.woodDark, 19, 55, 90, 4); f(g, c.woodDark, 38, 45, 4, 39); f(g, c.woodDark, 86, 45, 4, 39);
+      window(g, 21, 62, 0x345f61); window(g, 91, 62, 0x345f61);
+      door(g, 55, 61);
+      f(g, c.woodDark, 103, 48, 3, 16); f(g, c.outline, 98, 60, 19, 16);
+      f(g, 0xb68b4f, 100, 62, 15, 12); f(g, c.acid, 103, 66, 9, 2); f(g, c.orange, 108, 64, 2, 6);
+    });
+
+    landmark('landmark-workshop', 112, 80, g => {
+      landmarkShadow(g, 112, 73);
+      f(g, c.stoneDark, 11, 32, 90, 41);
+      f(g, 0x8b8673, 14, 35, 84, 35);
+      f(g, c.woodDark, 76, 4, 12, 31); f(g, c.stone, 78, 5, 8, 27); f(g, c.caveLight, 79, 5, 6, 3);
+      f(g, c.outline, 5, 25, 102, 12);
+      for (let x = 8; x < 104; x += 12) {
+        f(g, x % 24 === 8 ? 0x9e5944 : 0xb56b4f, x, 27, 11, 8);
+        f(g, 0xd18a67, x, 27, 10, 2, 0.66);
+      }
+      window(g, 21, 45, 0x354f55);
+      f(g, c.outline, 51, 42, 36, 29); f(g, c.wood, 54, 45, 30, 26);
+      for (let x = 59; x < 82; x += 7) f(g, c.woodDark, x, 45, 2, 26);
+      f(g, c.orange, 91, 48, 7, 5); f(g, c.acid, 94, 49, 2, 2);
+    });
+
+    landmark('landmark-riverside-hut', 112, 80, g => {
+      landmarkShadow(g, 112, 75);
+      f(g, c.woodDark, 17, 38, 78, 31); f(g, 0x9d835b, 20, 41, 72, 25);
+      steppedRoof(g, 11, 13, 90, 7, 0x4d7470, 0x79a09a, 0x31504d);
+      window(g, 28, 47, 0x397276); door(g, 63, 44);
+      f(g, c.woodDark, 22, 67, 7, 10); f(g, c.woodDark, 83, 67, 7, 10);
+      f(g, c.waterLight, 6, 74, 100, 2, 0.48); f(g, c.waterBright, 24, 77, 36, 1, 0.38);
+    });
+
+    landmark('landmark-signal-station', 256, 112, g => {
+      landmarkShadow(g, 256, 104);
+      f(g, c.outline, 10, 44, 236, 61);
+      f(g, 0x59665f, 14, 48, 228, 53);
+      f(g, 0x7f8b82, 18, 51, 220, 8, 0.68);
+      f(g, c.outline, 4, 29, 248, 22);
+      f(g, 0x384f49, 8, 32, 240, 16);
+      f(g, 0x5f7770, 12, 33, 232, 5);
+      f(g, c.outline, 92, 8, 72, 30);
+      f(g, 0x2b4541, 96, 12, 64, 23);
+      f(g, c.teal, 104, 27, 8, 4); f(g, c.teal, 116, 21, 8, 10);
+      f(g, c.orange, 128, 16, 8, 15); f(g, c.teal, 140, 23, 8, 8);
+      f(g, c.acid, 151, 19, 3, 12);
+      [28, 68, 172, 212].forEach(x => window(g, x, 65, 0x244c50));
+      f(g, c.outline, 109, 61, 38, 41); f(g, 0x354b46, 113, 65, 30, 37);
+      f(g, c.stoneLight, 116, 67, 2, 30, 0.48); f(g, c.teal, 137, 78, 3, 3);
+      f(g, c.orange, 14, 97, 228, 4, 0.52);
+    });
+
+    landmark('landmark-guard-post', 112, 80, g => {
+      landmarkShadow(g, 112, 73);
+      f(g, c.outline, 12, 26, 88, 47); f(g, 0x59645e, 15, 29, 82, 41);
+      for (let x = 12; x < 101; x += 18) f(g, c.outline, x, 18, 12, 14);
+      for (let x = 15; x < 98; x += 18) f(g, c.stone, x, 21, 7, 10);
+      f(g, c.stoneLight, 18, 31, 76, 4, 0.55);
+      window(g, 24, 43, 0x284e51); door(g, 62, 43, 0x3d4c48);
+      f(g, c.orange, 44, 41, 10, 3); f(g, c.acid, 48, 38, 3, 9);
+    });
+
+    landmark('landmark-archive-shrine', 112, 112, g => {
+      landmarkShadow(g, 112, 104);
+      f(g, c.outline, 24, 45, 64, 59); f(g, 0x55655c, 28, 49, 56, 51);
+      steppedRoof(g, 10, 18, 92, 8, 0x3f685b, 0x71917c, 0x29463d);
+      f(g, c.outline, 18, 43, 76, 7); f(g, c.stoneLight, 22, 45, 68, 3, 0.5);
+      f(g, c.outline, 38, 57, 36, 44); f(g, 0x1c302a, 42, 61, 28, 40);
+      f(g, c.teal, 53, 67, 6, 20, 0.58); f(g, c.acid, 48, 74, 16, 5, 0.48);
+      f(g, c.stoneDark, 14, 96, 84, 8); f(g, c.moss, 18, 94, 22, 4, 0.56);
+      f(g, c.orange, 54, 8, 4, 13); f(g, c.acid, 50, 12, 12, 4);
+    });
+
+    landmark('landmark-ranger-hut', 112, 80, g => {
+      landmarkShadow(g, 112, 73);
+      f(g, c.woodDark, 14, 35, 84, 38); f(g, 0x78684d, 18, 39, 76, 31);
+      steppedRoof(g, 8, 13, 96, 7, 0x536b48, 0x7f915f, 0x354631);
+      f(g, c.moss, 16, 35, 24, 4, 0.64); f(g, c.moss, 79, 37, 15, 3, 0.58);
+      window(g, 25, 47, 0x345b58); door(g, 65, 44);
+      f(g, c.woodDark, 7, 60, 13, 4); f(g, c.wood, 5, 56, 5, 15);
+    });
+
+    landmark('landmark-cave-mouth', 224, 96, g => {
+      landmarkShadow(g, 224, 89);
+      f(g, c.outline, 5, 76, 214, 15);
+      f(g, 0x283733, 10, 58, 204, 30);
+      f(g, 0x3e514b, 19, 40, 186, 43);
+      f(g, 0x57665e, 35, 25, 154, 52);
+      f(g, 0x6c776d, 58, 12, 108, 59);
+      f(g, c.stoneLight, 81, 7, 62, 8, 0.42);
+      // Deep, stepped arch with a readable walkable opening at the bottom.
+      f(g, c.outline, 69, 41, 86, 47);
+      f(g, 0x101918, 76, 34, 72, 54);
+      f(g, 0x070d0c, 84, 29, 56, 59);
+      f(g, 0x172724, 93, 38, 38, 50);
+      f(g, c.caveLight, 68, 78, 88, 7); f(g, c.caveMid, 78, 84, 68, 5);
+      f(g, c.teal, 68, 49, 3, 25, 0.34); f(g, c.orange, 153, 55, 3, 18, 0.3);
+      f(g, c.moss, 25, 56, 36, 5, 0.55); f(g, c.grassDark, 161, 62, 34, 5, 0.58);
+    });
 
     tile('tile-arena', g => {
       f(g, 0x101816, 0, 0, 16, 16); f(g, 0x192622, 1, 1, 14, 14);
@@ -330,29 +552,83 @@ export class WorldArtFactory {
       f(g, c.acid, 39, 3, 2, 3, 0.9);
     });
 
-    tile('tile-cave-floor', g => {
-      f(g, c.cave, 0, 0, 16, 16); f(g, c.caveMid, 1, 2, 5, 2); f(g, c.caveLight, 10, 3, 3, 1);
-      f(g, 0x0a1113, 5, 9, 8, 3); f(g, c.teal, 2, 13, 1, 1, 0.35); f(g, c.orange, 14, 11, 1, 1, 0.26);
+    const caveFloor = (g: Graphics, variant: number, purified: boolean) => {
+      const base = purified ? 0x29493d : variant === 1 ? 0x182425 : variant === 2 ? 0x151f21 : c.cave;
+      const mid = purified ? 0x3b6252 : variant === 1 ? 0x243535 : variant === 2 ? 0x202f31 : c.caveMid;
+      const light = purified ? 0x62806d : c.caveLight;
+      f(g, base, 0, 0, 16, 16);
+      f(g, mid, variant === 1 ? 1 : 8, variant === 2 ? 2 : 9, variant === 1 ? 7 : 6, 3, 0.72);
+      f(g, light, variant === 2 ? 2 : 10, variant === 1 ? 12 : 3, 4, 1, 0.62);
+      f(g, purified ? 0x1d352d : 0x091011, variant === 1 ? 10 : 3, variant === 1 ? 4 : 12, 5, 2, 0.7);
+      f(g, purified ? c.teal : 0x3b7770, 2 + variant * 4, 6 + variant * 3, 1, 1, purified ? 0.72 : 0.32);
+      if (purified) f(g, c.acid, 13 - variant * 3, 13, 1, 1, 0.48);
+    };
+    ['', '-2', '-3'].forEach((suffix, variant) => {
+      tile(`tile-cave-floor${suffix}`, g => caveFloor(g, variant, false));
+      tile(`tile-cave-floor${suffix}-purified`, g => caveFloor(g, variant, true));
     });
 
-    tile('tile-cave-floor-purified', g => {
-      f(g, 0x244238, 0, 0, 16, 16); f(g, 0x315548, 1, 2, 6, 2); f(g, 0x4d7562, 10, 3, 3, 1);
-      f(g, 0x1c352d, 5, 9, 8, 3); f(g, c.teal, 2, 13, 1, 1, 0.72); f(g, c.acid, 14, 11, 1, 1, 0.56);
-      f(g, 0x6f996b, 8, 6, 2, 1, 0.55); f(g, 0x9fc47d, 9, 5, 1, 1, 0.6);
-    });
+    const caveWall = (g: Graphics, variant: boolean, purified: boolean) => {
+      const deep = purified ? 0x152923 : 0x090f10;
+      const base = purified ? (variant ? 0x35584a : 0x304f43) : (variant ? 0x213133 : c.caveMid);
+      const light = purified ? 0x5e7b68 : c.caveLight;
+      f(g, deep, 0, 0, 16, 16);
+      f(g, base, 1, 1, 14, 15);
+      f(g, light, variant ? 8 : 2, 2, variant ? 5 : 4, 2, 0.74);
+      f(g, deep, variant ? 4 : 9, 0, 2, variant ? 7 : 9);
+      f(g, deep, 0, variant ? 8 : 10, 16, 2);
+      f(g, light, variant ? 2 : 10, 12, 4, 1, 0.56);
+      f(g, purified ? 0x203d33 : c.outline, 0, 15, 16);
+      if (purified) f(g, c.teal, variant ? 13 : 1, variant ? 4 : 6, 1, 2, 0.42);
+    };
+    tile('tile-cave-wall', g => caveWall(g, false, false));
+    tile('tile-cave-wall-2', g => caveWall(g, true, false));
+    tile('tile-cave-wall-purified', g => caveWall(g, false, true));
+    tile('tile-cave-wall-2-purified', g => caveWall(g, true, true));
 
-    tile('tile-cave-wall', g => {
-      f(g, 0x0b1113, 0, 0, 16, 16); f(g, c.caveMid, 1, 1, 14, 15);
-      f(g, c.caveLight, 2, 2, 4, 2); f(g, 0x0c1416, 8, 0, 2, 9); f(g, 0x0c1416, 0, 10, 16, 2);
-      f(g, 0x314c49, 10, 12, 4, 1); f(g, c.outline, 0, 15, 16);
-    });
+    const caveWallFace = (g: Graphics, purified: boolean) => {
+      f(g, purified ? 0x36594b : 0x223335, 0, 0, 16, 16);
+      f(g, purified ? 0x62806d : c.caveLight, 0, 0, 16, 3, 0.82);
+      f(g, purified ? 0x1b332b : 0x0a1112, 0, 12, 16, 4);
+      f(g, purified ? 0x294b3f : 0x172426, 1, 4, 14, 8);
+      f(g, purified ? 0x527260 : 0x344a49, 2, 5, 5, 2, 0.66);
+      f(g, purified ? 0x183028 : 0x0c1415, 8, 3, 2, 9);
+      f(g, purified ? c.teal : 0x376f69, 13, 6, 1, 4, purified ? 0.48 : 0.24);
+    };
+    tile('tile-cave-wall-face', g => caveWallFace(g, false));
+    tile('tile-cave-wall-face-purified', g => caveWallFace(g, true));
 
-    tile('tile-cave-wall-purified', g => {
-      f(g, 0x172b25, 0, 0, 16, 16); f(g, 0x365449, 1, 1, 14, 15);
-      f(g, 0x587564, 2, 2, 4, 2); f(g, 0x223c33, 8, 0, 2, 9); f(g, 0x223c33, 0, 10, 16, 2);
-      f(g, 0x6e8d6b, 10, 12, 4, 1); f(g, 0x1a3028, 0, 15, 16);
-      f(g, 0x7ca268, 1, 5, 3, 1, 0.7); f(g, c.teal, 13, 3, 1, 2, 0.48);
-    });
+    const caveWater = (g: Graphics, purified: boolean) => {
+      f(g, purified ? 0x315d54 : 0x162f35, 0, 0, 16, 16);
+      f(g, purified ? 0x4f8a76 : 0x24505a, 0, 3, 11, 2, 0.78);
+      f(g, purified ? c.teal : 0x39737a, 6, 8, 10, 2, 0.65);
+      f(g, purified ? c.acid : 0x4b8180, 1, 13, 8, 1, purified ? 0.38 : 0.25);
+      f(g, 0x071011, 0, 0, 16, 1, 0.45);
+    };
+    tile('tile-cave-water', g => caveWater(g, false));
+    tile('tile-cave-water-purified', g => caveWater(g, true));
+
+    const caveStairs = (g: Graphics, purified: boolean) => {
+      caveFloor(g, 1, purified);
+      for (let step = 0; step < 5; step++) {
+        const inset = step;
+        f(g, purified ? 0x668b73 : 0x435451, inset, 3 + step * 2, 16 - inset * 2, 2);
+        f(g, purified ? 0x294a3e : 0x162325, inset, 5 + step * 2, 16 - inset * 2, 1);
+      }
+    };
+    tile('tile-cave-stairs', g => caveStairs(g, false));
+    tile('tile-cave-stairs-purified', g => caveStairs(g, true));
+
+    const caveBoulder = (g: Graphics, purified: boolean) => {
+      f(g, purified ? 0x183129 : 0x091011, 2, 12, 12, 3, 0.42);
+      f(g, purified ? 0x3d6252 : 0x253638, 2, 6, 12, 8);
+      f(g, purified ? 0x557764 : c.caveLight, 4, 3, 8, 10);
+      f(g, purified ? 0x77917b : 0x566462, 6, 2, 5, 3);
+      f(g, purified ? 0x244439 : 0x172325, 3, 9, 4, 4);
+      f(g, purified ? c.teal : 0x39736c, 10, 6, 1, 4, purified ? 0.44 : 0.22);
+    };
+    tile('tile-cave-boulder', g => caveBoulder(g, false));
+    tile('tile-cave-boulder-purified', g => caveBoulder(g, true));
 
     tile('tile-crystal', g => {
       f(g, c.teal, 7, 2, 3, 13, 0.82); f(g, 0x257b72, 4, 7, 3, 8); f(g, c.acid, 10, 6, 3, 9, 0.82);

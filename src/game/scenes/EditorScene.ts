@@ -1,6 +1,18 @@
 import Phaser from 'phaser';
 import { WorldArtFactory } from '../utils/WorldArtFactory';
-import { MapBuilder, MAP_COLS, MAP_ROWS } from '../utils/MapBuilder';
+import {
+  BROOK_START_ROW,
+  CAVE_START_ROW,
+  CORE_START_ROW,
+  FADING_START_ROW,
+  GATE_START_ROW,
+  GROVE_START_ROW,
+  JUNCTION_START_ROW,
+  MapBuilder,
+  MAP_COLS,
+  MAP_ROWS,
+  SIGNAL_START_ROW,
+} from '../utils/MapBuilder';
 import { EventBus, EVENTS } from '../EventBus';
 import { TILE_TYPE_MAP, TILE_TEXTURE } from '../data/tileTypes';
 
@@ -16,12 +28,15 @@ export interface EditorClipboard { w: number; h: number; data: number[][]; }
 export interface EditorViewport { scrollX: number; scrollY: number; zoom: number; viewW: number; viewH: number; }
 
 export const ZONE_DEFS = [
-  { name: 'Echo Village',  rowStart: 0,  rowEnd: 13,  color: '#78b858' },
-  { name: 'Signal Path',   rowStart: 14, rowEnd: 25,  color: '#68aa50' },
-  { name: 'Neon Junction', rowStart: 26, rowEnd: 37,  color: '#60aa88' },
-  { name: 'Fading Path',   rowStart: 38, rowEnd: 53,  color: '#4a6040' },
-  { name: 'Void Cave',     rowStart: 54, rowEnd: 81,  color: '#8844cc' },
-  { name: 'The Core',      rowStart: 82, rowEnd: 93,  color: '#ff2200' },
+  { name: 'Echo Village',       rowStart: 0,                  rowEnd: SIGNAL_START_ROW - 1, color: '#78b858' },
+  { name: 'Signal Meadow',      rowStart: SIGNAL_START_ROW,   rowEnd: BROOK_START_ROW - 1, color: '#68aa50' },
+  { name: 'Brookside Crossing', rowStart: BROOK_START_ROW,    rowEnd: JUNCTION_START_ROW - 1, color: '#4d8f7b' },
+  { name: 'Neon Junction',      rowStart: JUNCTION_START_ROW, rowEnd: GROVE_START_ROW - 1, color: '#60aa88' },
+  { name: 'Whisper Grove',      rowStart: GROVE_START_ROW,    rowEnd: GATE_START_ROW - 1, color: '#507b58' },
+  { name: 'Frequency Gate',     rowStart: GATE_START_ROW,     rowEnd: FADING_START_ROW - 1, color: '#8c5d46' },
+  { name: 'Fading Highlands',   rowStart: FADING_START_ROW,   rowEnd: CAVE_START_ROW - 1, color: '#4a6040' },
+  { name: 'Void Cave',          rowStart: CAVE_START_ROW,     rowEnd: CORE_START_ROW - 1, color: '#376b70' },
+  { name: 'The Core',           rowStart: CORE_START_ROW,     rowEnd: MAP_ROWS - 1, color: '#b64d42' },
 ] as const;
 
 export class EditorScene extends Phaser.Scene {

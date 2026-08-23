@@ -2404,7 +2404,9 @@ a:focus-visible {
     radial-gradient(circle at 78% 45%, rgba(255, 122, 43, 0.085), transparent 29%),
     linear-gradient(rgba(110, 168, 216, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(110, 168, 216, 0.025) 1px, transparent 1px),
-    rgba(8, 4, 3, 0.985);
+    /* Fully opaque: the Phaser death scene draws its own headline behind
+       this one, and at 98.5% it ghosted through as a second copy. */
+    rgb(8, 4, 3);
   background-size: auto, 5% 5%, 5% 5%, auto;
   pointer-events: auto;
   animation: death-dom-arrival 260ms ease-out both;
@@ -3022,9 +3024,111 @@ a:focus-visible {
 .mobile-control-wrap *,
 .mobile-action-wrap *,
 .loading-overlay *,
-.name-modal * {
+.name-modal *,
+.death-overlay *,
+.reward-card * {
   border-radius: 0;
   backdrop-filter: none;
+}
+
+/* Round things that are pictures rather than panels — a record is a record,
+   a dish is a dish. The chassis is square; the artwork on it is not. */
+.reward-record,
+.reward-record::before,
+.reward-record__label,
+.reward-play,
+.death-receiver,
+.death-receiver::before,
+.death-receiver::after,
+.death-receiver i,
+.death-overlay > header > b i,
+.game-notice__pulse i,
+.game-notice__pulse b,
+.battle-message__signal i,
+.battle-message__signal b,
+.loading-overlay__ring,
+.game-hud__reel,
+.zone-card__reel,
+.dialog-overlay__portrait::before {
+  border-radius: 50%;
+}
+
+/* ── The two endings ──────────────────────────────────────────────────
+      Losing the signal and recovering the track are the game's biggest
+      moments, so they keep their scale — but they are still the same
+      machine, in the same face. Press Start 2P is a full em per glyph,
+      so the headlines run far smaller here than a proportional face
+      would need; sentences stay in DM Mono to remain readable. */
+
+.death-overlay > header strong,
+.death-overlay > header small,
+.death-overlay > header > b,
+.death-overlay main > small,
+.death-overlay dt,
+.death-overlay dd,
+.death-overlay aside small,
+.death-overlay > footer,
+.reward-kicker,
+.reward-content h2,
+.reward-player__heading strong,
+.reward-record__label span,
+.reward-record__label small {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.death-overlay h1 {
+  font-family: var(--font-pixel);
+  font-size: clamp(19px, 5.2vw, 40px);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.35;
+  border-left-width: var(--rail-w);
+}
+
+.death-overlay > header strong { font-size: var(--t-title); line-height: 1.5; }
+.death-overlay > header small,
+.death-overlay main > small,
+.death-overlay dt,
+.death-overlay aside small,
+.death-overlay > footer { font-size: var(--t-label); line-height: 1.7; }
+.death-overlay dd { font-size: var(--t-value); line-height: 1.5; }
+
+/* The status pill and the stat block are deck hardware like everything else. */
+.death-overlay > header > b,
+.death-overlay dl {
+  border: 2px solid var(--deck-edge-lo);
+  background: var(--panel-scan), var(--deck-face);
+  box-shadow: var(--panel-bevel);
+}
+
+.death-overlay > header > b { font-size: var(--t-label); line-height: 1.7; }
+.death-overlay dl { border-left: var(--rail-w) solid var(--ember); }
+
+.reward-content h2 {
+  font-size: clamp(15px, 3.9vw, 30px);
+  line-height: 1.45;
+}
+
+.reward-kicker,
+.reward-record__label small { font-size: var(--t-label); line-height: 1.7; }
+.reward-player__heading strong,
+.reward-record__label span { font-size: var(--t-value); line-height: 1.5; }
+
+/* The archive's progress bar is the same VU meter as every other readout. */
+.reward-progress {
+  height: 9px;
+  background: rgba(0, 0, 0, 0.62);
+  box-shadow:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.7),
+    inset -1px -1px 0 rgba(var(--gold-rgb), 0.12);
+}
+
+.reward-progress > i,
+.reward-progress > span {
+  mask-image: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px);
+  -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px);
 }
 
 /* The cassette window on the front of the deck. */
@@ -3319,7 +3423,9 @@ a:focus-visible {
 
   .reward-record { width: 210px; margin: 30px 0; }
   .reward-content { padding: 38px 27px 30px; }
-  .reward-content h2 { font-size: clamp(43px, 13vw, 64px); }
+  /* Pixel face, so the archive headline runs far smaller than the old
+     proportional display size — a full em per glyph fills a phone fast. */
+  .reward-content h2 { font-size: clamp(14px, 4.2vw, 22px); }
   .reward-close { top: 13px; right: 13px; }
   .reward-player { margin-top: 28px; padding: 15px 0; }
   .reward-wave { gap: 2px; }
@@ -3488,7 +3594,8 @@ a:focus-visible {
   .death-overlay__body { grid-template-columns: 1fr; }
   .death-overlay main { max-width: none; padding: 0; }
   .death-overlay main > small { font-size: 7px; }
-  .death-overlay h1 { margin-top: 10px; font-size: clamp(46px, 15vw, 64px); }
+  /* Same reason as the archive headline: a full em per glyph. */
+  .death-overlay h1 { margin-top: 10px; font-size: clamp(18px, 6.4vw, 30px); }
   .death-overlay main > p { margin-top: 14px; font-size: 9px; }
   .death-overlay dl { margin-top: 13px; padding: 10px; grid-template-columns: 1fr 0.45fr; gap: 9px; }
   .death-overlay dl div:last-child { grid-column: 1 / -1; }

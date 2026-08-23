@@ -103,6 +103,7 @@ export const EVENTS = {
   BATTLE_UI_STATE: 'battle-ui-state',
   BATTLE_UI_REQUEST: 'battle-ui-request',
   BATTLE_UI_ACTION: 'battle-ui-action',
+  CUTSCENE_STATE: 'cutscene-state',
   UI_NOTICE: 'ui-notice',
   UI_NOTICE_CLEAR: 'ui-notice-clear',
   ZONE_UI_STATE: 'zone-ui-state',

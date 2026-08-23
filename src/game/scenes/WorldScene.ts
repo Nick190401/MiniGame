@@ -1,9 +1,25 @@
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
+import { Npc } from '../entities/Npc';
 import { ENEMY_DEFINITIONS, BOSS_DEFINITION } from '../entities/Enemy';
 import type { EnemyData } from '../../types/game.types';
 import { Boss } from '../entities/Boss';
-import { BOSS_CORE_ROW, CAVE_START_ROW, CORE_START_ROW, MAP_COLS, MAP_ROWS, MapBuilder } from '../utils/MapBuilder';
+import {
+  BOSS_CORE_COL,
+  BOSS_CORE_ROW,
+  BROOK_START_ROW,
+  CAVE_START_ROW,
+  CORE_START_ROW,
+  FADING_START_ROW,
+  GATE_CENTER_COL,
+  GATE_START_ROW,
+  GROVE_START_ROW,
+  JUNCTION_START_ROW,
+  MAP_COLS,
+  MAP_ROWS,
+  MapBuilder,
+  SIGNAL_START_ROW,
+} from '../utils/MapBuilder';
 import { EventBus, EVENTS, type DialogPayload } from '../EventBus';
 import { useGameStore } from '../../store/gameStore';
 import { consumeMobileAction } from '../input/MobileInput';
@@ -12,31 +28,30 @@ import type { FootstepSurface } from '../audio/AudioLibrary';
 const TILE = 16;
 
 interface NpcVisualConfig {
-  texture: string;
-  worldScale: number;
+  portraitTexture: string;
   portraitScale: number;
   originX: number;
   originY: number;
   accent: number;
 }
 
-const NPC_VISUALS: Record<'elder' | 'guard' | 'musician', NpcVisualConfig> = {
-  elder: {
-    texture: 'npc-elder-muse-v2', worldScale: 0.0297, portraitScale: 0.0463,
+const NPC_VISUALS: Record<'professor' | 'guard' | 'musician', NpcVisualConfig> = {
+  professor: {
+    portraitTexture: 'npc-elder-muse-v3', portraitScale: 0.0463,
     originX: 618 / 1254, originY: 1152 / 1254, accent: 0x6ea8d8,
   },
   guard: {
-    texture: 'npc-junction-guard-v2', worldScale: 0.0343, portraitScale: 0.0536,
+    portraitTexture: 'npc-junction-guard-v3', portraitScale: 0.0536,
     originX: 627 / 1254, originY: 1084 / 1254, accent: 0xff7a2b,
   },
   musician: {
-    texture: 'npc-wandering-musician-v2', worldScale: 0.0321, portraitScale: 0.0502,
+    portraitTexture: 'npc-wandering-musician-v3', portraitScale: 0.0502,
     originX: 622 / 1254, originY: 1114 / 1254, accent: 0xe8b465,
   },
 };
 
 const DIALOG_SPEAKERS: Record<string, NpcVisualConfig> = {
-  'Elder Muse': NPC_VISUALS.elder,
+  'Professor Muse': NPC_VISUALS.professor,
   'Junction Guard': NPC_VISUALS.guard,
   'Wandering Musician': NPC_VISUALS.musician,
 };
@@ -55,10 +70,9 @@ export class WorldScene extends Phaser.Scene {
   private finaleOverlay?: Phaser.GameObjects.Container;
 
   // NPCs
-  private npcSprite?: Phaser.GameObjects.Sprite;   // Elder Muse — Echo Village
-  private npc2Sprite?: Phaser.GameObjects.Sprite;  // Junction Guard — Neon Junction
-  private npc3Sprite?: Phaser.GameObjects.Sprite;  // Wandering Musician — Neon Junction
-  private npcBlockers: Phaser.GameObjects.Zone[] = [];
+  private npcSprite?: Npc;   // Professor Muse — Echo Village
+  private npc2Sprite?: Npc;  // Junction Guard — Neon Junction
+  private npc3Sprite?: Npc;  // Wandering Musician — Neon Junction
 
   private npcInteractLabel?: Phaser.GameObjects.Container;
   private npc2InteractLabel?: Phaser.GameObjects.Container;
@@ -79,29 +93,35 @@ export class WorldScene extends Phaser.Scene {
   private currentTypeTimer?: Phaser.Time.TimerEvent;
   private currentLine = '';
   private activeDialogSpeaker?: string;
+  private introActive = false;
 
   // State
   private battleActive = false;
   private worldFrozen = false;
 
   // Pentagram center — boss triggers when player walks into the rune circle
-  private readonly PENTAGRAM_X = 24 * TILE;
+  private readonly PENTAGRAM_X = BOSS_CORE_COL * TILE;
   private readonly PENTAGRAM_Y = BOSS_CORE_ROW * TILE;
   private readonly PENTAGRAM_TRIGGER_RADIUS = 4 * TILE; // ~64 px, just inside the outer ring
   private bossEncounterStarted = false;
 
   // Boss approach zone — final antechamber before the actual encounter.
-  private bossApproachRect = new Phaser.Geom.Rectangle(0, 77 * TILE, MAP_COLS * TILE, 5 * TILE);
+  private bossApproachRect = new Phaser.Geom.Rectangle(0, (CORE_START_ROW - 4) * TILE, MAP_COLS * TILE, 4 * TILE);
   private bossApproachStarted = false;
   private approachEffects: Phaser.GameObjects.GameObject[] = [];
   private _approachShakeTimer?: Phaser.Time.TimerEvent;
 
-  // Gate zone — only the path columns directly against the gate (row 36)
-  private gateZoneRect = new Phaser.Geom.Rectangle(18 * TILE, 36 * TILE, 6 * TILE, 1 * TILE);
+  // Gate zone — only the path directly against the Frequency Gate.
+  private gateZoneRect = new Phaser.Geom.Rectangle(
+    (GATE_CENTER_COL - 3) * TILE,
+    (GATE_START_ROW - 1) * TILE,
+    6 * TILE,
+    2 * TILE,
+  );
 
   // Sign positions
-  private signPos  = { x: 17 * TILE + 8, y:  9 * TILE + 8 };  // Echo Village
-  private sign2Pos = { x: 17 * TILE + 8, y: 35 * TILE + 8 };  // Neon Junction
+  private signPos  = { x: 36 * TILE + 8, y: 18 * TILE + 8 };  // Echo Village
+  private sign2Pos = { x: 28 * TILE + 8, y: 89 * TILE + 8 };  // Whisper Grove
 
   // Input
   private interactKey!: Phaser.Input.Keyboard.Key;
@@ -144,6 +164,7 @@ export class WorldScene extends Phaser.Scene {
 
   create(): void {
     if (!this.scene.isActive('UIScene')) this.scene.launch('UIScene');
+    EventBus.emit(EVENTS.CUTSCENE_STATE, true);
 
     // Build map
     const mapResult = MapBuilder.build(this);
@@ -215,6 +236,9 @@ export class WorldScene extends Phaser.Scene {
 
     // Dialog
     this.createDialogBox();
+    this.worldFrozen = true;
+    this.player.freeze();
+    this.time.delayedCall(420, () => this.startIntroCutscene());
   }
 
   // ── Update ────────────────────────────────────────────────────────────────
@@ -225,6 +249,8 @@ export class WorldScene extends Phaser.Scene {
       const wv = this.cameras.main.worldView;
       this.dialogBox.setPosition(wv.x + 4, wv.y + wv.height - 76);
     }
+
+    this.updateNpcs(delta);
 
     const mobileAction = consumeMobileAction();
     if (mobileAction && this.dialogActive) {
@@ -255,9 +281,9 @@ export class WorldScene extends Phaser.Scene {
       const d1 = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.signPos.x, this.signPos.y);
       if (d1 < 28) {
         this.showDialogOnce('sign-village', [
-          'SIGNAL PATH — north.',
+          'SIGNAL MEADOW — south.',
           'Tall grass stretches across the road.',
-          'Creatures stir within.',
+          'Brookside Crossing lies beyond.',
           `Walk carefully, ${useGameStore.getState().playerName}.`,
         ]);
       }
@@ -267,7 +293,7 @@ export class WorldScene extends Phaser.Scene {
           'WARNING.',
           'FREQUENCY GATE — south.',
           'Passage requires Level 2.',
-          'Beyond: the Fading Path.',
+          'Beyond: the Fading Highlands.',
           'Beyond that: silence.',
         ]);
       }
@@ -283,7 +309,7 @@ export class WorldScene extends Phaser.Scene {
           `You are Level ${store.level}.`,
           'The Frequency Gate remains sealed.',
           'Reach Level 2 to pass.',
-          'Train in the tall grass of Signal Path.',
+        'Train in the tall grass of Signal Meadow.',
         ]);
       }
     }
@@ -362,8 +388,8 @@ export class WorldScene extends Phaser.Scene {
       const color = index % 7 === 0 ? 0x6ea8d8 : index % 5 === 0 ? 0xe8b465 : 0xff7a2b;
       mote.fillStyle(color, 0.26);
       mote.fillRect(0, 0, index % 9 === 0 ? 2 : 1, index % 9 === 0 ? 2 : 1);
-      const startX = 2 * TILE + Math.random() * 44 * TILE;
-      const startY = 2 * TILE + Math.random() * 49 * TILE;
+      const startX = 4 * TILE + Math.random() * (MAP_COLS - 8) * TILE;
+      const startY = 2 * TILE + Math.random() * (CAVE_START_ROW - 6) * TILE;
       mote.setPosition(startX, startY);
       this.tweens.add({
         targets: mote,
@@ -416,14 +442,14 @@ export class WorldScene extends Phaser.Scene {
     if (this.playerShadow) {
       this.playerShadow.setPosition(this.player.x, this.player.y + 1.5);
       this.playerShadow.setScale(this.player.isMoving() ? 1.08 : 1);
-      this.playerShadow.setAlpha(this.player.y >= 54 * TILE ? 0.48 : 0.34);
+      this.playerShadow.setAlpha(this.player.y >= CAVE_START_ROW * TILE ? 0.48 : 0.34);
     }
 
     this.footstepTimer += delta;
     if (this.player.isMoving() && this.footstepTimer >= 150) {
       this.footstepTimer = 0;
       const dust = this.add.graphics().setDepth(4);
-      const inCave = this.player.y >= 52 * TILE;
+      const inCave = this.player.y >= (CAVE_START_ROW - 4) * TILE;
       dust.fillStyle(inCave ? 0x6ea8d8 : 0xd2bd80, inCave ? 0.35 : 0.32);
       dust.fillRect(-3, 0, 2, 1);
       dust.fillRect(2, 1, 1, 1);
@@ -554,18 +580,26 @@ export class WorldScene extends Phaser.Scene {
   private updateZonePresentation(force: boolean): void {
     if (!this.player || !this.zoneHud || !this.zoneHudTitle || !this.zoneHudMeta || !this.zoneHudAccent || !this.zoneWash) return;
     const row = Math.floor(this.player.y / TILE);
-    const zoneIndex = row < 13 ? 0 : row < 26 ? 1 : row < 39 ? 2 : row < CAVE_START_ROW ? 3 : row < CORE_START_ROW ? 4 : 5;
+    const zoneIndex = row < SIGNAL_START_ROW ? 0
+      : row < BROOK_START_ROW ? 1
+        : row < JUNCTION_START_ROW ? 2
+          : row < GROVE_START_ROW ? 3
+            : row < FADING_START_ROW ? 4
+              : row < CAVE_START_ROW ? 5
+                : row < CORE_START_ROW ? 6 : 7;
     if (!force && zoneIndex === this.currentZoneIndex) return;
     this.currentZoneIndex = zoneIndex;
 
     const zones = [
       { title: 'Echo Village', meta: 'ORIGIN // OPEN SIGNAL', accent: 0xff7a2b, wash: 0x725d4e, alpha: 0.025 },
-      { title: 'Signal Path', meta: 'WILD BAND // CH. 02', accent: 0xab907c, wash: 0x6d4f40, alpha: 0.035 },
-      { title: 'Neon Junction', meta: 'RELAY DISTRICT // CH. 03', accent: 0x6ea8d8, wash: 0x5d3e2f, alpha: 0.045 },
-      { title: 'Fading Path', meta: 'WEAK SIGNAL // CH. 04', accent: 0x9e806b, wash: 0x3c2d25, alpha: 0.07 },
+      { title: 'Signal Meadow', meta: 'WILD BAND // CH. 02', accent: 0xab907c, wash: 0x6d4f40, alpha: 0.035 },
+      { title: 'Brookside Crossing', meta: 'RIVER RELAY // CH. 03', accent: 0x75b7ad, wash: 0x35564e, alpha: 0.035 },
+      { title: 'Neon Junction', meta: 'RELAY DISTRICT // CH. 04', accent: 0x6ea8d8, wash: 0x5d3e2f, alpha: 0.045 },
+      { title: 'Whisper Grove', meta: 'ARCHIVE WOODS // CH. 05', accent: 0x89a97c, wash: 0x314a39, alpha: 0.05 },
+      { title: 'Fading Highlands', meta: 'WEAK SIGNAL // CH. 06', accent: 0x9e806b, wash: 0x3c2d25, alpha: 0.07 },
       this.cavePurified
-        ? { title: 'Resonant Cave', meta: 'SIGNAL RESTORED // CH. 05', accent: 0xff7a2b, wash: 0x5d3e2f, alpha: 0.065 }
-        : { title: 'Void Cave', meta: 'NO CARRIER // CH. 05', accent: 0x6ea8d8, wash: 0x301e15, alpha: 0.09 },
+        ? { title: 'Resonant Cave', meta: 'SIGNAL RESTORED // CH. 07', accent: 0xff7a2b, wash: 0x5d3e2f, alpha: 0.065 }
+        : { title: 'Void Cave', meta: 'NO CARRIER // CH. 07', accent: 0x6ea8d8, wash: 0x301e15, alpha: 0.09 },
       this.cavePurified
         ? { title: 'The Living Core', meta: 'MASTER FREQUENCY // CLEAN', accent: 0x6ea8d8, wash: 0x4f3122, alpha: 0.07 }
         : { title: 'The Core', meta: 'TERMINAL FREQUENCY', accent: 0xe8b465, wash: 0x351612, alpha: 0.12 },
@@ -603,13 +637,14 @@ export class WorldScene extends Phaser.Scene {
     const px = this.player.x;
     const py = this.player.y;
 
-    // NPC 1 — Elder Muse
+    // NPC 1 — Professor Muse
     const d1 = this.npcSprite
       ? Phaser.Math.Distance.Between(px, py, this.npcSprite.x, this.npcSprite.y)
       : 999;
     const near1 = d1 < 30;
     this.npcInteractLabel?.setVisible(near1 && !this.dialogActive);
     if (near1 && !this.dialogActive && interactionRequested) {
+      this.npcSprite?.faceToward(px, py);
       this.triggerNpc1();
     }
 
@@ -620,6 +655,7 @@ export class WorldScene extends Phaser.Scene {
     const near2 = d2 < 30;
     this.npc2InteractLabel?.setVisible(near2 && !this.dialogActive);
     if (near2 && !this.dialogActive && interactionRequested) {
+      this.npc2Sprite?.faceToward(px, py);
       this.triggerNpc2();
     }
 
@@ -630,6 +666,7 @@ export class WorldScene extends Phaser.Scene {
     const near3 = d3 < 30;
     this.npc3InteractLabel?.setVisible(near3 && !this.dialogActive);
     if (near3 && !this.dialogActive && interactionRequested) {
+      this.npc3Sprite?.faceToward(px, py);
       this.triggerNpc3();
     }
   }
@@ -651,51 +688,188 @@ export class WorldScene extends Phaser.Scene {
     glyph.fillRect(-1, -1, 4, 2);
     glyph.fillRect(-1, 2, 5, 2);
 
-    const container = this.add.container(x, y - 40, [bg, glyph]);
+    const marker = this.add.container(0, -40, [bg, glyph]);
+    const container = this.add.container(x, y, [marker]);
     container.setDepth(10).setVisible(false);
 
-    this.tweens.add({ targets: container, y: y - 43, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: marker, y: -43, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     return container;
   }
 
-  private createNpcVisual(
-    x: number,
-    y: number,
-    visual: NpcVisualConfig,
-  ): Phaser.GameObjects.Sprite {
-    this.add.ellipse(x, y + 1, 18, 5, 0x110906, 0.24).setDepth(3);
-    const sprite = this.add.sprite(x, y, visual.texture)
-      .setDepth(4)
-      .setOrigin(visual.originX, visual.originY)
-      .setScale(visual.worldScale);
-    sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-    this.createNpcBlocker(x, y);
-    return sprite;
-  }
-
-  private createNpcBlocker(x: number, y: number): void {
-    // Keep collision close to the feet instead of inheriting the PNG's large
-    // transparent canvas, so approaching an NPC still feels natural.
-    const blocker = this.add.zone(x, y - 4, 15, 9).setName('npc-blocker');
-    this.physics.add.existing(blocker, true);
-    this.physics.add.collider(this.player, blocker);
-    this.npcBlockers.push(blocker);
-  }
-
   private spawnNPC(x: number, y: number, _textureKey: string, _labelField: string): void {
-    this.npcSprite = this.createNpcVisual(x, y, NPC_VISUALS.elder);
+    this.npcSprite = this.createNpcActor(x, y, 'professor', 26, 18);
     this.npcInteractLabel = this.createInteractLabel(x, y);
   }
 
   private spawnNPC2(x: number, y: number): void {
-    this.npc2Sprite = this.createNpcVisual(x, y, NPC_VISUALS.guard);
+    this.npc2Sprite = this.createNpcActor(x, y, 'guard', 18, 10);
     this.npc2InteractLabel = this.createInteractLabel(x, y);
   }
 
   private spawnNPC3(x: number, y: number): void {
-    this.npc3Sprite = this.createNpcVisual(x, y, NPC_VISUALS.musician);
+    this.npc3Sprite = this.createNpcActor(x, y, 'musician', 42, 24);
     this.npc3InteractLabel = this.createInteractLabel(x, y);
+  }
+
+  private createNpcActor(
+    x: number,
+    y: number,
+    npcId: 'professor' | 'guard' | 'musician',
+    radiusX: number,
+    radiusY: number,
+  ): Npc {
+    const npc = new Npc(this, x, y, npcId, { radiusX, radiusY });
+    this.physics.add.collider(npc, this.walls);
+    this.physics.add.collider(this.player, npc);
+    return npc;
+  }
+
+  private updateNpcs(delta: number): void {
+    const movementEnabled = !this.worldFrozen && !this.battleActive && !this.dialogActive;
+    const entries: Array<[Npc | undefined, Phaser.GameObjects.Container | undefined]> = [
+      [this.npcSprite, this.npcInteractLabel],
+      [this.npc2Sprite, this.npc2InteractLabel],
+      [this.npc3Sprite, this.npc3InteractLabel],
+    ];
+
+    entries.forEach(([npc, label]) => {
+      npc?.update(delta, movementEnabled);
+      if (npc && label) label.setPosition(npc.x, npc.y);
+    });
+  }
+
+  private startIntroCutscene(): void {
+    if (this.introActive || this.shownOnce.has('professor-intro') || !this.npcSprite) return;
+
+    this.introActive = true;
+    this.shownOnce.add('professor-intro');
+    this.npcFirstDialogDone = true;
+    this.worldFrozen = true;
+    this.player.freeze();
+    this.npcSprite.stopPatrol();
+    this.zoneHud?.setVisible(false);
+    EventBus.emit(EVENTS.UI_NOTICE_CLEAR);
+
+    this.cameras.main.stopFollow();
+    const professorTargetX = this.npcSprite.x + 18;
+    const focusX = (professorTargetX + this.player.x) / 2;
+    const focusY = (this.npcSprite.y + this.player.y) / 2 - 5;
+    this.cameras.main.pan(focusX, focusY, 720, 'Sine.easeInOut', true);
+    this.cameras.main.zoomTo(2.18, 720, 'Sine.easeInOut');
+
+    this.npcSprite.walkScriptedTo(professorTargetX, this.npcSprite.y, 720, () => {
+      this.npcSprite?.faceToward(this.player.x, this.player.y);
+    });
+
+    const playerName = useGameStore.getState().playerName || 'Listener';
+    this.time.delayedCall(860, () => {
+      this.showDialog([
+        'Professor Muse:',
+        `"${playerName}, wait. The Gatekeeper stole the Lost Track."`,
+        '"Follow the main road south. Recover all three Sound Fragments and reach Level 2."',
+        '"The Frequency Gate leads to him. If your signal drops, any of us can restore a little HP."',
+      ], () => this.finishIntroCutscene(), beat => this.playIntroBeat(beat));
+    });
+  }
+
+  private playIntroBeat(beat: number): void {
+    if (!this.npcSprite) return;
+
+    if (beat === 0) {
+      this.npcSprite.faceToward(this.player.x, this.player.y);
+      this.pulseProfessorSignal();
+      return;
+    }
+
+    if (beat === 1) {
+      const routeX = 32 * TILE;
+      const routeY = 20 * TILE;
+      this.cameras.main.pan(routeX, routeY - 16, 620, 'Sine.easeInOut', true);
+      this.cameras.main.zoomTo(1.92, 620, 'Sine.easeInOut');
+      this.pulseVillageRoute(routeX, routeY);
+      return;
+    }
+
+    const professorFocusX = (this.npcSprite.x + this.player.x) / 2;
+    const professorFocusY = (this.npcSprite.y + this.player.y) / 2 - 5;
+    this.cameras.main.pan(professorFocusX, professorFocusY, 620, 'Sine.easeInOut', true);
+    this.cameras.main.zoomTo(2.18, 620, 'Sine.easeInOut');
+    this.npcSprite.faceToward(this.player.x, this.player.y);
+  }
+
+  private finishIntroCutscene(): void {
+    this.worldFrozen = true;
+    this.cameras.main.pan(this.player.x, this.player.y, 760, 'Sine.easeInOut', true);
+    this.cameras.main.zoomTo(2, 760, 'Sine.easeInOut');
+    EventBus.emit(EVENTS.UI_NOTICE, {
+      eyebrow: 'MISSION TAPE // SIDE A',
+      title: 'Recover the Lost Track',
+      detail: '3 fragments  /  Level 2  /  Defeat the Gatekeeper',
+      accent: '#d7ff4a',
+      tone: 'info',
+      variant: 'hero',
+      duration: 2300,
+    });
+
+    this.time.delayedCall(1750, () => {
+      this.cameras.main.startFollow(this.player, true, 1, 1);
+      this.player.unfreeze();
+      this.introActive = false;
+      this.worldFrozen = false;
+      EventBus.emit(EVENTS.CUTSCENE_STATE, false);
+      this.currentZoneIndex = -1;
+      this.updateZonePresentation(true);
+    });
+  }
+
+  private pulseProfessorSignal(): void {
+    if (!this.npcSprite) return;
+
+    for (let index = 0; index < 3; index++) {
+      const ring = this.add.graphics()
+        .setDepth(9)
+        .setPosition(this.npcSprite.x, this.npcSprite.y - 12)
+        .setScale(0.45)
+        .setAlpha(0.8);
+      ring.lineStyle(index === 1 ? 2 : 1, index === 2 ? 0xff7a2b : 0x6ea8d8, 0.92);
+      ring.strokeCircle(0, 0, 8 + index * 3);
+      this.tweens.add({
+        targets: ring,
+        scaleX: 1.65,
+        scaleY: 1.65,
+        alpha: 0,
+        delay: index * 90,
+        duration: 520,
+        ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    }
+  }
+
+  private pulseVillageRoute(x: number, y: number): void {
+    for (let index = 0; index < 5; index++) {
+      const marker = this.add.graphics()
+        .setDepth(12)
+        .setPosition(x, y - 34 + index * 9)
+        .setScale(0.55)
+        .setAlpha(0);
+      marker.fillStyle(index === 4 ? 0xff7a2b : 0xd7ff4a, 0.95);
+      marker.fillTriangle(-4, -3, 4, -3, 0, 3);
+      this.tweens.add({
+        targets: marker,
+        y: marker.y + 5,
+        scaleX: 1,
+        scaleY: 1,
+        alpha: 0.92,
+        delay: 190 + index * 85,
+        duration: 240,
+        hold: 420,
+        yoyo: true,
+        ease: 'Quad.easeOut',
+        onComplete: () => marker.destroy(),
+      });
+    }
   }
 
   private spawnFragments(mapResult: ReturnType<typeof MapBuilder.build>): void {
@@ -748,13 +922,13 @@ export class WorldScene extends Phaser.Scene {
       this.npcFirstDialogDone = true;
       const pName = useGameStore.getState().playerName;
       this.showDialog([
-        'Elder Muse:',
+        'Professor Muse:',
         `"Welcome, young ${pName}."`,
         '"This is Echo Village."',
         '"Long ago, music filled every road."',
         '"Then The Gatekeeper came."',
         '"It sealed the Lost Track in silence."',
-        '"Head north through Signal Path."',
+        '"Head south through Signal Meadow."',
         '"Grow strong in the tall grass."',
         '"Then find Neon Junction."',
         '"The road forward lies beyond."',
@@ -764,21 +938,21 @@ export class WorldScene extends Phaser.Scene {
       if (store.hp < store.maxHp) {
         this.showDialog(
           [
-            'Elder Muse:',
+            'Professor Muse:',
             `"You look weary, ${useGameStore.getState().playerName}."`,
             '"Close your eyes. Listen..."',
           ],
           () => {
-            this.playHealingMusic(this.npcSprite!, store.maxHp, [
-              'Elder Muse:',
+            this.playHealingMusic(this.npcSprite!, this.getNpcHealAmount(store.maxHp), [
+              'Professor Muse:',
               '"The old melodies still carry power."',
-              '"You should feel better now."',
+              '"That restored part of your signal."',
             ]);
           }
         );
       } else {
         this.showDialog([
-          'Elder Muse:',
+          'Professor Muse:',
           `"You look well, ${useGameStore.getState().playerName}."`,
           '"The road ahead awaits."',
         ]);
@@ -791,12 +965,12 @@ export class WorldScene extends Phaser.Scene {
       this.npc2FirstDialogDone = true;
       this.showDialog([
         'Junction Guard:',
-        '"You made it through Signal Path."',
+        '"You crossed Signal Meadow and Brookside."',
         `"Few reach this far, ${useGameStore.getState().playerName}."`,
         '"The Frequency Gate lies south."',
         '"It demands Level 2 strength."',
         '"Beware what lies beyond."',
-        '"The Fading Path leads to Void Cave."',
+        '"The Fading Highlands lead to Void Cave."',
         '"And in that cave..."',
         '"The Gatekeeper waits in The Core."',
       ]);
@@ -811,7 +985,7 @@ export class WorldScene extends Phaser.Scene {
             '"Listen."',
           ],
           () => {
-            this.playHealingMusic(this.npc2Sprite!, store.maxHp, [
+            this.playHealingMusic(this.npc2Sprite!, this.getNpcHealAmount(store.maxHp), [
               'Junction Guard:',
               '"A guard\'s remedy."',
               '"Don\'t tell anyone."',
@@ -850,7 +1024,7 @@ export class WorldScene extends Phaser.Scene {
             '"Let me play you something..."',
           ],
           () => {
-            this.playHealingMusic(this.npc3Sprite!, store.maxHp, [
+            this.playHealingMusic(this.npc3Sprite!, this.getNpcHealAmount(store.maxHp), [
               'Wandering Musician:',
               '"Music heals all wounds."',
               '"It always has."',
@@ -865,6 +1039,10 @@ export class WorldScene extends Phaser.Scene {
         ]);
       }
     }
+  }
+
+  private getNpcHealAmount(maxHp: number): number {
+    return Math.max(6, Math.ceil(maxHp * 0.25));
   }
 
   // ── Interactions ──────────────────────────────────────────────────────────
@@ -1008,8 +1186,8 @@ export class WorldScene extends Phaser.Scene {
         const mote = this.add.graphics().setDepth(5);
         mote.fillStyle(0x880011, 0.5);
         mote.fillCircle(0, 0, 1.5);
-        const sx = 8 * TILE + Math.random() * 32 * TILE;
-        const sy = 91 * TILE;
+        const sx = 12 * TILE + Math.random() * (MAP_COLS - 24) * TILE;
+        const sy = (MAP_ROWS - 3) * TILE;
         mote.setPosition(sx, sy);
         this.tweens.add({
           targets: mote,
@@ -1018,7 +1196,7 @@ export class WorldScene extends Phaser.Scene {
           duration: 2500 + Math.random() * 1500,
           repeat: -1,
           onRepeat: () => {
-            mote.setPosition(8 * TILE + Math.random() * 32 * TILE, 91 * TILE);
+            mote.setPosition(12 * TILE + Math.random() * (MAP_COLS - 24) * TILE, (MAP_ROWS - 3) * TILE);
             mote.setAlpha(0.5);
           },
         });
@@ -1304,13 +1482,13 @@ export class WorldScene extends Phaser.Scene {
     this.purifiedCaveEffects.push(core);
 
     const arch = this.add.graphics().setDepth(3).setName('purified-arch');
-    arch.lineStyle(7, 0x573c2f, 0.92); arch.beginPath(); arch.arc(cx, 83 * TILE, 8 * TILE, Math.PI, 0, false); arch.strokePath();
-    arch.lineStyle(2, 0x6ea8d8, 0.56); arch.beginPath(); arch.arc(cx, 83 * TILE, 8 * TILE - 7, Math.PI + 0.1, -0.1, false); arch.strokePath();
+    arch.lineStyle(7, 0x573c2f, 0.92); arch.beginPath(); arch.arc(cx, (CORE_START_ROW + 1) * TILE, 8 * TILE, Math.PI, 0, false); arch.strokePath();
+    arch.lineStyle(2, 0x6ea8d8, 0.56); arch.beginPath(); arch.arc(cx, (CORE_START_ROW + 1) * TILE, 8 * TILE - 7, Math.PI + 0.1, -0.1, false); arch.strokePath();
     arch.setAlpha(instant ? 1 : 0);
     if (!instant) this.tweens.add({ targets: arch, alpha: 1, duration: 900 });
     this.purifiedCaveEffects.push(arch);
 
-    const lightPools: [number, number][] = [[20,56],[10,63],[36,66],[38,72],[15,74],[18,79],[31,80],[24,87]];
+    const lightPools: [number, number][] = [[32,121],[14,128],[51,127],[32,136],[14,141],[50,140],[32,146],[32,156]];
     lightPools.forEach(([col, row], index) => {
       const pool = this.add.graphics().setDepth(0.6).setPosition(col * TILE, row * TILE).setName('purified-light');
       pool.fillStyle(index % 3 === 0 ? 0xff7a2b : 0x6ea8d8, 0.1); pool.fillEllipse(0, 0, 34, 12);
@@ -1323,8 +1501,8 @@ export class WorldScene extends Phaser.Scene {
       const mote = this.add.graphics().setDepth(3).setName('purified-mote');
       const color = index % 5 === 0 ? 0xff7a2b : index % 3 === 0 ? 0xf8ece2 : 0x6ea8d8;
       mote.fillStyle(color, 0.76); mote.fillRect(0, 0, index % 7 === 0 ? 2 : 1, index % 7 === 0 ? 2 : 1);
-      const startX = Phaser.Math.Between(6 * TILE, 42 * TILE);
-      const startY = Phaser.Math.Between(CAVE_START_ROW * TILE, 91 * TILE);
+      const startX = Phaser.Math.Between(4 * TILE, (MAP_COLS - 4) * TILE);
+      const startY = Phaser.Math.Between(CAVE_START_ROW * TILE, (MAP_ROWS - 3) * TILE);
       mote.setPosition(startX, startY).setAlpha(instant ? 0.48 : 0);
       this.tweens.add({
         targets: mote,
@@ -1729,7 +1907,14 @@ export class WorldScene extends Phaser.Scene {
     openPanel(leftPanel, -28);
     openPanel(rightPanel, 28);
 
-    const gateSignal = this.add.rectangle(21 * TILE, 38 * TILE, 52, 24, 0x6ea8d8, 0)
+    const gateSignal = this.add.rectangle(
+      GATE_CENTER_COL * TILE,
+      (GATE_START_ROW + 1) * TILE,
+      52,
+      24,
+      0x6ea8d8,
+      0,
+    )
       .setDepth(4);
     this.tweens.add({
       targets: gateSignal,
@@ -1753,7 +1938,7 @@ export class WorldScene extends Phaser.Scene {
         'The Frequency Gate trembles.',
         'A low hum fills the air.',
         'Then — silence.',
-        'The path to the Fading Path is open.',
+        'The path to the Fading Highlands is open.',
       ]);
     }
   }
@@ -1822,7 +2007,7 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 8; y < boxH; y += 8) bg.lineBetween(62, y, boxW - 8, y);
 
     const accent = this.add.graphics();
-    const portrait = this.add.image(32, 64, 'npc-elder-muse-v2').setVisible(false);
+    const portrait = this.add.image(32, 64, 'npc-elder-muse-v3').setVisible(false);
     const systemMark = this.add.text(33, 36, '◎', {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#ff7a2b',
     }).setOrigin(0.5).setAlpha(0.48);
@@ -1864,6 +2049,8 @@ export class WorldScene extends Phaser.Scene {
     this.dialogBox.setData('systemMark', systemMark);
     this.dialogBox.setData('accent', accent);
     this.dialogBox.setData('callback', null);
+    this.dialogBox.setData('lineCallback', null);
+    this.dialogBox.setData('lineIndex', 0);
 
     this.input.on('pointerdown', this.handleDialogAdvance, this);
     const advanceKeys = ['SPACE','ENTER','Z','E','W','S','A','D','UP','DOWN','LEFT','RIGHT'];
@@ -1906,7 +2093,7 @@ export class WorldScene extends Phaser.Scene {
     accent.fillRect(62, 20, 238, 1);
 
     if (visual) {
-      portrait.setTexture(visual.texture)
+      portrait.setTexture(visual.portraitTexture)
         .setOrigin(visual.originX, visual.originY)
         .setPosition(32, 64)
         .setScale(visual.portraitScale)
@@ -1935,11 +2122,17 @@ export class WorldScene extends Phaser.Scene {
     speaker.setX(69);
   }
 
-  showDialog(lines: string[], onComplete?: () => void): void {
+  showDialog(
+    lines: string[],
+    onComplete?: () => void,
+    onLine?: (lineIndex: number) => void,
+  ): void {
     if (!this.dialogBox || this.dialogActive) return;
     this.dialogActive = true;
     this.dialogQueue = [...lines];
     this.dialogBox.setData('callback', onComplete ?? null);
+    this.dialogBox.setData('lineCallback', onLine ?? null);
+    this.dialogBox.setData('lineIndex', 0);
     this.setDialogSpeaker();
     // The visible conversation UI is rendered as a crisp DOM overlay. The
     // Phaser container remains as the input/state controller only.
@@ -1957,7 +2150,10 @@ export class WorldScene extends Phaser.Scene {
       this.worldFrozen = false;
       EventBus.emit(EVENTS.DIALOG_CLEAR);
       const cb = this.dialogBox.getData('callback') as (() => void) | null;
-      if (cb) { this.dialogBox.setData('callback', null); cb(); }
+      this.dialogBox.setData('callback', null);
+      this.dialogBox.setData('lineCallback', null);
+      this.dialogBox.setData('lineIndex', 0);
+      cb?.();
       return;
     }
 
@@ -1986,12 +2182,16 @@ export class WorldScene extends Phaser.Scene {
       text: displayLine,
       speaker: speakerName,
       accent: `#${(visual?.accent ?? (isGatekeeper ? 0xe8b465 : 0xff7a2b)).toString(16).padStart(6, '0')}`,
-      portrait: this.activeDialogSpeaker === 'Elder Muse' ? 'elder'
+      portrait: this.activeDialogSpeaker === 'Professor Muse' ? 'elder'
         : this.activeDialogSpeaker === 'Junction Guard' ? 'guard'
           : this.activeDialogSpeaker === 'Wandering Musician' ? 'musician'
             : isGatekeeper ? 'gatekeeper' : undefined,
     };
     EventBus.emit(EVENTS.DIALOG, payload);
+    const lineCallback = this.dialogBox.getData('lineCallback') as ((lineIndex: number) => void) | null;
+    const lineIndex = this.dialogBox.getData('lineIndex') as number;
+    this.dialogBox.setData('lineIndex', lineIndex + 1);
+    lineCallback?.(lineIndex);
   }
 
   // ── Visual effects ────────────────────────────────────────────────────────
@@ -2009,7 +2209,7 @@ export class WorldScene extends Phaser.Scene {
    * 4. Follow-up dialog resumes after the visual resolves
    */
   private playHealingMusic(
-    npcSprite: Phaser.GameObjects.Sprite,
+    npcSprite: Npc,
     healAmount: number,
     followUpLines: string[],
   ): void {
@@ -2021,7 +2221,7 @@ export class WorldScene extends Phaser.Scene {
     const pY = this.player.y;
     const sourceY = nY - 9;
     const targetY = pY - 9;
-    const visual = npcSprite === this.npcSprite ? NPC_VISUALS.elder
+    const visual = npcSprite === this.npcSprite ? NPC_VISUALS.professor
       : npcSprite === this.npc2Sprite ? NPC_VISUALS.guard
         : NPC_VISUALS.musician;
     const accent = visual.accent;
@@ -2248,19 +2448,18 @@ export class WorldScene extends Phaser.Scene {
         fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#ff7a2b',
         stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
-      const resonanceText = this.add.text(0, 9, 'FULL RESONANCE', {
+      const resonanceText = this.add.text(0, 9, 'PARTIAL RESONANCE', {
         fontFamily: '"Press Start 2P"', fontSize: '4px', color: accentCss,
         stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
       const feedback = this.add.container(pX, pY - 28, [hpText, resonanceText])
         .setName('healing-feedback')
         .setDepth(21)
-        .setScale(0.44)
-        .setVisible(false);
+        .setScale(0.44);
       EventBus.emit(EVENTS.UI_NOTICE, {
         eyebrow: 'HEALING FREQUENCY // SYNCED',
         title: `+${restoredAmount} HP`,
-        detail: 'Full resonance restored by the channel keeper.',
+        detail: 'A small part of your signal was restored.',
         accent: accentCss,
         tone: 'success',
         duration: 2100,
@@ -2297,6 +2496,7 @@ export class WorldScene extends Phaser.Scene {
 
   shutdown(): void {
     this.setFootstepSurface('none');
+    EventBus.emit(EVENTS.CUTSCENE_STATE, false);
     EventBus.off(EVENTS.BATTLE_END, this.onBattleEnd, this);
     EventBus.off(EVENTS.RESPAWN, this.onRespawn, this);
     EventBus.off(EVENTS.ZONE_UI_REQUEST, this.onZoneUiRequest, this);
