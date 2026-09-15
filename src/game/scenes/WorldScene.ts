@@ -37,7 +37,7 @@ interface NpcVisualConfig {
 
 const NPC_VISUALS: Record<'professor' | 'guard' | 'musician', NpcVisualConfig> = {
   professor: {
-    portraitTexture: 'npc-elder-muse-v3', portraitScale: 0.0463,
+    portraitTexture: 'npc-elder-muse-v4', portraitScale: 0.0463,
     originX: 618 / 1254, originY: 1152 / 1254, accent: 0x6ea8d8,
   },
   guard: {
@@ -51,9 +51,9 @@ const NPC_VISUALS: Record<'professor' | 'guard' | 'musician', NpcVisualConfig> =
 };
 
 const DIALOG_SPEAKERS: Record<string, NpcVisualConfig> = {
-  'Professor Muse': NPC_VISUALS.professor,
-  'Junction Guard': NPC_VISUALS.guard,
-  'Wandering Musician': NPC_VISUALS.musician,
+  'Professorin Krys': NPC_VISUALS.professor,
+  'Quincy': NPC_VISUALS.guard,
+  'Kian Vero': NPC_VISUALS.musician,
 };
 
 export class WorldScene extends Phaser.Scene {
@@ -70,9 +70,9 @@ export class WorldScene extends Phaser.Scene {
   private finaleOverlay?: Phaser.GameObjects.Container;
 
   // NPCs
-  private npcSprite?: Npc;   // Professor Muse — Echo Village
-  private npc2Sprite?: Npc;  // Junction Guard — Neon Junction
-  private npc3Sprite?: Npc;  // Wandering Musician — Neon Junction
+  private npcSprite?: Npc;   // Professorin Krys — Echo Village
+  private npc2Sprite?: Npc;  // Quincy — Neon Junction
+  private npc3Sprite?: Npc;  // Kian Vero — Neon Junction
 
   private npcInteractLabel?: Phaser.GameObjects.Container;
   private npc2InteractLabel?: Phaser.GameObjects.Container;
@@ -258,7 +258,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.updateNpcs(delta);
 
-    // During the introduction the player tracks Professor Muse instead of
+    // During the introduction the player tracks Professorin Krys instead of
     // staring straight ahead while she approaches and speaks.
     if (this.introActive && this.npcSprite) {
       this.player.faceToward(this.npcSprite.x, this.npcSprite.y);
@@ -649,7 +649,7 @@ export class WorldScene extends Phaser.Scene {
     const px = this.player.x;
     const py = this.player.y;
 
-    // NPC 1 — Professor Muse
+    // NPC 1 — Professorin Krys
     const d1 = this.npcSprite
       ? Phaser.Math.Distance.Between(px, py, this.npcSprite.x, this.npcSprite.y)
       : 999;
@@ -660,7 +660,7 @@ export class WorldScene extends Phaser.Scene {
       this.triggerNpc1();
     }
 
-    // NPC 2 — Junction Guard
+    // NPC 2 — Quincy
     const d2 = this.npc2Sprite
       ? Phaser.Math.Distance.Between(px, py, this.npc2Sprite.x, this.npc2Sprite.y)
       : 999;
@@ -671,7 +671,7 @@ export class WorldScene extends Phaser.Scene {
       this.triggerNpc2();
     }
 
-    // NPC 3 — Wandering Musician
+    // NPC 3 — Kian Vero
     const d3 = this.npc3Sprite
       ? Phaser.Math.Distance.Between(px, py, this.npc3Sprite.x, this.npc3Sprite.y)
       : 999;
@@ -766,7 +766,7 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.stopFollow();
     this.createIntroCinematicOverlay();
 
-    // Open on Professor Muse's laboratory before gliding across the village.
+    // Open on Professorin Krys's laboratory before gliding across the village.
     // The camera starts moving while the scene is still fading in, so the
     // loading transition resolves into an establishing shot instead of a cut.
     const laboratoryX = 22 * TILE;
@@ -797,7 +797,7 @@ export class WorldScene extends Phaser.Scene {
     this.time.delayedCall(2740, () => {
       if (!this.introActive) return;
       this.showDialog([
-        'Professor Muse:',
+        'Professorin Krys:',
         `"${playerName}, wait. The Gatekeeper stole the Lost Track."`,
         '"Follow the signal south. Recover all three Sound Fragments and strengthen your frequency."',
         '"Reach Level 2, cross the Frequency Gate, and find him in the silence beyond."',
@@ -1085,7 +1085,7 @@ export class WorldScene extends Phaser.Scene {
       this.npcFirstDialogDone = true;
       const pName = useGameStore.getState().playerName;
       this.showDialog([
-        'Professor Muse:',
+        'Professorin Krys:',
         `"Welcome, young ${pName}."`,
         '"This is Echo Village."',
         '"Long ago, music filled every road."',
@@ -1101,13 +1101,13 @@ export class WorldScene extends Phaser.Scene {
       if (store.hp < store.maxHp) {
         this.showDialog(
           [
-            'Professor Muse:',
+            'Professorin Krys:',
             `"You look weary, ${useGameStore.getState().playerName}."`,
             '"Close your eyes. Listen..."',
           ],
           () => {
             this.playHealingMusic(this.npcSprite!, this.getNpcHealAmount(store.maxHp), [
-              'Professor Muse:',
+              'Professorin Krys:',
               '"The old melodies still carry power."',
               '"That restored part of your signal."',
             ]);
@@ -1115,7 +1115,7 @@ export class WorldScene extends Phaser.Scene {
         );
       } else {
         this.showDialog([
-          'Professor Muse:',
+          'Professorin Krys:',
           `"You look well, ${useGameStore.getState().playerName}."`,
           '"The road ahead awaits."',
         ]);
@@ -1127,7 +1127,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.npc2FirstDialogDone) {
       this.npc2FirstDialogDone = true;
       this.showDialog([
-        'Junction Guard:',
+        'Quincy:',
         '"You crossed Signal Meadow and Brookside."',
         `"Few reach this far, ${useGameStore.getState().playerName}."`,
         '"The Frequency Gate lies south."',
@@ -1142,14 +1142,14 @@ export class WorldScene extends Phaser.Scene {
       if (store.hp < store.maxHp) {
         this.showDialog(
           [
-            'Junction Guard:',
+            'Quincy:',
             '"You look rough, kid."',
             '"Hold on... I have an old recording."',
             '"Listen."',
           ],
           () => {
             this.playHealingMusic(this.npc2Sprite!, this.getNpcHealAmount(store.maxHp), [
-              'Junction Guard:',
+              'Quincy:',
               '"A guard\'s remedy."',
               '"Don\'t tell anyone."',
             ]);
@@ -1157,7 +1157,7 @@ export class WorldScene extends Phaser.Scene {
         );
       } else {
         this.showDialog([
-          'Junction Guard:',
+          'Quincy:',
           '"The gate opens for the worthy."',
           `"Stay determined, ${useGameStore.getState().playerName}."`,
         ]);
@@ -1169,7 +1169,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.npc3FirstDialogDone) {
       this.npc3FirstDialogDone = true;
       this.showDialog([
-        'Wandering Musician:',
+        'Kian Vero:',
         '"I used to play every evening."',
         '"Then the silence spread."',
         '"I heard the Lost Track once."',
@@ -1182,13 +1182,13 @@ export class WorldScene extends Phaser.Scene {
       if (store.hp < store.maxHp) {
         this.showDialog(
           [
-            'Wandering Musician:',
+            'Kian Vero:',
             '"You look beaten up, friend."',
             '"Let me play you something..."',
           ],
           () => {
             this.playHealingMusic(this.npc3Sprite!, this.getNpcHealAmount(store.maxHp), [
-              'Wandering Musician:',
+              'Kian Vero:',
               '"Music heals all wounds."',
               '"It always has."',
             ]);
@@ -1196,7 +1196,7 @@ export class WorldScene extends Phaser.Scene {
         );
       } else {
         this.showDialog([
-          'Wandering Musician:',
+          'Kian Vero:',
           '"The road to The Core is long."',
           '"But I believe in you."',
         ]);
@@ -2170,7 +2170,7 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 8; y < boxH; y += 8) bg.lineBetween(62, y, boxW - 8, y);
 
     const accent = this.add.graphics();
-    const portrait = this.add.image(32, 64, 'npc-elder-muse-v3').setVisible(false);
+    const portrait = this.add.image(32, 64, 'npc-elder-muse-v4').setVisible(false);
     const systemMark = this.add.text(33, 36, '◎', {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#ff7a2b',
     }).setOrigin(0.5).setAlpha(0.48);
@@ -2345,9 +2345,9 @@ export class WorldScene extends Phaser.Scene {
       text: displayLine,
       speaker: speakerName,
       accent: `#${(visual?.accent ?? (isGatekeeper ? 0xe8b465 : 0xff7a2b)).toString(16).padStart(6, '0')}`,
-      portrait: this.activeDialogSpeaker === 'Professor Muse' ? 'elder'
-        : this.activeDialogSpeaker === 'Junction Guard' ? 'guard'
-          : this.activeDialogSpeaker === 'Wandering Musician' ? 'musician'
+      portrait: this.activeDialogSpeaker === 'Professorin Krys' ? 'elder'
+        : this.activeDialogSpeaker === 'Quincy' ? 'guard'
+          : this.activeDialogSpeaker === 'Kian Vero' ? 'musician'
             : isGatekeeper ? 'gatekeeper' : undefined,
     };
     EventBus.emit(EVENTS.DIALOG, payload);

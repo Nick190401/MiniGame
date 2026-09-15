@@ -17,7 +17,7 @@ export class PreloadScene extends Phaser.Scene {
     PLAYER_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
     NPC_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
     this.load.image('player-battle', 'assets/player_model.PNG');
-    this.load.image('npc-elder-muse-v3', 'assets/npc-elder-muse-v3.png');
+    this.load.image('npc-elder-muse-v4', 'assets/npc-elder-muse-v4.png');
     this.load.image('npc-junction-guard-v3', 'assets/npc-junction-guard-v3.png');
     this.load.image('npc-wandering-musician-v3', 'assets/npc-wandering-musician-v3.png');
     this.load.image('silence-battle', 'assets/silence_model.PNG');

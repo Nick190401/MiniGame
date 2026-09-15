@@ -13,7 +13,7 @@ interface OverlayBounds {
 }
 
 const PORTRAITS: Partial<Record<NonNullable<DialogPayload['portrait']>, string>> = {
-  elder: '/assets/npc-elder-muse-v3.png',
+  elder: '/assets/npc-elder-muse-v4.png',
   guard: '/assets/npc-junction-guard-v3.png',
   musician: '/assets/npc-wandering-musician-v3.png',
   gatekeeper: '/assets/boss-gatekeeper-phase1-v2.png',

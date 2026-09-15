@@ -55,7 +55,7 @@ Meet the **Elder Muse**, learn what happened to the signal and begin searching f
 
 A corrupted connection point filled with strange signals, musicians and dangerous encounters.
 
-Meet characters such as the **Junction Guard** and the **Wandering Musician** while getting closer to the source of the disturbance.
+Meet characters such as **Quincy, the Junction Guard**, and **Kian Vero, the Wandering Musician**, while getting closer to the source of the disturbance.
 
 ### 🕳️ The Corrupted Cave
 
@@ -224,13 +224,13 @@ The journey includes several characters that guide the player through the story.
 <td align="center">
 <img src="./public/assets/npc-junction-guard-v2.png" width="180">
 <br>
-<strong>Junction Guard</strong>
+<strong>Quincy — Junction Guard</strong>
 </td>
 
 <td align="center">
 <img src="./public/assets/npc-wandering-musician-v2.png" width="180">
 <br>
-<strong>Wandering Musician</strong>
+<strong>Kian Vero — Wandering Musician</strong>
 </td>
 </tr>
 </table>

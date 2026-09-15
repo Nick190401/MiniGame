@@ -35,6 +35,6 @@ export const NPC_TEXTURE_ASSETS = (Object.entries(NPC_TEXTURES) as Array<
 >).flatMap(([npc, directions]) => (
   Object.values(directions).flat().map(key => ({
     key,
-    url: `assets/npc/overworld/${npc}/${key}.png`,
+    url: `assets/npc/overworld/${npc === 'professor' ? 'professor-v4' : npc}/${key}.png`,
   }))
 ));
