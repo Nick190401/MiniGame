@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { AudioManager } from '../game/audio/AudioManager';
+import { SFX } from '../game/audio/AudioLibrary';
+import { EventBus, EVENTS } from '../game/EventBus';
+
+const playUiClick = () => AudioManager.playSfx(SFX.uiClick.key);
 
 function writeString(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index++) {
@@ -126,6 +131,10 @@ export function RewardModal() {
       .finally(() => setIsGenerating(false));
   }, [bonusSongUnlocked]);
 
+  useEffect(() => {
+    if (bonusSongUnlocked) EventBus.emit(EVENTS.REWARD_UI_STATE, showModal);
+  }, [bonusSongUnlocked, showModal]);
+
   useEffect(() => () => {
     if (audioData?.url) URL.revokeObjectURL(audioData.url);
   }, [audioData]);
@@ -149,6 +158,7 @@ export function RewardModal() {
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    playUiClick();
     if (isPlaying) audio.pause();
     else void audio.play();
     setIsPlaying(!isPlaying);
@@ -157,12 +167,14 @@ export function RewardModal() {
   const seek = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
     if (!audio || !totalDuration) return;
+    playUiClick();
     const bounds = event.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
     audio.currentTime = ratio * totalDuration;
   }, [totalDuration]);
 
   const closeModal = useCallback(() => {
+    playUiClick();
     audioRef.current?.pause();
     setIsPlaying(false);
     setShowModal(false);
@@ -170,6 +182,7 @@ export function RewardModal() {
 
   const downloadTrack = useCallback(() => {
     if (!audioData) return;
+    playUiClick();
     const link = document.createElement('a');
     link.href = audioData.url;
     link.download = 'the-lost-track.wav';
@@ -182,7 +195,7 @@ export function RewardModal() {
 
   if (!showModal) {
     return (
-      <button className="reward-reopen" onClick={() => setShowModal(true)}>
+      <button className="reward-reopen" onClick={() => { playUiClick(); setShowModal(true); }}>
         <span className="reward-reopen__pulse" />
         Lost Track
         <span>↗</span>

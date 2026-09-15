@@ -29,6 +29,7 @@ type Fadeable = Phaser.Sound.BaseSound & { volume: number; setVolume(value: numb
 
 const SETTINGS_KEY = 'sound-quest:audio-settings';
 const DEFAULT_FADE_MS = 500;
+const BATTLE_MUSIC_VOLUME_MULTIPLIER = 0.9;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -84,6 +85,7 @@ class AudioManagerImpl {
     EventBus.on(EVENTS.PLAYER_DIED, this.onPlayerDied, this);
     EventBus.on(EVENTS.RESPAWN, this.onRespawn, this);
     EventBus.on(EVENTS.BONUS_SONG_UNLOCKED, this.onBonusSongUnlocked, this);
+    EventBus.on(EVENTS.REWARD_UI_STATE, this.onRewardUiState, this);
     EventBus.on(EVENTS.ATTACK_USED, this.onAttackUsed, this);
     EventBus.on(EVENTS.IMPACT, this.onImpact, this);
     EventBus.on(EVENTS.HEAL, this.onHeal, this);
@@ -95,7 +97,12 @@ class AudioManagerImpl {
     EventBus.on(EVENTS.ITEM_COLLECTED, () => this.playSfx(SFX.itemPickup.key));
     EventBus.on(EVENTS.GATE_OPEN, () => this.playSfx(SFX.gateOpen.key));
     EventBus.on(EVENTS.GATE_BLOCKED, () => this.playSfx(SFX.gateBlocked.key));
-    EventBus.on(EVENTS.DIALOG, () => this.playSfx(SFX.dialogBlip.key, { volume: 0.5 }));
+    EventBus.on(EVENTS.DIALOG, () => {
+      this.playAvailableSfx([SFX.dialogBlip.key, SFX.uiClick.key], { volume: 0.5 });
+    });
+    EventBus.on(EVENTS.DEATH_UI_ACTION, () => {
+      this.playAvailableSfx([SFX.uiConfirm.key, SFX.uiClick.key]);
+    });
     // Picking an attack is the game's main "select" interaction.
     EventBus.on(EVENTS.BATTLE_UI_ACTION, () => this.playSfx(SFX.uiClick.key));
   }
@@ -148,7 +155,19 @@ class AudioManagerImpl {
 
   private onBonusSongUnlocked(): void {
     // RewardModal plays its own procedurally-generated track — just get out of its way.
+    this.onRewardUiState(true);
+  }
+
+  private onRewardUiState(isOpen: boolean): void {
+    if (!isOpen) {
+      if (this.mode !== 'reward') return;
+      this.mode = 'world';
+      this.playMusic(this.zoneTrack, { fadeMs: 600 });
+      return;
+    }
+
     this.mode = 'reward';
+    this.onFootsteps('none');
     this.stopMusic(600);
   }
 
@@ -183,6 +202,7 @@ class AudioManagerImpl {
    * the loop is only ever audible while they are actually walking.
    */
   private onFootsteps(surface: FootstepSurface): void {
+    if (this.mode !== 'world') surface = 'none';
     if (surface === this.footstepSurface) return;
     this.footstepSurface = surface;
     this.stopFootsteps();
@@ -218,11 +238,16 @@ class AudioManagerImpl {
     return keys.find(key => this.game!.cache.audio.has(key)) ?? null;
   }
 
+  private playAvailableSfx(keys: string[], opts: SfxOptions = {}): void {
+    const key = this.resolveKey(...keys);
+    if (key) this.playSfx(key, opts);
+  }
+
   playMusic(key: string, opts: MusicOptions = {}): void {
     if (!this.game) return;
     if (key === this.musicKey && this.music?.isPlaying) return;
 
-    const { loop = true, fadeMs = DEFAULT_FADE_MS, volume = this.settings.musicVolume } = opts;
+    const { loop = true, fadeMs = DEFAULT_FADE_MS, volume = this.targetMusicVolume() } = opts;
 
     const previous = this.music;
     this.music = null;
@@ -302,7 +327,7 @@ class AudioManagerImpl {
   setMusicVolume(value: number): void {
     this.settings.musicVolume = clamp01(value);
     this.persist();
-    this.music?.setVolume(this.settings.musicVolume);
+    this.music?.setVolume(this.targetMusicVolume());
   }
 
   setSfxVolume(value: number): void {
@@ -326,6 +351,10 @@ class AudioManagerImpl {
   }
 
   // ── Internals ────────────────────────────────────────────────────────────
+
+  private targetMusicVolume(): number {
+    return this.settings.musicVolume * (this.mode === 'battle' ? BATTLE_MUSIC_VOLUME_MULTIPLIER : 1);
+  }
 
   private persist(): void {
     try {

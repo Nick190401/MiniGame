@@ -135,6 +135,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.lastDirection;
   }
 
+  faceToward(x: number, y: number): void {
+    const dx = x - this.x;
+    const dy = y - this.y;
+    this.lastDirection = Math.abs(dx) > Math.abs(dy)
+      ? (dx < 0 ? 'left' : 'right')
+      : (dy < 0 ? 'up' : 'down');
+    this.moving = false;
+    this.currentFrame = 0;
+    this.frameTimer = 0;
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.applyVisualFrame(this.lastDirection, 0);
+  }
+
   isMoving(): boolean {
     return this.moving;
   }

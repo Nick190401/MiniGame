@@ -94,6 +94,11 @@ export class WorldScene extends Phaser.Scene {
   private currentLine = '';
   private activeDialogSpeaker?: string;
   private introActive = false;
+  private introCameraBeat = -1;
+  private introCinematicOverlay?: {
+    scene: Phaser.Scene;
+    items: Phaser.GameObjects.GameObject[];
+  };
 
   // State
   private battleActive = false;
@@ -184,6 +189,7 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 1, 1);
     this.cameras.main.setZoom(2);
     this.cameras.main.setRoundPixels(true);
+    this.cameras.main.fadeIn(850, 5, 9, 8);
 
     this.physics.add.collider(this.player, this.walls);
 
@@ -238,7 +244,7 @@ export class WorldScene extends Phaser.Scene {
     this.createDialogBox();
     this.worldFrozen = true;
     this.player.freeze();
-    this.time.delayedCall(420, () => this.startIntroCutscene());
+    this.time.delayedCall(120, () => this.startIntroCutscene());
   }
 
   // ── Update ────────────────────────────────────────────────────────────────
@@ -251,6 +257,12 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.updateNpcs(delta);
+
+    // During the introduction the player tracks Professor Muse instead of
+    // staring straight ahead while she approaches and speaks.
+    if (this.introActive && this.npcSprite) {
+      this.player.faceToward(this.npcSprite.x, this.npcSprite.y);
+    }
 
     const mobileAction = consumeMobileAction();
     if (mobileAction && this.dialogActive) {
@@ -752,74 +764,206 @@ export class WorldScene extends Phaser.Scene {
     EventBus.emit(EVENTS.UI_NOTICE_CLEAR);
 
     this.cameras.main.stopFollow();
-    const professorTargetX = this.npcSprite.x + 18;
-    const focusX = (professorTargetX + this.player.x) / 2;
-    const focusY = (this.npcSprite.y + this.player.y) / 2 - 5;
-    this.cameras.main.pan(focusX, focusY, 720, 'Sine.easeInOut', true);
-    this.cameras.main.zoomTo(2.18, 720, 'Sine.easeInOut');
+    this.createIntroCinematicOverlay();
 
-    this.npcSprite.walkScriptedTo(professorTargetX, this.npcSprite.y, 720, () => {
-      this.npcSprite?.faceToward(this.player.x, this.player.y);
+    // Open on Professor Muse's laboratory before gliding across the village.
+    // The camera starts moving while the scene is still fading in, so the
+    // loading transition resolves into an establishing shot instead of a cut.
+    const laboratoryX = 22 * TILE;
+    const laboratoryY = 7 * TILE;
+    this.moveIntroCamera(laboratoryX, laboratoryY, this.introZoom(1.55), 820, 'Cubic.easeInOut');
+
+    const approachX = this.player.x - 30;
+    const approachY = this.player.y;
+    const focusX = (approachX + this.player.x) / 2;
+    const focusY = this.player.y - 7;
+
+    this.time.delayedCall(760, () => {
+      if (!this.introActive || !this.npcSprite) return;
+      this.moveIntroCamera(focusX, focusY, this.introZoom(2.08), 1500, 'Sine.easeInOut');
+
+      // Walk on the village paths in two readable legs. A direct diagonal
+      // tween would slide while showing only one directional walk cycle.
+      this.npcSprite.walkScriptedTo(this.npcSprite.x, approachY, 1180, () => {
+        if (!this.introActive || !this.npcSprite) return;
+        this.npcSprite.walkScriptedTo(approachX, approachY, 620, () => {
+          this.npcSprite?.faceToward(this.player.x, this.player.y);
+          this.player.faceToward(approachX, approachY);
+        });
+      });
     });
 
     const playerName = useGameStore.getState().playerName || 'Listener';
-    this.time.delayedCall(860, () => {
+    this.time.delayedCall(2740, () => {
+      if (!this.introActive) return;
       this.showDialog([
         'Professor Muse:',
         `"${playerName}, wait. The Gatekeeper stole the Lost Track."`,
-        '"Follow the main road south. Recover all three Sound Fragments and reach Level 2."',
-        '"The Frequency Gate leads to him. If your signal drops, any of us can restore a little HP."',
+        '"Follow the signal south. Recover all three Sound Fragments and strengthen your frequency."',
+        '"Reach Level 2, cross the Frequency Gate, and find him in the silence beyond."',
+        '"If your signal fades, find one of us. We can tune it back into shape."',
       ], () => this.finishIntroCutscene(), beat => this.playIntroBeat(beat));
     });
   }
 
   private playIntroBeat(beat: number): void {
     if (!this.npcSprite) return;
+    this.introCameraBeat = beat;
 
     if (beat === 0) {
       this.npcSprite.faceToward(this.player.x, this.player.y);
+      const focusX = (this.npcSprite.x + this.player.x) / 2;
+      const focusY = (this.npcSprite.y + this.player.y) / 2 - 7;
+      this.moveIntroCamera(focusX, focusY, this.introZoom(2.2), 520, 'Sine.easeOut');
       this.pulseProfessorSignal();
       return;
     }
 
     if (beat === 1) {
-      const routeX = 32 * TILE;
-      const routeY = 20 * TILE;
-      this.cameras.main.pan(routeX, routeY - 16, 620, 'Sine.easeInOut', true);
-      this.cameras.main.zoomTo(1.92, 620, 'Sine.easeInOut');
-      this.pulseVillageRoute(routeX, routeY);
+      const fragment = this.fragments[0];
+      const targetX = fragment?.x ?? 13 * TILE + TILE / 2;
+      const targetY = fragment?.y ?? 29 * TILE + TILE / 2;
+      this.moveIntroCamera(targetX, targetY - 8, this.introZoom(1.72), 980, 'Cubic.easeInOut');
+      this.time.delayedCall(610, () => {
+        if (this.introActive && this.introCameraBeat === beat) {
+          this.pulseIntroTarget(targetX, targetY, 'SOUND FRAGMENT // 01', 0x6ea8d8);
+        }
+      });
+      return;
+    }
+
+    if (beat === 2) {
+      const gateX = GATE_CENTER_COL * TILE;
+      const gateY = (GATE_START_ROW + 1) * TILE;
+      // This long southbound sweep briefly exposes the scale of the journey
+      // before landing on the locked gate named in the current dialog line.
+      this.moveIntroCamera(gateX, gateY, this.introZoom(1.28), 1450, 'Sine.easeInOut');
+      this.time.delayedCall(1110, () => {
+        if (this.introActive && this.introCameraBeat === beat) {
+          this.pulseIntroTarget(gateX, gateY, 'FREQUENCY GATE // LOCKED', 0xff7a2b);
+          this.cameras.main.shake(180, 0.0018);
+        }
+      });
       return;
     }
 
     const professorFocusX = (this.npcSprite.x + this.player.x) / 2;
     const professorFocusY = (this.npcSprite.y + this.player.y) / 2 - 5;
-    this.cameras.main.pan(professorFocusX, professorFocusY, 620, 'Sine.easeInOut', true);
-    this.cameras.main.zoomTo(2.18, 620, 'Sine.easeInOut');
+    this.moveIntroCamera(professorFocusX, professorFocusY, this.introZoom(2.08), 1180, 'Cubic.easeInOut');
+    this.time.delayedCall(820, () => {
+      if (this.introActive && this.introCameraBeat === beat) this.pulseProfessorSignal();
+    });
     this.npcSprite.faceToward(this.player.x, this.player.y);
   }
 
   private finishIntroCutscene(): void {
     this.worldFrozen = true;
-    this.cameras.main.pan(this.player.x, this.player.y, 760, 'Sine.easeInOut', true);
-    this.cameras.main.zoomTo(2, 760, 'Sine.easeInOut');
-    EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: 'MISSION TAPE // SIDE A',
-      title: 'Recover the Lost Track',
-      detail: '3 fragments  /  Level 2  /  Defeat the Gatekeeper',
-      accent: '#d7ff4a',
-      tone: 'info',
-      variant: 'hero',
-      duration: 2300,
+    this.introCameraBeat = -1;
+    this.moveIntroCamera(this.player.x, this.player.y, 2, 1250, 'Cubic.easeInOut');
+
+    this.time.delayedCall(460, () => {
+      if (!this.introActive) return;
+      EventBus.emit(EVENTS.UI_NOTICE, {
+        eyebrow: 'MISSION TAPE // SIDE A',
+        title: 'Recover the Lost Track',
+        detail: '3 fragments  /  Level 2  /  Defeat the Gatekeeper',
+        accent: '#d7ff4a',
+        tone: 'info',
+        variant: 'hero',
+        duration: 2300,
+      });
     });
 
-    this.time.delayedCall(1750, () => {
+    this.time.delayedCall(920, () => this.dismissIntroCinematicOverlay());
+    this.time.delayedCall(1380, () => {
+      if (!this.introActive) return;
       this.cameras.main.startFollow(this.player, true, 1, 1);
+      this.cameras.main.setZoom(2);
       this.player.unfreeze();
       this.introActive = false;
       this.worldFrozen = false;
       EventBus.emit(EVENTS.CUTSCENE_STATE, false);
       this.currentZoneIndex = -1;
       this.updateZonePresentation(true);
+    });
+  }
+
+  private moveIntroCamera(
+    x: number,
+    y: number,
+    zoom: number,
+    duration: number,
+    ease: string,
+  ): void {
+    this.cameras.main.pan(x, y, duration, ease, true);
+    this.cameras.main.zoomTo(zoom, duration, ease, true);
+  }
+
+  private introZoom(baseZoom: number): number {
+    // Portrait screens show substantially more vertical world space, so a
+    // modest boost keeps the subject readable without changing the route.
+    return this.scale.height > this.scale.width ? baseZoom * 1.1 : baseZoom;
+  }
+
+  private createIntroCinematicOverlay(): void {
+    this.introCinematicOverlay?.items.forEach(item => item.destroy());
+
+    // Fixed cinematic chrome belongs to UIScene. World-space objects with a
+    // zero scroll factor can still be culled during the long flight to the
+    // gate; the UI camera stays at the origin for the entire sequence.
+    const ui = this.scene.get('UIScene') as Phaser.Scene;
+    const width = ui.scale.width;
+    const height = ui.scale.height;
+    const barHeight = Phaser.Math.Clamp(Math.round(height * 0.075), 26, 42);
+    const bars = ui.add.graphics().setDepth(90).setAlpha(0);
+    bars.fillStyle(0x050908, 0.96);
+    bars.fillRect(0, 0, width, barHeight);
+    bars.fillRect(0, height - barHeight, width, barHeight);
+    bars.fillStyle(0xff7a2b, 0.9);
+    bars.fillRect(18, barHeight - 2, Math.min(118, width * 0.25), 1);
+    const chapter = ui.add.text(18, Math.max(7, barHeight * 0.27), 'FIRST TRANSMISSION', {
+      fontFamily: 'DM Mono',
+      fontSize: '7px',
+      color: '#f8ece2',
+      letterSpacing: 2,
+    }).setDepth(91).setResolution(2).setAlpha(0);
+    const location = ui.add.text(width - 18, barHeight / 2, 'ECHO VILLAGE // ORIGIN SIGNAL', {
+      fontFamily: 'DM Mono',
+      fontSize: '6px',
+      color: '#8fbdde',
+      letterSpacing: 1,
+    }).setOrigin(1, 0.5).setDepth(91).setResolution(2).setAlpha(0);
+
+    const items: Phaser.GameObjects.GameObject[] = [bars, chapter, location];
+    this.introCinematicOverlay = { scene: ui, items };
+
+    ui.tweens.add({
+      targets: items,
+      alpha: 1,
+      duration: 520,
+      ease: 'Sine.easeOut',
+    });
+    ui.tweens.add({
+      targets: [chapter, location],
+      alpha: { from: 0.35, to: 1 },
+      duration: 620,
+      delay: 260,
+      yoyo: true,
+      hold: 1050,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  private dismissIntroCinematicOverlay(): void {
+    const overlay = this.introCinematicOverlay;
+    if (!overlay) return;
+    this.introCinematicOverlay = undefined;
+    overlay.scene.tweens.add({
+      targets: overlay.items,
+      alpha: 0,
+      duration: 440,
+      ease: 'Sine.easeIn',
+      onComplete: () => overlay.items.forEach(item => item.destroy()),
     });
   }
 
@@ -847,29 +991,48 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private pulseVillageRoute(x: number, y: number): void {
-    for (let index = 0; index < 5; index++) {
-      const marker = this.add.graphics()
-        .setDepth(12)
-        .setPosition(x, y - 34 + index * 9)
-        .setScale(0.55)
-        .setAlpha(0);
-      marker.fillStyle(index === 4 ? 0xff7a2b : 0xd7ff4a, 0.95);
-      marker.fillTriangle(-4, -3, 4, -3, 0, 3);
-      this.tweens.add({
-        targets: marker,
-        y: marker.y + 5,
-        scaleX: 1,
-        scaleY: 1,
-        alpha: 0.92,
-        delay: 190 + index * 85,
-        duration: 240,
-        hold: 420,
-        yoyo: true,
-        ease: 'Quad.easeOut',
-        onComplete: () => marker.destroy(),
-      });
-    }
+  private pulseIntroTarget(x: number, y: number, label: string, color: number): void {
+    const marker = this.add.graphics().setDepth(14).setPosition(x, y).setScale(0.35).setAlpha(0);
+    marker.lineStyle(2, color, 0.95);
+    marker.strokeCircle(0, 0, 18);
+    marker.lineStyle(1, 0xf8ece2, 0.7);
+    marker.strokeCircle(0, 0, 25);
+    marker.lineBetween(-31, 0, -20, 0);
+    marker.lineBetween(20, 0, 31, 0);
+    marker.lineBetween(0, -31, 0, -20);
+    marker.lineBetween(0, 20, 0, 31);
+
+    const targetLabel = this.add.text(x, y - 39, label, {
+      fontFamily: 'DM Mono',
+      fontSize: '6px',
+      color: '#f8ece2',
+      backgroundColor: '#0a0605',
+      padding: { x: 5, y: 3 },
+      letterSpacing: 1,
+    }).setOrigin(0.5).setDepth(15).setResolution(2).setAlpha(0);
+
+    this.tweens.add({
+      targets: marker,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      angle: 90,
+      duration: 380,
+      hold: 620,
+      yoyo: true,
+      ease: 'Back.easeOut',
+      onComplete: () => marker.destroy(),
+    });
+    this.tweens.add({
+      targets: targetLabel,
+      y: y - 44,
+      alpha: 1,
+      duration: 300,
+      hold: 650,
+      yoyo: true,
+      ease: 'Cubic.easeOut',
+      onComplete: () => targetLabel.destroy(),
+    });
   }
 
   private spawnFragments(mapResult: ReturnType<typeof MapBuilder.build>): void {

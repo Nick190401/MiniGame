@@ -3,6 +3,8 @@ import { useGameStore } from '../store/gameStore';
 import { AudioManager } from '../game/audio/AudioManager';
 import { SFX } from '../game/audio/AudioLibrary';
 
+const playUiClick = () => AudioManager.playSfx(SFX.uiClick.key);
+
 export function TitleScreen() {
   const setGamePhase = useGameStore(s => s.setGamePhase);
   const setPlayerName = useGameStore(s => s.setPlayerName);
@@ -10,16 +12,24 @@ export function TitleScreen() {
   const [name, setName] = useState('');
 
   const openModal = useCallback(() => {
-    AudioManager.playSfx(SFX.uiClick.key);
+    playUiClick();
     setShowModal(true);
   }, []);
-  const closeModal = useCallback(() => setShowModal(false), []);
+  const closeModal = useCallback(() => {
+    playUiClick();
+    setShowModal(false);
+  }, []);
 
   const handleStart = useCallback(() => {
-    AudioManager.playSfx(SFX.uiClick.key);
+    playUiClick();
     setPlayerName(name.trim() || 'Sound Keeper');
     setGamePhase('world');
   }, [name, setPlayerName, setGamePhase]);
+
+  const openEditor = useCallback(() => {
+    playUiClick();
+    setGamePhase('editor');
+  }, [setGamePhase]);
 
   // Classic arcade convention: any key opens the modal, not just a click.
   useEffect(() => {
@@ -91,7 +101,7 @@ export function TitleScreen() {
               <span className="name-modal__submit-icon" aria-hidden="true">↗</span>
             </button>
 
-            <button className="name-modal__secondary" onClick={() => setGamePhase('editor')}>
+            <button className="name-modal__secondary" onClick={openEditor}>
               <span aria-hidden="true">⌗</span> Open world editor
             </button>
           </div>
