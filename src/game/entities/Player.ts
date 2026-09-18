@@ -3,15 +3,11 @@ import { MobileInput } from '../input/MobileInput';
 import { PLAYER_TEXTURES, type PlayerDirection } from '../assets/PlayerTextures';
 
 const SPEED = 120;
-const WORLD_MODEL_SCALE = 0.105;
-
-// Subject centre and foot baseline inside each standalone 313px texture.
-const PLAYER_ORIGINS: Record<PlayerDirection, ReadonlyArray<readonly [number, number]>> = {
-  down: [[169, 291], [157, 291], [151, 291], [148, 291]],
-  up: [[167, 281], [157, 281], [149, 281], [146, 281]],
-  left: [[157, 263], [154, 261], [145, 263], [141, 261]],
-  right: [[162, 239], [141, 239], [152, 239], [141, 239]],
-};
+// The generated world texture has enough detail for a slightly larger figure.
+// Keep nearest-neighbour sampling so the extra detail stays crisp and pixel-like.
+const WORLD_MODEL_SCALE = 0.06;
+const BODY_WIDTH = 9.45 / WORLD_MODEL_SCALE;
+const BODY_HEIGHT = 5.775 / WORLD_MODEL_SCALE;
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -32,12 +28,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    this.setDepth(5);
+    this.setDepth(5 + y / 10000);
     this.setScale(WORLD_MODEL_SCALE);
     this.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(90, 55);
+    body.setSize(BODY_WIDTH, BODY_HEIGHT);
     this.applyVisualFrame('down', 0);
     body.setCollideWorldBounds(true);
 
@@ -123,12 +119,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private applyVisualFrame(direction: PlayerDirection, frame: number): void {
     this.setTexture(PLAYER_TEXTURES[direction][frame]);
-    const [centerX, baselineY] = PLAYER_ORIGINS[direction][frame];
+    const centerX = 156.5, baselineY = 291;
     this.setOrigin(centerX / 313, baselineY / 313);
 
     // Keep the collision footprint anchored beneath the feet for every pose.
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setOffset(centerX - 45, baselineY - 55);
+    body.setOffset(centerX * 2 - BODY_WIDTH / 2, baselineY * 2 - BODY_HEIGHT);
   }
 
   getDirection(): PlayerDirection {

@@ -326,6 +326,10 @@ function applyExpandedWorldLayout(grid: number[][]): void {
   fill(61, 46, 66, 52, P);
   fill(68, 12, 72, 18, P);
   fill(68, 46, 72, 52, P);
+  // Doorstep lanes follow the smaller Junction buildings' new footprints.
+  fill(64, 9, 65, 17, P);
+  fill(64, 47, 65, 54, P);
+  fill(74, 48, 74, 54, P);
   fill(66, 22, 69, 25, R); fill(66, 38, 69, 41, R);
   for (const [row, col] of [
     [63, 15], [63, 48], [66, 19], [66, 44], [69, 20], [69, 43],
@@ -870,6 +874,9 @@ export class MapBuilder {
       return shadow;
     };
 
+    const junctionEdges = scene.add.graphics().setDepth(0.2);
+    decorative.add(junctionEdges);
+
     for (let row = 0; row < MAP_ROWS; row++) {
       for (let col = 0; col < MAP_COLS; col++) {
         const tileType = grid[row][col];
@@ -913,11 +920,28 @@ export class MapBuilder {
           }
           case P: {
             const isBridge = row >= 44 && row <= 49 && col >= 28 && col <= 35;
+            const isJunction = row >= JUNCTION_START_ROW && row < GROVE_START_ROW;
             const pathKey = isBridge ? 'tile-bridge'
-              : row >= JUNCTION_START_ROW && row < GROVE_START_ROW ? 'tile-path-2'
+              : isJunction ? `tile-junction-paving-${(row % 2) * 2 + col % 2}`
                 : 'tile-path';
             const i = scene.add.image(px, py, pathKey);
-            i.setFlip(rng > 0.52, rng > 0.82);
+            if (!isJunction) i.setFlip(rng > 0.52, rng > 0.82);
+            if (isJunction) {
+              const x = col * TILE, y = row * TILE;
+              const isEdge = (r: number, c: number) => grid[r]?.[c] !== P && grid[r]?.[c] !== H;
+              junctionEdges.fillStyle(0xb1b6a3, 1);
+              if (isEdge(row - 1, col)) junctionEdges.fillRect(x, y, TILE, 2);
+              if (isEdge(row + 1, col)) junctionEdges.fillRect(x, y + TILE - 2, TILE, 2);
+              if (isEdge(row, col - 1)) junctionEdges.fillRect(x, y, 2, TILE);
+              if (isEdge(row, col + 1)) junctionEdges.fillRect(x + TILE - 2, y, 2, TILE);
+              // Sparse inlaid lights guide the station's central promenade.
+              if ((col === 29 || col === 34) && row % 4 === 0) {
+                junctionEdges.fillStyle(0x293f43, 1);
+                junctionEdges.fillRect(x + 5, y + 5, 6, 4);
+                junctionEdges.fillStyle(0x81b9ac, 0.85);
+                junctionEdges.fillRect(x + 6, y + 6, 4, 1);
+              }
+            }
             if (row >= FADING_START_ROW) i.setTint(0xb6b49e);
             i.setDepth(0); decorative.add(i);
             break;

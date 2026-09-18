@@ -95,6 +95,21 @@ export class WorldArtFactory {
       f(g, c.stoneLight, 9, 9, 5, 1, 0.48); f(g, c.teal, 14, 3, 1, 1, 0.38);
     });
 
+    // Quiet slate paving, offset joints and restrained wear for Neon Junction.
+    // Four tiles form a continuous pattern rather than randomly mirrored bricks.
+    for (let variant = 0; variant < 4; variant++) {
+      tile(`tile-junction-paving-${variant}`, g => {
+        f(g, 0x3c4b50, 0, 0, 16, 16);
+        f(g, variant < 2 ? 0x657477 : 0x68777a, 0, 1, 16, 14);
+        const joint = variant % 2 === 0 ? 4 : 12;
+        f(g, 0x425358, joint, 1, 1, 14);
+        f(g, 0x879592, 0, 1, 16, 1, 0.55);
+        f(g, 0x82908e, joint + 1, 2, 1, 11, 0.32);
+        f(g, 0x536367, 0, 14, 16, 1, 0.6);
+        f(g, 0x9aa59c, (variant * 5 + 2) % 15, 6, 2, 1, 0.18);
+      });
+    }
+
     tile('tile-bridge', g => {
       f(g, c.woodDark, 0, 0, 16, 16);
       for (let y = 1; y < 16; y += 5) {

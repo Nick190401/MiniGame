@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { EventBus, EVENTS, type DialogPayload } from '../game/EventBus';
 
 interface DialogueOverlayProps {
@@ -13,17 +13,54 @@ interface OverlayBounds {
 }
 
 const PORTRAITS: Partial<Record<NonNullable<DialogPayload['portrait']>, string>> = {
-  elder: '/assets/npc-elder-muse-v4.png',
-  guard: '/assets/npc-junction-guard-v3.png',
-  musician: '/assets/npc-wandering-musician-v3.png',
-  gatekeeper: '/assets/boss-gatekeeper-phase1-v2.png',
+  elder: '/assets/npc-elder-muse-v4.webp',
+  guard: '/assets/npc-junction-guard-v3.webp',
+  musician: '/assets/npc-wandering-musician-v3.webp',
+  gatekeeper: '/assets/boss-gatekeeper-phase1-v2.webp',
 };
+
+// Cache tightly framed busts instead of squeezing padded full-body art into a square.
+const portraitCache = new Map<string, Promise<string>>();
+function preparePortrait(url: string): Promise<string> {
+  if (!portraitCache.has(url)) portraitCache.set(url, (async () => {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(image, 0, 0);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let left = canvas.width, top = canvas.height, right = 0, bottom = 0;
+    for (let y = 0; y < canvas.height; y += 2) for (let x = 0; x < canvas.width; x += 2) {
+      if (data[(y * canvas.width + x) * 4 + 3] < 100) continue;
+      left = Math.min(left, x); right = Math.max(right, x);
+      top = Math.min(top, y); bottom = Math.max(bottom, y);
+    }
+    const width = right - left + 1;
+    const height = Math.min(bottom - top + 1, width * 1.2);
+    canvas.width = 256; canvas.height = 308;
+    ctx.drawImage(image, left, top, width, height, 0, 0, 256, 308);
+    return canvas.toDataURL('image/png');
+  })().catch(() => url));
+  return portraitCache.get(url)!;
+}
+
+Object.values(PORTRAITS).forEach(url => { void preparePortrait(url); });
 
 export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
   const [dialog, setDialog] = useState<DialogPayload | null>(null);
   const [bounds, setBounds] = useState<OverlayBounds | null>(null);
+  const [portraits, setPortraits] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    let mounted = true;
+    Object.values(PORTRAITS).forEach(url => {
+      void preparePortrait(url).then(src => {
+        if (mounted) setPortraits(previous => ({ ...previous, [url]: src }));
+      });
+    });
     const onDialog = (payload: DialogPayload | string) => {
       setDialog(typeof payload === 'string'
         ? { text: payload, speaker: 'FIELD TRANSMISSION', accent: '#ff7a2b' }
@@ -33,12 +70,13 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
     EventBus.on(EVENTS.DIALOG, onDialog);
     EventBus.on(EVENTS.DIALOG_CLEAR, onClear);
     return () => {
+      mounted = false;
       EventBus.off(EVENTS.DIALOG, onDialog);
       EventBus.off(EVENTS.DIALOG_CLEAR, onClear);
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const parent = canvasParentRef.current;
     if (!parent) return;
 
@@ -47,6 +85,7 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
       if (!canvas) return;
       const stageRect = parent.parentElement?.getBoundingClientRect() ?? parent.getBoundingClientRect();
       const canvasRect = canvas.getBoundingClientRect();
+      if (canvasRect.width <= 0 || canvasRect.height <= 0) return;
       const width = canvasRect.width * 0.9;
       const height = Math.min(190, Math.max(88, canvasRect.height * 0.28));
       setBounds({
@@ -61,7 +100,10 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
     mutationObserver.observe(parent, { childList: true });
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(parent);
+    const canvas = parent.querySelector('canvas');
+    if (canvas) resizeObserver.observe(canvas);
     window.addEventListener('resize', measure);
+    measure();
     const frame = requestAnimationFrame(measure);
 
     return () => {
@@ -94,7 +136,7 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
         {portraitUrl ? (
           <img
             className={`dialog-overlay__portrait-image is-${dialog.portrait}`}
-            src={portraitUrl}
+            src={portraits[portraitUrl] ?? portraitUrl}
             alt=""
           />
         ) : (

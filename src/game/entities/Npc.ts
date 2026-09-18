@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { NPC_TEXTURES, type NpcDirection, type NpcId } from '../assets/NpcTextures';
 
 const NPC_SPEED = 24;
-const NPC_SCALE = 0.105;
+const NPC_SCALE = 0.12;
 const FRAME_SIZE = 313;
 const FOOT_BASELINE = 291;
-const BODY_WIDTH = 116;
-const BODY_HEIGHT = 70;
+// Preserve the old collision footprint while enlarging only the artwork.
+const BODY_WIDTH = 12.18 / NPC_SCALE;
+const BODY_HEIGHT = 7.35 / NPC_SCALE;
 
 export interface NpcPatrolArea {
   radiusX: number;
@@ -45,7 +46,7 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    this.setDepth(4);
+    this.setDepth(5 + y / 10000);
     this.setOrigin(0.5, FOOT_BASELINE / FRAME_SIZE);
     this.setScale(NPC_SCALE);
     this.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
@@ -228,6 +229,8 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
   }
 
   private syncShadow(): void {
+    // Same foot-position depth band as the player and foreground grass.
+    this.setDepth(5 + this.y / 10000);
     this.shadow.setPosition(this.x, this.y + 1);
   }
 }

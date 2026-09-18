@@ -196,8 +196,8 @@ export class DeathScene extends Phaser.Scene {
     receiver.add(platform);
 
     const playerGhost = this.add.sprite(0, 61, PLAYER_TEXTURES.down[0])
-      .setOrigin(169 / 313, 291 / 313)
-      .setScale(0.34)
+      .setOrigin(0.5, 291 / 313)
+      .setScale(0.17)
       .setTint(0x8c8179)
       .setAlpha(0.48);
     playerGhost.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);

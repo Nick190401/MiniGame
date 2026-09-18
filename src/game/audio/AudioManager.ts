@@ -20,7 +20,7 @@ import {
  * importing this file.
  */
 
-type MusicOptions = { loop?: boolean; fadeMs?: number; volume?: number };
+type MusicOptions = { loop?: boolean; fadeMs?: number; volume?: number; onComplete?: () => void };
 type SfxOptions = { volume?: number; rate?: number };
 type Mode = 'world' | 'battle' | 'death' | 'reward';
 
@@ -70,6 +70,7 @@ class AudioManagerImpl {
   private preBootSfx = new Map<string, HTMLAudioElement>();
   private footstepSound: Fadeable | null = null;
   private footstepSurface: FootstepSurface = 'none';
+  private encounterSound: Phaser.Sound.BaseSound | null = null;
 
   /** Wire the manager up once the Phaser game instance exists. Safe to call more than once. */
   init(game: Phaser.Game): void {
@@ -92,7 +93,23 @@ class AudioManagerImpl {
     EventBus.on(EVENTS.ENEMY_DEFEATED, this.onEnemyDefeated, this);
     EventBus.on(EVENTS.FOOTSTEPS, this.onFootsteps, this);
 
-    EventBus.on(EVENTS.BOSS_DEFEATED, () => this.onEnemyDefeated(true));
+    // ENEMY_DEFEATED already covers bosses; BOSS_DEFEATED is the later story beat.
+    EventBus.on(EVENTS.ENCOUNTER, () => {
+      this.onFootsteps('none');
+      this.mode = 'battle';
+      this.playMusic(MUSIC.battle.key, { fadeMs: 150 });
+      this.encounterSound?.destroy();
+      this.encounterSound = null;
+      if (this.game && this.resolveKey(SFX.encounter.key)) {
+        const sound = this.game.sound.add(SFX.encounter.key, { volume: this.settings.sfxVolume });
+        this.encounterSound = sound;
+        sound.once('complete', () => {
+          if (this.encounterSound === sound) this.encounterSound = null;
+          sound.destroy();
+        });
+        sound.play();
+      }
+    });
     EventBus.on(EVENTS.LEVEL_UP, () => this.playSfx(SFX.levelUp.key));
     EventBus.on(EVENTS.ITEM_COLLECTED, () => this.playSfx(SFX.itemPickup.key));
     EventBus.on(EVENTS.GATE_OPEN, () => this.playSfx(SFX.gateOpen.key));
@@ -123,13 +140,17 @@ class AudioManagerImpl {
     const key = data.isBoss
       ? this.resolveKey(BOSS_PHASE_MUSIC[0], MUSIC.battle.key)
       : this.resolveKey(MUSIC.battle.key);
-    if (key) this.playMusic(key, { fadeMs: 350 });
+    // The short encounter cue accompanies the world transition; the actual
+    // fight starts with the looping battle theme, without a second intro track.
+    // Layer the still-playing encounter cue over the battle music immediately.
+    if (key) this.playMusic(key, { fadeMs: 150 });
   }
 
   private onBattleEnd(data?: { outcome?: 'win' | 'lose' }): void {
     // On a loss the death theme is about to take over, so returning to the
     // zone track here would stab in for a moment and immediately be replaced.
     if (data?.outcome === 'lose') return;
+    if (data?.outcome === 'win') this.playSfx(SFX.victory.key);
     this.mode = 'world';
     this.playMusic(this.zoneTrack, { fadeMs: 500 });
   }
@@ -172,8 +193,11 @@ class AudioManagerImpl {
   }
 
   private onAttackUsed(data: AttackUsedPayload): void {
-    if (data.isPlayer) this.playSfx(ATTACK_SFX_BY_ID[data.attackId] ?? SFX.attackGeneric.key);
-    else this.playSfx(ATTACK_SFX_BY_ENEMY_NAME[data.name] ?? SFX.enemyAttack.key);
+    if (data.isPlayer) this.playAttackSfx(data.attackId);
+    else this.playAvailableSfx([
+      ATTACK_SFX_BY_ENEMY_NAME[data.name] ?? SFX.enemyAttack.key,
+      SFX.enemyAttack.key,
+    ]);
   }
 
   private onImpact(data: ImpactPayload): void {
@@ -269,6 +293,12 @@ class AudioManagerImpl {
     }
 
     const sound = this.game.sound.add(key, { loop, volume: 0 }) as unknown as Fadeable;
+    if (opts.onComplete) {
+      sound.once('complete', () => {
+        // A stopped/replaced intro must never restart battle music later.
+        if (this.music === sound) opts.onComplete?.();
+      });
+    }
     sound.play(seek > 0 ? { seek } : undefined);
     this.music = sound;
     this.musicKey = key;
@@ -321,7 +351,7 @@ class AudioManagerImpl {
   }
 
   playAttackSfx(attackId: string): void {
-    this.playSfx(ATTACK_SFX_BY_ID[attackId] ?? SFX.attackGeneric.key);
+    this.playSfx(ATTACK_SFX_BY_ID[attackId] ?? SFX.attackBassDrop.key);
   }
 
   setMusicVolume(value: number): void {

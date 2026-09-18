@@ -64,6 +64,9 @@ export class BattleScene extends Phaser.Scene {
 
   // Ambient particles
   private ambientParticles: Phaser.GameObjects.Graphics[] = [];
+  private enemyEffects = new Set<Phaser.GameObjects.Graphics>();
+  private enemyEffectTimers = new Set<Phaser.Time.TimerEvent>();
+  private enemyEffectTweens = new Set<Phaser.Tweens.Tween>();
 
   // Opaque-pixel bounds per texture, so characters can be sized and planted
   // by what is actually *visible* rather than by their padded canvas.
@@ -89,6 +92,7 @@ export class BattleScene extends Phaser.Scene {
     this.bossPhaseIndex = 0;
     this.attackButtons = [];
     this.ambientParticles = [];
+    this.turnState = 'player-choose';
   }
 
   create(): void {
@@ -220,8 +224,10 @@ export class BattleScene extends Phaser.Scene {
     // platforms) instead of using that art directly.
     const signalColor = this.isBoss ? 0xf0362c : this.enemyData.color;
     const atmosphere = this.add.graphics().setDepth(1);
-    atmosphere.fillStyle(signalColor, 0.06);
-    atmosphere.fillCircle(platformAnchors.enemy.x, platformAnchors.enemy.y, BATTLE_H * 0.55);
+    if (!this.isBoss) {
+      atmosphere.fillStyle(signalColor, 0.06);
+      atmosphere.fillCircle(platformAnchors.enemy.x, platformAnchors.enemy.y, BATTLE_H * 0.55);
+    }
     atmosphere.fillStyle(0x6ea8d8, 0.045);
     atmosphere.fillCircle(platformAnchors.player.x, platformAnchors.player.y, BATTLE_H * 0.45);
 
@@ -232,11 +238,6 @@ export class BattleScene extends Phaser.Scene {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '10px', color: `#${signalColor.toString(16).padStart(6, '0')}`,
     }).setOrigin(1, 0).setDepth(3).setVisible(false);
 
-    if (this.isBoss) {
-      const aura = this.add.graphics().setDepth(1);
-      aura.fillStyle(0x330000, 0.14);
-      aura.fillRect(0, 0, W, H);
-    }
 
     // Scanlines
     const scanlines = this.add.graphics();
@@ -315,7 +316,16 @@ export class BattleScene extends Phaser.Scene {
     );
 
     this.enemySprite = this.add.sprite(0, 0, enemyTexture).setDepth(5);
+    this.enemySprite.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.plantOnPlatform(this.enemySprite, enemyTexture, platformAnchors.enemy, this.enemyTargetHeight);
+    if (this.isBoss) {
+      const contactShadow = this.add.ellipse(
+        platformAnchors.enemy.x, platformAnchors.enemy.y - 2,
+        this.enemyTargetHeight * 0.72, this.enemyTargetHeight * 0.1,
+        0x080e0d, 0.42,
+      ).setDepth(4).setName('boss-contact-shadow');
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => contactShadow.destroy());
+    }
     this.enemyPlatform = platformAnchors.enemy;
     const enemyFinalX = this.enemySprite.x;
     const enemySpriteY = this.enemySprite.y;
@@ -327,7 +337,8 @@ export class BattleScene extends Phaser.Scene {
       duration: 600,
       ease: 'Back.easeOut',
       onComplete: () => {
-        this.tweens.add({
+        if (this.currentEnemyHp <= 0) return;
+        if (!this.isBoss) this.tweens.add({
           targets: this.enemySprite,
           y: enemySpriteY - 5,
           duration: this.isBoss ? 1800 : 1300,
@@ -351,8 +362,11 @@ export class BattleScene extends Phaser.Scene {
 
     // ── Player sprite — slides in onto its platform ──────────────────────
     // Largest of the two: its platform is the nearest thing in the artwork.
-    const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.336, 10);
+    const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.37, 10);
     this.playerSprite = this.add.sprite(0, 0, 'player-battle').setDepth(5);
+    // Preserve the baked-in cap lettering and pixel contours when the large
+    // source is reduced to battle size. Linear filtering blurred the MR mark.
+    this.playerSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.plantOnPlatform(this.playerSprite, 'player-battle', platformAnchors.player, playerTargetH);
     const playerFinalX = this.playerSprite.x;
     this.playerSprite.x = -40;
@@ -391,6 +405,7 @@ export class BattleScene extends Phaser.Scene {
     EventBus.on(EVENTS.BATTLE_UI_ACTION, this.onBattleUiAction);
     EventBus.on(EVENTS.BATTLE_UI_REQUEST, this.emitBattleUiState, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.stopEnemyEffects();
       this.scene.setVisible(true, 'WorldScene');
       EventBus.off(EVENTS.BATTLE_UI_ACTION, this.onBattleUiAction);
       EventBus.off(EVENTS.BATTLE_UI_REQUEST, this.emitBattleUiState, this);
@@ -980,12 +995,17 @@ export class BattleScene extends Phaser.Scene {
 
     const damage = applyDamageVariance(attack.damage);
     this.setMessage(`${attack.name}!`);
-    EventBus.emit(EVENTS.ATTACK_USED, { attackId: attack.id, name: attack.name, isPlayer: true });
-
     this.playPlayerAttackAnimation(attack, () => {
       this.currentEnemyHp = Math.max(0, this.currentEnemyHp - damage);
       this.updateEnemyHpBar();
       this.playTargetImpact(this.enemySprite, attack.color, false);
+
+      // A lethal hit must not start another boss phase or leave its aura alive.
+      if (this.currentEnemyHp <= 0) {
+        this.stopEnemyEffects();
+        this.time.delayedCall(600, () => this.endBattle('win'));
+        return;
+      }
 
       // Check boss phase transition
       if (this.isBoss) {
@@ -999,11 +1019,6 @@ export class BattleScene extends Phaser.Scene {
           this.triggerPhaseChange(newPhaseIdx);
           return;
         }
-      }
-
-      if (this.currentEnemyHp <= 0) {
-        this.time.delayedCall(600, () => this.endBattle('win'));
-        return;
       }
 
       this.time.delayedCall(700, () => this.executeEnemyAttack());
@@ -1020,8 +1035,6 @@ export class BattleScene extends Phaser.Scene {
     const damage  = applyDamageVariance(rawDmg);
 
     this.setMessage(`${this.enemyData.name}\nuses ${attack.name}!`);
-    EventBus.emit(EVENTS.ATTACK_USED, { attackId: 'enemy-attack', name: attack.name, isPlayer: false });
-
     this.time.delayedCall(600, () => {
       this.playEnemyAttackAnimation(attack, () => {
         store.takeDamage(damage);
@@ -1231,9 +1244,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private endBattle(outcome: 'win' | 'lose'): void {
+    if (this.turnState === 'battle-end') return;
     this.setTurnState('battle-end');
 
     if (outcome === 'win') {
+      this.stopEnemyEffects();
+      this.enemySprite.clearTint().setAlpha(1);
+      this.children.getByName('boss-contact-shadow')?.destroy();
       this.setMessage(this.isBoss
         ? 'THE GATEKEEPER\nhas been silenced!'
         : `${this.enemyData.name}\nwas defeated!`);
@@ -1254,6 +1271,7 @@ export class BattleScene extends Phaser.Scene {
             angle: 360,
             duration: 500,
             ease: 'Back.easeIn',
+            onComplete: () => this.enemySprite.setVisible(false).setActive(false),
           });
           this.spawnDefeatParticles(this.enemySprite.x, this.enemySprite.y);
         },
@@ -1269,10 +1287,11 @@ export class BattleScene extends Phaser.Scene {
         const xpMsg = `+${this.enemyData.xpReward} XP`;
         this.setMessage(`${this.enemyData.name} defeated!\n${xpMsg}`);
 
-        if (store.level > prevLevel) {
-          EventBus.emit(EVENTS.LEVEL_UP, store.level);
+        const currentLevel = useGameStore.getState().level;
+        if (currentLevel > prevLevel) {
+          EventBus.emit(EVENTS.LEVEL_UP, currentLevel);
           this.time.delayedCall(500, () => {
-            this.setMessage(`${this.enemyData.name} defeated!\n${xpMsg}\nLEVEL UP! → ${store.level}!`);
+            this.setMessage(`${this.enemyData.name} defeated!\n${xpMsg}\nLEVEL UP! → ${currentLevel}!`);
           });
         }
       }
@@ -1346,7 +1365,11 @@ export class BattleScene extends Phaser.Scene {
   // ── Player attack animations ──────────────────────────────────────────────
 
   private playPlayerAttackAnimation(attack: Attack, onComplete: () => void): void {
-    this.playPlayerAttackPrelude(attack, () => this.runPlayerAttackAnimation(attack, onComplete));
+    this.playPlayerAttackPrelude(attack, () => {
+      // Start the cue with the visible attack, after the track-card wind-up.
+      EventBus.emit(EVENTS.ATTACK_USED, { attackId: attack.id, name: attack.name, isPlayer: true });
+      this.runPlayerAttackAnimation(attack, onComplete);
+    });
   }
 
   private playPlayerAttackPrelude(attack: Attack, onComplete: () => void): void {
@@ -2320,7 +2343,12 @@ export class BattleScene extends Phaser.Scene {
   // ── Enemy attack animation ──────────────────────────────────────────────
 
   private playEnemyAttackAnimation(attack: { name: string; damage: number }, onComplete: () => void): void {
-    this.playEnemyAttackPrelude(attack, () => this.runEnemyAttackAnimation(attack, onComplete));
+    this.playEnemyAttackPrelude(attack, () => {
+      // The enemy turn has a message delay and a warning card. Playing here
+      // keeps the attack cue on the first visible strike frame.
+      EventBus.emit(EVENTS.ATTACK_USED, { attackId: 'enemy-attack', name: attack.name, isPlayer: false });
+      this.runEnemyAttackAnimation(attack, onComplete);
+    });
   }
 
   private playEnemyAttackPrelude(attack: { name: string; damage: number }, onComplete: () => void): void {
@@ -2423,16 +2451,20 @@ export class BattleScene extends Phaser.Scene {
     const origScaleX = this.enemySprite.scaleX;
     const origScaleY = this.enemySprite.scaleY;
 
-    // Different attack styles based on enemy type
+    // Match the visual attack family to the assigned sound family. Boss moves
+    // need explicit routing because their names do not contain the old generic
+    // "static" / "glitch" keywords.
     const enemyId = this.enemyData.id;
+    const zapAttacks = new Set(['Frequency Lock']);
+    const voidAttacks = new Set(['Silence Wave', 'Void Crush']);
 
-    if (enemyId === 'static-noise' || attack.name.toLowerCase().includes('static')) {
+    if (enemyId === 'static-noise' || zapAttacks.has(attack.name) || attack.name.toLowerCase().includes('static')) {
       // Electric attack — zap bolts
       this.playZapAttack(origX, origY, pX, pY, onComplete);
     } else if (enemyId === 'broken-signal' || attack.name.toLowerCase().includes('glitch')) {
       // Glitch attack — screen corruption effect
       this.playGlitchAttack(origX, origY, pX, pY, onComplete);
-    } else if (enemyId === 'silence' || attack.name.toLowerCase().includes('void')) {
+    } else if (enemyId === 'silence' || voidAttacks.has(attack.name) || attack.name.toLowerCase().includes('void')) {
       // Void attack — dark wave
       this.playVoidAttack(origX, origY, pX, pY, onComplete);
     } else {
@@ -2960,10 +2992,40 @@ export class BattleScene extends Phaser.Scene {
 
   // ── Silence enemy ambient effects ──────────────────────────────────────
 
+  private createEnemyEffect(): Phaser.GameObjects.Graphics {
+    const effect = this.add.graphics();
+    this.enemyEffects.add(effect);
+    effect.once('destroy', () => this.enemyEffects.delete(effect));
+    return effect;
+  }
+
+  private addEnemyEffectTimer(config: Phaser.Types.Time.TimerEventConfig): void {
+    this.enemyEffectTimers.add(this.time.addEvent(config));
+  }
+
+  private addEnemyEffectTween(config: Phaser.Types.Tweens.TweenBuilderConfig): void {
+    const tween = this.tweens.add(config);
+    this.enemyEffectTweens.add(tween);
+    tween.once('complete', () => this.enemyEffectTweens.delete(tween));
+  }
+
+  private stopEnemyEffects(): void {
+    this.enemyEffectTimers.forEach(timer => timer.remove(false));
+    this.enemyEffectTimers.clear();
+    this.enemyEffectTweens.forEach(tween => tween.remove());
+    this.enemyEffectTweens.clear();
+    this.enemyEffects.forEach(effect => {
+      this.tweens.killTweensOf(effect);
+      effect.destroy();
+    });
+    this.enemyEffects.clear();
+    if (this.enemySprite) this.tweens.killTweensOf(this.enemySprite);
+  }
+
   private spawnSilenceParticles(cx: number, cy: number, battleH: number): void {
     // 1) Orbiting purple/magenta pixel squares — matches the model's floating fragments
     for (let i = 0; i < 10; i++) {
-      const sq = this.add.graphics().setDepth(6);
+      const sq = this.createEnemyEffect().setDepth(6);
       const color = [0x6ea8d8, 0xff7a2b, 0x29638c, 0xe8b465][i % 4];
       const size = 3 + Math.random() * 4;
       sq.fillStyle(color, 0.8);
@@ -2975,14 +3037,14 @@ export class BattleScene extends Phaser.Scene {
       sq.setPosition(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius * 0.6);
 
       // Orbit around the enemy
-      this.tweens.add({
+      this.addEnemyEffectTween({
         targets: sq,
         angle: 360,
         duration: speed,
         repeat: -1,
       });
       // Drift in/out
-      this.tweens.add({
+      this.addEnemyEffectTween({
         targets: sq,
         x: { from: sq.x - 15, to: sq.x + 15 },
         y: { from: sq.y - 10, to: sq.y + 10 },
@@ -2995,13 +3057,13 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // 2) Cyan glow pulse at enemy core
-    const glow = this.add.graphics().setDepth(4);
+    const glow = this.createEnemyEffect().setDepth(4);
     glow.setPosition(cx, cy);
     glow.fillStyle(0x398bc6, 0.12);
     glow.fillCircle(0, 0, 50);
     glow.fillStyle(0x398bc6, 0.08);
     glow.fillCircle(0, 0, 35);
-    this.tweens.add({
+    this.addEnemyEffectTween({
       targets: glow,
       scaleX: 1.3, scaleY: 1.3,
       alpha: 0.04,
@@ -3012,12 +3074,12 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // 3) Rising cyan sparks from the body
-    this.time.addEvent({
+    this.addEnemyEffectTimer({
       delay: 300,
       repeat: -1,
       callback: () => {
-        if (!this.enemySprite?.active) return;
-        const spark = this.add.graphics().setDepth(7);
+        if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
+        const spark = this.createEnemyEffect().setDepth(7);
         const sc = [0x398bc6, 0x398bc6, 0x6eaad5][Math.floor(Math.random() * 3)];
         spark.fillStyle(sc, 0.7);
         spark.fillCircle(0, 0, 1 + Math.random());
@@ -3025,7 +3087,7 @@ export class BattleScene extends Phaser.Scene {
           this.enemySprite.x + Phaser.Math.Between(-25, 25),
           this.enemySprite.y + Phaser.Math.Between(-15, 30)
         );
-        this.tweens.add({
+        this.addEnemyEffectTween({
           targets: spark,
           y: spark.y - 40 - Math.random() * 30,
           x: spark.x + Phaser.Math.Between(-12, 12),
@@ -3040,11 +3102,11 @@ export class BattleScene extends Phaser.Scene {
     // 4) Dark mist / smoke at the base
     const mistY = cy + 55;
     for (let i = 0; i < 4; i++) {
-      const mist = this.add.graphics().setDepth(3);
+      const mist = this.createEnemyEffect().setDepth(3);
       mist.fillStyle(0x2d1e17, 0.3);
       mist.fillEllipse(0, 0, 30 + Math.random() * 20, 8 + Math.random() * 4);
       mist.setPosition(cx + Phaser.Math.Between(-35, 35), mistY + Phaser.Math.Between(-5, 5));
-      this.tweens.add({
+      this.addEnemyEffectTween({
         targets: mist,
         x: mist.x + Phaser.Math.Between(-20, 20),
         alpha: { from: 0.15, to: 0.35 },
@@ -3064,17 +3126,17 @@ export class BattleScene extends Phaser.Scene {
     const speakerOffsetX = 35;
     for (const side of [-1, 1]) {
       const sx = cx + speakerOffsetX * side;
-      this.time.addEvent({
+      this.addEnemyEffectTimer({
         delay: 1400 + side * 200,
         repeat: -1,
         callback: () => {
-          if (!this.enemySprite?.active) return;
+          if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
           for (let r = 0; r < 3; r++) {
-            const ring = this.add.graphics().setDepth(4);
+            const ring = this.createEnemyEffect().setDepth(4);
             ring.lineStyle(2, 0xcc8800, 0.5);
             ring.strokeCircle(0, 0, 6);
             ring.setPosition(sx, cy);
-            this.tweens.add({
+            this.addEnemyEffectTween({
               targets: ring,
               scaleX: 3 + r,
               scaleY: 3 + r,
@@ -3090,19 +3152,19 @@ export class BattleScene extends Phaser.Scene {
 
     // 2) Antenna sparks — electric orange/gold crackles at the antenna tips
     const antennaPositions = [{ x: cx - 28, y: cy - 40 }, { x: cx + 28, y: cy - 40 }];
-    this.time.addEvent({
+    this.addEnemyEffectTimer({
       delay: 350,
       repeat: -1,
       callback: () => {
-        if (!this.enemySprite?.active) return;
+        if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
         const ant = antennaPositions[Math.floor(Math.random() * 2)];
         for (let s = 0; s < 3; s++) {
-          const spark = this.add.graphics().setDepth(7);
+          const spark = this.createEnemyEffect().setDepth(7);
           const sc = [0xffaa00, 0xff6600, 0xffdd44][s];
           spark.fillStyle(sc, 0.9);
           spark.fillRect(-1, -1, 2, 2);
           spark.setPosition(ant.x + Phaser.Math.Between(-4, 4), ant.y + Phaser.Math.Between(-4, 4));
-          this.tweens.add({
+          this.addEnemyEffectTween({
             targets: spark,
             y: spark.y - 10 - Math.random() * 15,
             x: spark.x + Phaser.Math.Between(-8, 8),
@@ -3115,7 +3177,7 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // 3) Frequency dial glow — pulsating amber/orange light at the center
-    const dialGlow = this.add.graphics().setDepth(3);
+    const dialGlow = this.createEnemyEffect().setDepth(3);
     dialGlow.setPosition(cx, cy + 5);
     dialGlow.fillStyle(0xff6600, 0.1);
     dialGlow.fillCircle(0, 0, 45);
@@ -3123,7 +3185,7 @@ export class BattleScene extends Phaser.Scene {
     dialGlow.fillCircle(0, 0, 25);
     dialGlow.fillStyle(0xffdd44, 0.08);
     dialGlow.fillCircle(0, 0, 12);
-    this.tweens.add({
+    this.addEnemyEffectTween({
       targets: dialGlow,
       scaleX: 1.3, scaleY: 1.3,
       alpha: 0.04,
@@ -3134,9 +3196,9 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // 4) Frequency needle scanning — a thin line sweeping back and forth
-    const needle = this.add.graphics().setDepth(5);
+    const needle = this.createEnemyEffect().setDepth(5);
     const needleState = { pos: 0 };
-    this.tweens.add({
+    this.addEnemyEffectTween({
       targets: needleState,
       pos: 1,
       duration: 2500,
@@ -3144,11 +3206,11 @@ export class BattleScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-    this.time.addEvent({
+    this.addEnemyEffectTimer({
       delay: 40,
       repeat: -1,
       callback: () => {
-        if (!this.enemySprite?.active) { needle.destroy(); return; }
+        if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) { needle.destroy(); return; }
         needle.clear();
         const spriteY = this.enemySprite.y;
         const needleX = cx - 30 + needleState.pos * 60;
@@ -3162,7 +3224,7 @@ export class BattleScene extends Phaser.Scene {
 
     // 5) Crimson tendrils — dark red wisps drifting around the body
     for (let i = 0; i < 8; i++) {
-      const tendril = this.add.graphics().setDepth(4);
+      const tendril = this.createEnemyEffect().setDepth(4);
       const tc = [0x8b1a1a, 0xaa2020, 0x660c0c, 0x991515][i % 4];
       tendril.fillStyle(tc, 0.4);
       // Elongated wisp shape
@@ -3174,7 +3236,7 @@ export class BattleScene extends Phaser.Scene {
       const radius = 30 + Math.random() * 25;
       tendril.setPosition(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius * 0.6);
 
-      this.tweens.add({
+      this.addEnemyEffectTween({
         targets: tendril,
         x: tendril.x + Phaser.Math.Between(-15, 15),
         y: tendril.y + Phaser.Math.Between(-8, 8),
@@ -3188,12 +3250,12 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // 6) Ember particles — tiny rising orange/red sparks from the body
-    this.time.addEvent({
+    this.addEnemyEffectTimer({
       delay: 250,
       repeat: -1,
       callback: () => {
-        if (!this.enemySprite?.active) return;
-        const ember = this.add.graphics().setDepth(6);
+        if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
+        const ember = this.createEnemyEffect().setDepth(6);
         const ec = [0xff6600, 0xffaa00, 0xff3300, 0xffdd44][Math.floor(Math.random() * 4)];
         ember.fillStyle(ec, 0.7);
         ember.fillCircle(0, 0, 1 + Math.random());
@@ -3201,7 +3263,7 @@ export class BattleScene extends Phaser.Scene {
           this.enemySprite.x + Phaser.Math.Between(-30, 30),
           this.enemySprite.y + Phaser.Math.Between(-10, 20)
         );
-        this.tweens.add({
+        this.addEnemyEffectTween({
           targets: ember,
           y: ember.y - 25 - Math.random() * 20,
           x: ember.x + Phaser.Math.Between(-10, 10),
@@ -3217,7 +3279,7 @@ export class BattleScene extends Phaser.Scene {
   private spawnStaticNoiseParticles(cx: number, cy: number, _battleH: number): void {
     // 1) Scattered neon pixel fragments — dispersing outward like the model's glitch shards
     for (let i = 0; i < 14; i++) {
-      const sq = this.add.graphics().setDepth(6);
+      const sq = this.createEnemyEffect().setDepth(6);
       const color = [0x6ea8d8, 0xff7a2b, 0xe8b465, 0xab907c, 0xf0362c, 0xf8ece2][i % 6];
       const size = 2 + Math.random() * 5;
       sq.fillStyle(color, 0.85);
@@ -3228,7 +3290,7 @@ export class BattleScene extends Phaser.Scene {
       sq.setPosition(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius * 0.7);
 
       // Drift outward and back — simulates the dispersing fragments
-      this.tweens.add({
+      this.addEnemyEffectTween({
         targets: sq,
         x: { from: sq.x - 8, to: sq.x + 12 + Math.random() * 10 },
         y: { from: sq.y - 5, to: sq.y + 8 },
@@ -3239,7 +3301,7 @@ export class BattleScene extends Phaser.Scene {
         delay: Math.random() * 2000,
       });
       // Slow rotation
-      this.tweens.add({
+      this.addEnemyEffectTween({
         targets: sq,
         angle: 360,
         duration: 5000 + Math.random() * 4000,
@@ -3249,13 +3311,13 @@ export class BattleScene extends Phaser.Scene {
 
     // 2) Horizontal EKG signal waveforms — the cyan/green zigzag lines from the model
     const drawSignalWave = (yOffset: number, waveColor: number, speed: number) => {
-      const wave = this.add.graphics().setDepth(5);
+      const wave = this.createEnemyEffect().setDepth(5);
       let phase = 0;
-      this.time.addEvent({
+      this.addEnemyEffectTimer({
         delay: 50,
         repeat: -1,
         callback: () => {
-          if (!this.enemySprite?.active) return;
+          if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
           wave.clear();
           phase += 0.15;
           wave.lineStyle(1.5, waveColor, 0.5 + Math.sin(phase * 0.5) * 0.2);
@@ -3283,12 +3345,12 @@ export class BattleScene extends Phaser.Scene {
     drawSignalWave(28, 0xe8b465, 0.6);
 
     // 3) Screen corruption — flickering horizontal glitch bars across the battle area
-    const glitchBars = this.add.graphics().setDepth(4);
-    this.time.addEvent({
+    const glitchBars = this.createEnemyEffect().setDepth(4);
+    this.addEnemyEffectTimer({
       delay: 120,
       repeat: -1,
       callback: () => {
-        if (!this.enemySprite?.active) return;
+        if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
         glitchBars.clear();
         // Only show glitch bars ~40% of frames for a stuttery feel
         if (Math.random() > 0.4) return;
@@ -3304,17 +3366,17 @@ export class BattleScene extends Phaser.Scene {
 
     // 4) Bass pulse rings — concentric rings pulsing outward from the speaker area
     const speakerY = cy + 25;
-    this.time.addEvent({
+    this.addEnemyEffectTimer({
       delay: 1200,
       repeat: -1,
       callback: () => {
-        if (!this.enemySprite?.active) return;
+        if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
         for (let r = 0; r < 3; r++) {
-          const ring = this.add.graphics().setDepth(4);
+          const ring = this.createEnemyEffect().setDepth(4);
           ring.lineStyle(2, 0x398bc6, 0.4);
           ring.strokeCircle(0, 0, 8);
           ring.setPosition(cx, speakerY);
-          this.tweens.add({
+          this.addEnemyEffectTween({
             targets: ring,
             scaleX: 4 + r * 1.5,
             scaleY: 2.5 + r,
@@ -3328,12 +3390,12 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // 5) Static crackling — small electric sparks popping around the sprite
-    this.time.addEvent({
+    this.addEnemyEffectTimer({
       delay: 200,
       repeat: -1,
       callback: () => {
-        if (!this.enemySprite?.active) return;
-        const spark = this.add.graphics().setDepth(7);
+        if (this.currentEnemyHp <= 0 || !this.enemySprite?.active) return;
+        const spark = this.createEnemyEffect().setDepth(7);
         const sc = [0x6ea8d8, 0xff7a2b, 0xf8ece2, 0xe8b465][Math.floor(Math.random() * 4)];
         spark.fillStyle(sc, 0.8);
         const s = 1 + Math.random() * 2;
@@ -3343,7 +3405,7 @@ export class BattleScene extends Phaser.Scene {
           this.enemySprite.y + Phaser.Math.Between(-30, 35)
         );
         // Quick flash and fade
-        this.tweens.add({
+        this.addEnemyEffectTween({
           targets: spark,
           alpha: 0,
           y: spark.y - 15 - Math.random() * 20,
@@ -3356,13 +3418,13 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // 6) Core glow — pulsing red/cyan dual glow at center
-    const glow = this.add.graphics().setDepth(3);
+    const glow = this.createEnemyEffect().setDepth(3);
     glow.setPosition(cx, cy);
     glow.fillStyle(0xe8b465, 0.08);
     glow.fillCircle(0, 0, 55);
     glow.fillStyle(0x6ea8d8, 0.06);
     glow.fillCircle(0, 5, 40);
-    this.tweens.add({
+    this.addEnemyEffectTween({
       targets: glow,
       scaleX: 1.25, scaleY: 1.25,
       alpha: 0.03,

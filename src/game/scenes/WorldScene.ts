@@ -52,7 +52,7 @@ const NPC_VISUALS: Record<'professor' | 'guard' | 'musician', NpcVisualConfig> =
 
 const DIALOG_SPEAKERS: Record<string, NpcVisualConfig> = {
   'Professorin Krys': NPC_VISUALS.professor,
-  'Quincy': NPC_VISUALS.guard,
+  'Quincy Guard': NPC_VISUALS.guard,
   'Kian Vero': NPC_VISUALS.musician,
 };
 
@@ -71,7 +71,7 @@ export class WorldScene extends Phaser.Scene {
 
   // NPCs
   private npcSprite?: Npc;   // Professorin Krys — Echo Village
-  private npc2Sprite?: Npc;  // Quincy — Neon Junction
+  private npc2Sprite?: Npc;  // Quincy Guard — Neon Junction
   private npc3Sprite?: Npc;  // Kian Vero — Neon Junction
 
   private npcInteractLabel?: Phaser.GameObjects.Container;
@@ -660,7 +660,7 @@ export class WorldScene extends Phaser.Scene {
       this.triggerNpc1();
     }
 
-    // NPC 2 — Quincy
+    // NPC 2 — Quincy Guard
     const d2 = this.npc2Sprite
       ? Phaser.Math.Distance.Between(px, py, this.npc2Sprite.x, this.npc2Sprite.y)
       : 999;
@@ -1106,10 +1106,10 @@ export class WorldScene extends Phaser.Scene {
             '"Close your eyes. Listen..."',
           ],
           () => {
-            this.playHealingMusic(this.npcSprite!, this.getNpcHealAmount(store.maxHp), [
+            this.playHealingMusic(this.npcSprite!, [
               'Professorin Krys:',
               '"The old melodies still carry power."',
-              '"That restored part of your signal."',
+              '"Your signal is fully restored."',
             ]);
           }
         );
@@ -1127,7 +1127,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.npc2FirstDialogDone) {
       this.npc2FirstDialogDone = true;
       this.showDialog([
-        'Quincy:',
+        'Quincy Guard:',
         '"You crossed Signal Meadow and Brookside."',
         `"Few reach this far, ${useGameStore.getState().playerName}."`,
         '"The Frequency Gate lies south."',
@@ -1142,14 +1142,14 @@ export class WorldScene extends Phaser.Scene {
       if (store.hp < store.maxHp) {
         this.showDialog(
           [
-            'Quincy:',
+            'Quincy Guard:',
             '"You look rough, kid."',
             '"Hold on... I have an old recording."',
             '"Listen."',
           ],
           () => {
-            this.playHealingMusic(this.npc2Sprite!, this.getNpcHealAmount(store.maxHp), [
-              'Quincy:',
+            this.playHealingMusic(this.npc2Sprite!, [
+              'Quincy Guard:',
               '"A guard\'s remedy."',
               '"Don\'t tell anyone."',
             ]);
@@ -1157,7 +1157,7 @@ export class WorldScene extends Phaser.Scene {
         );
       } else {
         this.showDialog([
-          'Quincy:',
+          'Quincy Guard:',
           '"The gate opens for the worthy."',
           `"Stay determined, ${useGameStore.getState().playerName}."`,
         ]);
@@ -1187,7 +1187,7 @@ export class WorldScene extends Phaser.Scene {
             '"Let me play you something..."',
           ],
           () => {
-            this.playHealingMusic(this.npc3Sprite!, this.getNpcHealAmount(store.maxHp), [
+            this.playHealingMusic(this.npc3Sprite!, [
               'Kian Vero:',
               '"Music heals all wounds."',
               '"It always has."',
@@ -1202,10 +1202,6 @@ export class WorldScene extends Phaser.Scene {
         ]);
       }
     }
-  }
-
-  private getNpcHealAmount(maxHp: number): number {
-    return Math.max(6, Math.ceil(maxHp * 0.25));
   }
 
   // ── Interactions ──────────────────────────────────────────────────────────
@@ -1303,9 +1299,10 @@ export class WorldScene extends Phaser.Scene {
     const prevLevel = store.level;
     store.addXp(10);
     EventBus.emit(EVENTS.XP_GAINED, 10);
-    if (store.level > prevLevel) {
-      EventBus.emit(EVENTS.LEVEL_UP, store.level);
-      this.showLevelUpEffect(store.level);
+    const currentLevel = useGameStore.getState().level;
+    if (currentLevel > prevLevel) {
+      EventBus.emit(EVENTS.LEVEL_UP, currentLevel);
+      this.showLevelUpEffect(currentLevel);
     }
   }
 
@@ -1319,6 +1316,7 @@ export class WorldScene extends Phaser.Scene {
     this.battleActive = true;
     this.grassStepTimer = 0;
     this.player.freeze();
+    EventBus.emit(EVENTS.ENCOUNTER);
     this.cameras.main.flash(200, 255, 255, 255);
     this.time.delayedCall(250, () => {
       this.scene.launch('BattleScene', { enemyData: data, isBoss: false });
@@ -1407,6 +1405,7 @@ export class WorldScene extends Phaser.Scene {
         ],
         () => {
           this.cameras.main.flash(500, 100, 0, 180);
+          EventBus.emit(EVENTS.ENCOUNTER);
           this.time.delayedCall(400, () => {
             this.scene.launch('BattleScene', { enemyData: BOSS_DEFINITION, isBoss: true });
             this.scene.pause();
@@ -2346,7 +2345,7 @@ export class WorldScene extends Phaser.Scene {
       speaker: speakerName,
       accent: `#${(visual?.accent ?? (isGatekeeper ? 0xe8b465 : 0xff7a2b)).toString(16).padStart(6, '0')}`,
       portrait: this.activeDialogSpeaker === 'Professorin Krys' ? 'elder'
-        : this.activeDialogSpeaker === 'Quincy' ? 'guard'
+        : this.activeDialogSpeaker === 'Quincy Guard' ? 'guard'
           : this.activeDialogSpeaker === 'Kian Vero' ? 'musician'
             : isGatekeeper ? 'gatekeeper' : undefined,
     };
@@ -2373,7 +2372,6 @@ export class WorldScene extends Phaser.Scene {
    */
   private playHealingMusic(
     npcSprite: Npc,
-    healAmount: number,
     followUpLines: string[],
   ): void {
     this.worldFrozen = true;
@@ -2389,8 +2387,6 @@ export class WorldScene extends Phaser.Scene {
         : NPC_VISUALS.musician;
     const accent = visual.accent;
     const accentCss = `#${accent.toString(16).padStart(6, '0')}`;
-    const storeBefore = useGameStore.getState();
-    const restoredAmount = Math.max(0, Math.min(healAmount, storeBefore.maxHp - storeBefore.hp));
 
     // Phase 1: The NPC tunes a short signal instead of emitting generic sparkles.
     for (let index = 0; index < 3; index++) {
@@ -2533,7 +2529,9 @@ export class WorldScene extends Phaser.Scene {
 
     // Phase 3: The received beat blooms around the player and restores HP.
     this.time.delayedCall(1260, () => {
-      useGameStore.getState().restoreHp(healAmount);
+      const store = useGameStore.getState();
+      const restoredAmount = Math.max(0, store.maxHp - store.hp);
+      store.restoreHp(store.maxHp);
       EventBus.emit(EVENTS.HEAL, { amount: restoredAmount, source: 'npc' });
 
       const aura = this.add.graphics()
@@ -2622,7 +2620,7 @@ export class WorldScene extends Phaser.Scene {
       EventBus.emit(EVENTS.UI_NOTICE, {
         eyebrow: 'HEALING FREQUENCY // SYNCED',
         title: `+${restoredAmount} HP`,
-        detail: 'A small part of your signal was restored.',
+        detail: 'Your health is fully restored.',
         accent: accentCss,
         tone: 'success',
         duration: 2100,

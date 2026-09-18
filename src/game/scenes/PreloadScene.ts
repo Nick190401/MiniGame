@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { TextureFactory } from '../utils/TextureFactory';
 import { WorldArtFactory } from '../utils/WorldArtFactory';
 import { EventBus, EVENTS } from '../EventBus';
-import { PLAYER_TEXTURE_ASSETS, PLAYER_TEXTURES } from '../assets/PlayerTextures';
+import { PLAYER_TEXTURE_ASSETS, PLAYER_TEXTURES, createPlayerTextures } from '../assets/PlayerTextures';
 import { NPC_TEXTURE_ASSETS } from '../assets/NpcTextures';
 import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from '../audio/AudioLibrary';
 
@@ -16,18 +16,18 @@ export class PreloadScene extends Phaser.Scene {
     // density-adjusted size and exposing four characters in one frame.
     PLAYER_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
     NPC_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
-    this.load.image('player-battle', 'assets/player_model.PNG');
-    this.load.image('npc-elder-muse-v4', 'assets/npc-elder-muse-v4.png');
-    this.load.image('npc-junction-guard-v3', 'assets/npc-junction-guard-v3.png');
-    this.load.image('npc-wandering-musician-v3', 'assets/npc-wandering-musician-v3.png');
-    this.load.image('silence-battle', 'assets/silence_model.PNG');
-    this.load.image('staticnoise-battle', 'assets/static-noice.PNG');
-    this.load.image('brokensignal-battle', 'assets/brokensignal_model.PNG');
-    this.load.image('boss-gatekeeper-battle-phase1', 'assets/boss-gatekeeper-phase1-v2.png');
-    this.load.image('boss-gatekeeper-battle-phase2', 'assets/boss-gatekeeper-phase2-v2.png');
-    this.load.image('boss-gatekeeper-battle-phase3', 'assets/boss-gatekeeper-phase3-v2.png');
-    this.load.image('battle-bg-normal', 'assets/battle-bg-normal.png');
-    this.load.image('battle-bg-boss', 'assets/battle-bg-boss.png');
+    this.load.image('player-battle', 'assets/player_model.webp?v=mr-readable-2');
+    this.load.image('npc-elder-muse-v4', 'assets/npc-elder-muse-v4.webp');
+    this.load.image('npc-junction-guard-v3', 'assets/npc-junction-guard-v3.webp');
+    this.load.image('npc-wandering-musician-v3', 'assets/npc-wandering-musician-v3.webp');
+    this.load.image('silence-battle', 'assets/silence_model.webp');
+    this.load.image('staticnoise-battle', 'assets/static-noice.webp');
+    this.load.image('brokensignal-battle', 'assets/brokensignal_model.webp');
+    this.load.image('boss-gatekeeper-battle-phase1', 'assets/boss-gatekeeper-phase1-v2.webp');
+    this.load.image('boss-gatekeeper-battle-phase2', 'assets/boss-gatekeeper-phase2-v2.webp');
+    this.load.image('boss-gatekeeper-battle-phase3', 'assets/boss-gatekeeper-phase3-v2.webp');
+    this.load.image('battle-bg-normal', 'assets/battle-bg-normal.webp');
+    this.load.image('battle-bg-boss', 'assets/battle-bg-boss.webp');
     this.load.spritesheet(
       'town-rpg-atlas',
       'assets/tilesets/town_rpg_pack/town_rpg_pack/graphics/transparent-bg-tiles.png',
@@ -48,13 +48,17 @@ export class PreloadScene extends Phaser.Scene {
     // Music/SFX are optional: files may not exist yet (see AudioLibrary.ts).
     // A missing file just fails to load — it never blocks the other assets
     // or crashes the boot sequence, it only logs a quiet debug note below.
-    [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS].forEach(({ key, url }) => this.load.audio(key, url));
+    const availableAudio = new Set(Object.keys(import.meta.glob('/public/assets/audio/**/*.{mp3,ogg,wav}')).map(path => path.replace('/public/', '')));
+    [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS]
+      .filter(({ key, url }) => key !== 'music-battle-intro' && availableAudio.has(url))
+      .forEach(({ key, url }) => this.load.audio(key, url));
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
       if (file.type === 'audio') console.debug(`[audio] not found yet, skipping: ${file.src}`);
     });
   }
 
   create(): void {
+    createPlayerTextures(this);
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#0a0605');
     EventBus.emit(EVENTS.LOADING_UI_STATE, {
@@ -186,8 +190,8 @@ export class PreloadScene extends Phaser.Scene {
     platform.strokeEllipse(486, 335, 91, 18);
 
     const playerPreview = this.add.sprite(486, 337, PLAYER_TEXTURES.down[0])
-      .setOrigin(169 / 313, 291 / 313)
-      .setScale(0.48)
+      .setOrigin(0.5, 291 / 313)
+      .setScale(0.24)
       .setAlpha(0);
     playerPreview.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.tweens.add({ targets: playerPreview, alpha: 1, y: 331, duration: 520, ease: 'Cubic.easeOut' });
@@ -256,9 +260,9 @@ export class PreloadScene extends Phaser.Scene {
           progress: 100,
           ready: true,
         });
-        this.time.delayedCall(420, () => {
-          this.cameras.main.fadeOut(260, 5, 9, 8);
-          this.time.delayedCall(260, () => {
+        this.time.delayedCall(40, () => {
+          this.cameras.main.fadeOut(120, 5, 9, 8);
+          this.time.delayedCall(120, () => {
             this.scene.start('WorldScene');
             EventBus.emit(EVENTS.SCENE_READY, 'WorldScene');
           });
@@ -290,9 +294,9 @@ export class PreloadScene extends Phaser.Scene {
         ease: 'Sine.easeInOut',
       });
 
-      this.time.delayedCall(150, runNextStep);
+      this.time.delayedCall(16, runNextStep);
     };
 
-    this.time.delayedCall(260, runNextStep);
+    this.time.delayedCall(16, runNextStep);
   }
 }

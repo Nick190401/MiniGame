@@ -99,6 +99,7 @@ export const EVENTS = {
   XP_GAINED: 'xp-gained',
   LEVEL_UP: 'level-up',
   BATTLE_START: 'battle-start',
+  ENCOUNTER: 'encounter',
   BATTLE_END: 'battle-end',
   BATTLE_UI_STATE: 'battle-ui-state',
   BATTLE_UI_REQUEST: 'battle-ui-request',

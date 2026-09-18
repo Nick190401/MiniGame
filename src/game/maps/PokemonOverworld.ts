@@ -27,6 +27,7 @@ interface LandmarkStamp {
   tint?: number;
   flipX?: boolean;
   collision?: boolean;
+  roofRows?: number;
 }
 
 export interface LandmarkCollider {
@@ -53,11 +54,11 @@ const landmarks: LandmarkStamp[] = [
   { texture: 'landmark-riverside-hut', col: 46, row: 40, width: 7, height: 5 },
 
   // Neon Junction: one large civic landmark plus distinct support buildings.
-  { texture: 'landmark-signal-station', col: 24, row: 56, width: 16, height: 7 },
-  { texture: 'landmark-inn', col: 5, row: 58, width: 8, height: 6, tint: 0xc9d5ce },
-  { texture: 'landmark-clinic', col: 50, row: 58, width: 8, height: 6, tint: 0xc7d9d8 },
-  { texture: 'landmark-workshop', col: 6, row: 68, width: 7, height: 5, tint: 0xc0cbc2 },
-  { texture: 'landmark-guard-post', col: 50, row: 69, width: 7, height: 5 },
+  { texture: 'landmark-signal-station', col: 26, row: 57.75, width: 12, height: 5.25, roofRows: 1.5 },
+  { texture: 'landmark-inn', col: 6, row: 59.5, width: 6, height: 4.5, roofRows: 1.5, tint: 0xc9d5ce },
+  { texture: 'landmark-clinic', col: 51, row: 59.5, width: 6, height: 4.5, roofRows: 1.5, tint: 0xc7d9d8 },
+  { texture: 'landmark-workshop', col: 7, row: 69.25, width: 5.25, height: 3.75, roofRows: 1.5, tint: 0xc0cbc2 },
+  { texture: 'landmark-guard-post', col: 51, row: 70.25, width: 5.25, height: 3.75, roofRows: 1.5 },
 
   // Whisper Grove acts as a quiet, history-rich transition before the gate.
   { texture: 'landmark-archive-shrine', col: 7, row: 78, width: 7, height: 7 },
@@ -94,10 +95,10 @@ const atlasStamps: AtlasStamp[] = [
 export const OVERWORLD_LANDMARK_COLLIDERS: LandmarkCollider[] = landmarks.flatMap((landmark) => {
   if (landmark.collision === false) return [];
   return [{
-    row1: landmark.row + 2,
-    col1: landmark.col,
-    row2: landmark.row + landmark.height - 1,
-    col2: landmark.col + landmark.width - 1,
+    row1: Math.ceil(landmark.row + (landmark.roofRows ?? 2)),
+    col1: Math.ceil(landmark.col),
+    row2: Math.ceil(landmark.row + landmark.height) - 1,
+    col2: Math.floor(landmark.col + landmark.width) - 1,
   }];
 });
 
@@ -139,7 +140,7 @@ export function renderPokemonOverworld(
       landmark.col * TILE,
       landmark.row * TILE,
       landmark.texture,
-    ).setOrigin(0, 0).setDepth(3.5);
+    ).setOrigin(0, 0).setDisplaySize(landmark.width * TILE, landmark.height * TILE).setDepth(3.5);
 
     if (landmark.tint !== undefined) image.setTint(landmark.tint);
     if (landmark.flipX) image.setFlipX(true);
