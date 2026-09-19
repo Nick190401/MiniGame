@@ -54,8 +54,8 @@ export const MUSIC = {
 export const BOSS_PHASE_MUSIC = [MUSIC.bossPhase1.key, MUSIC.bossPhase2.key, MUSIC.bossPhase3.key];
 
 /**
- * WorldScene zone title → overworld track. Cave and Core share one track
- * so moving between them does not restart the music.
+ * WorldScene zone title → overworld track. The corrupted cave uses its own
+ * theme; restored cave/Core zones return to the normal overworld track.
  */
 const ZONE_TRACK_BY_TITLE: Record<string, string> = {
   'Echo Village': MUSIC.overworldDefault.key,
@@ -64,9 +64,9 @@ const ZONE_TRACK_BY_TITLE: Record<string, string> = {
   'Neon Junction': MUSIC.overworldDefault.key,
   'Whisper Grove': MUSIC.overworldDefault.key,
   'Fading Highlands': MUSIC.overworldDefault.key,
-  'Resonant Cave': MUSIC.cave.key,
+  'Resonant Cave': MUSIC.overworldDefault.key,
   'Void Cave': MUSIC.cave.key,
-  'The Living Core': MUSIC.cave.key,
+  'The Living Core': MUSIC.overworldDefault.key,
   'The Core': MUSIC.cave.key,
 };
 

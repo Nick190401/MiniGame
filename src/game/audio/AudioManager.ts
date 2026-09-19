@@ -150,11 +150,14 @@ class AudioManagerImpl {
     if (key) this.playMusic(key, { fadeMs: 150 });
   }
 
-  private onBattleEnd(data?: { outcome?: 'win' | 'lose' }): void {
+  private onBattleEnd(data?: { outcome?: 'win' | 'lose'; isBoss?: boolean }): void {
     // On a loss the death theme is about to take over, so returning to the
     // zone track here would stab in for a moment and immediately be replaced.
     if (data?.outcome === 'lose') return;
     if (data?.outcome === 'win') this.playSfx(SFX.victory.key);
+    // The restored zone title arrives after the purification animation.
+    // Switch immediately on victory instead of briefly restarting cave music.
+    if (data?.outcome === 'win' && data.isBoss) this.zoneTrack = MUSIC.overworldDefault.key;
     this.mode = 'world';
     this.playMusic(this.zoneTrack, { fadeMs: 500 });
   }
