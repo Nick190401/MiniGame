@@ -1282,11 +1282,12 @@ a:focus-visible {
   position: relative;
   z-index: 2;
   display: grid;
-  width: 31%;
+  width: 46%;
   aspect-ratio: 1;
   place-items: center;
   border-radius: 50%;
-  background: var(--ember);
+  background: radial-gradient(circle at 35% 25%, #f6dda0, #c59446);
+  border: 2px solid #765325;
   color: var(--ink);
   text-align: center;
 }
@@ -3688,6 +3689,27 @@ a:focus-visible {
   .dialog-overlay__content { padding: 7px 10px; }
   .dialog-overlay p { font-size: 11px; }
   .zone-card { width: 190px; }
+}
+
+.reward-record__label .brand-logo {
+  width: 76%;
+  margin-top: 8%;
+  filter: brightness(0.12);
+}
+
+.reward-record__label > small {
+  margin: 0;
+  font-size: 6px;
+  letter-spacing: 0.06em;
+}
+
+.reward-record__spindle {
+  width: 6px;
+  height: 6px;
+  margin-bottom: 8%;
+  border-radius: 50%;
+  background: #100d09;
+  box-shadow: 0 0 0 1px rgba(255, 240, 197, 0.6);
 }
 
 /* Keep every battle readout inside its chassis at common 4:3 desktop sizes.

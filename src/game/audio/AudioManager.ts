@@ -182,7 +182,7 @@ class AudioManagerImpl {
   }
 
   private onBonusSongUnlocked(): void {
-    // RewardModal plays its own procedurally-generated track — just get out of its way.
+    // RewardModal plays the uploaded Lost Track song — just get out of its way.
     this.onRewardUiState(true);
   }
 

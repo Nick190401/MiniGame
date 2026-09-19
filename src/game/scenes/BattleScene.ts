@@ -364,10 +364,8 @@ export class BattleScene extends Phaser.Scene {
     // Largest of the two: its platform is the nearest thing in the artwork.
     const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.37, 10);
     this.playerSprite = this.add.sprite(0, 0, 'player-battle').setDepth(5);
-    // Preserve the baked-in cap lettering and pixel contours when the large
-    // source is reduced to battle size. Linear filtering blurred the MR mark.
-    this.playerSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.plantOnPlatform(this.playerSprite, 'player-battle', platformAnchors.player, playerTargetH);
+    this.preparePlayerBattleTexture();
     const playerFinalX = this.playerSprite.x;
     this.playerSprite.x = -40;
 
@@ -934,6 +932,53 @@ export class BattleScene extends Phaser.Scene {
     sprite.x = platform.x - (contentCentreX - bounds.sourceWidth / 2) * scale;
     sprite.y = platform.y - (bounds.bottom + 1 - bounds.sourceHeight / 2) * scale;
     return targetHeight;
+  }
+
+  /** Preserve fine cap lettering when reducing the large source to battle size.
+   * Pre-filter at display density rather than dropping source pixels with NEAREST.
+   * No retouching, sharpening, stroke expansion or change to the sprite geometry.
+   */
+  private preparePlayerBattleTexture(): void {
+    const source = this.textures.get('player-battle').getSourceImage() as HTMLImageElement;
+    const sprite = this.playerSprite;
+    const displayWidth = sprite.displayWidth;
+    const displayHeight = sprite.displayHeight;
+    const canvasScale = this.game.canvas.getBoundingClientRect().width / this.scale.width;
+    const density = Math.max(2, canvasScale * (window.devicePixelRatio || 1));
+    const width = Math.min(source.width, Math.ceil(displayWidth * density));
+    const height = Math.min(source.height, Math.ceil(displayHeight * density));
+    const key = 'player-battle-filtered';
+    if (this.textures.exists(key)) this.textures.remove(key);
+    const texture = this.textures.createCanvas(key, width, height);
+    if (!texture) return;
+
+    // Halving in stages avoids a single large downsample losing the M/R gap.
+    let input: CanvasImageSource = source;
+    let inputWidth = source.width;
+    let inputHeight = source.height;
+    while (inputWidth > width * 2 && inputHeight > height * 2) {
+      const intermediate = document.createElement('canvas');
+      intermediate.width = Math.ceil(inputWidth / 2);
+      intermediate.height = Math.ceil(inputHeight / 2);
+      const context = intermediate.getContext('2d');
+      if (!context) break;
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(input, 0, 0, intermediate.width, intermediate.height);
+      input = intermediate;
+      inputWidth = intermediate.width;
+      inputHeight = intermediate.height;
+    }
+    const context = texture.getContext();
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(input, 0, 0, width, height);
+    texture.refresh();
+    texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    sprite.setTexture(key).setDisplaySize(displayWidth, displayHeight);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.textures.remove(key);
+    });
   }
 
   private tryExecuteAttack(index: number): void {
