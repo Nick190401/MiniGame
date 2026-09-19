@@ -55,6 +55,11 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
+  setRevealAlpha(alpha: number): void {
+    this.setAlpha(alpha);
+    this.auraGraphics.setAlpha(alpha);
+  }
+
   getCurrentPhase(): BossPhase {
     return BOSS_PHASES[this.currentPhaseIndex];
   }

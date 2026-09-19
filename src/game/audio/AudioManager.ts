@@ -111,6 +111,10 @@ class AudioManagerImpl {
       }
     });
     EventBus.on(EVENTS.LEVEL_UP, () => this.playSfx(SFX.levelUp.key));
+    EventBus.on(EVENTS.BOSS_SUMMONING, () => {
+      this.onFootsteps('none');
+      this.playSfx(SFX.bossAppeared.key);
+    });
     EventBus.on(EVENTS.ITEM_COLLECTED, () => this.playSfx(SFX.itemPickup.key));
     EventBus.on(EVENTS.GATE_OPEN, () => this.playSfx(SFX.gateOpen.key));
     EventBus.on(EVENTS.GATE_BLOCKED, () => this.playSfx(SFX.gateBlocked.key));

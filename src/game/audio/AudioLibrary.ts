@@ -25,6 +25,7 @@ export const MUSIC = {
   // Every zone falls back to this
   // until it gets its own file below.
   overworldDefault: track('music-overworld-default', 'music/overworld/default-stream.mp3'),
+  cave: track('music-cave', 'sfx/world/cave.mp3'),
 
   // One slot per zone (WorldScene's ZONES titles map to these in
   // ZONE_TRACK_BY_TITLE below) — not loaded from real files yet. Drop a file
@@ -53,9 +54,8 @@ export const MUSIC = {
 export const BOSS_PHASE_MUSIC = [MUSIC.bossPhase1.key, MUSIC.bossPhase2.key, MUSIC.bossPhase3.key];
 
 /**
- * WorldScene zone title → overworld track. All zones share the one theme
- * that actually exists today; repoint a zone at its own `MUSIC.xyz.key`
- * once that zone's file has been dropped in (see MUSIC above).
+ * WorldScene zone title → overworld track. Cave and Core share one track
+ * so moving between them does not restart the music.
  */
 const ZONE_TRACK_BY_TITLE: Record<string, string> = {
   'Echo Village': MUSIC.overworldDefault.key,
@@ -64,10 +64,10 @@ const ZONE_TRACK_BY_TITLE: Record<string, string> = {
   'Neon Junction': MUSIC.overworldDefault.key,
   'Whisper Grove': MUSIC.overworldDefault.key,
   'Fading Highlands': MUSIC.overworldDefault.key,
-  'Resonant Cave': MUSIC.overworldDefault.key,
-  'Void Cave': MUSIC.overworldDefault.key,
-  'The Living Core': MUSIC.overworldDefault.key,
-  'The Core': MUSIC.overworldDefault.key,
+  'Resonant Cave': MUSIC.cave.key,
+  'Void Cave': MUSIC.cave.key,
+  'The Living Core': MUSIC.cave.key,
+  'The Core': MUSIC.cave.key,
 };
 
 export function trackForZone(zoneTitle: string): string {
@@ -110,6 +110,7 @@ export const SFX = {
   victory: track('sfx-victory', 'sfx/battle/victory.mp3'),
   bossPhaseChange: track('sfx-boss-phase-change', 'sfx/battle/boss-phase-change.mp3'),
   bossDefeated: track('sfx-boss-defeated', 'sfx/battle/boss-defeated.mp3'),
+  bossAppeared: track('sfx-boss-appeared', 'sfx/world/boss_erscheinen.wav'),
   enemyDefeated: track('sfx-enemy-defeated', 'sfx/battle/enemy-defeated.mp3'),
 
   // World / progression

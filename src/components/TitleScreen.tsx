@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { AudioManager } from '../game/audio/AudioManager';
 import { SFX } from '../game/audio/AudioLibrary';
+import { BrandLogo } from './BrandLogo';
 
 const playUiClick = () => AudioManager.playSfx(SFX.uiClick.key);
 
@@ -50,6 +51,7 @@ export function TitleScreen() {
     <div className="title-screen">
       {!showModal && (
         <>
+          <div className="brand-stamp"><BrandLogo /></div>
           <button className="title-screen__prompt" onClick={openModal} aria-label="Press start">
             <span className="title-screen__prompt-glow" aria-hidden="true" />
             <span className="title-screen__prompt-text">Press Start</span>

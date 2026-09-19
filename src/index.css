@@ -1,5 +1,34 @@
 @import "tailwindcss";
 
+.brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+/* Quiet maker's mark, clear of the central title and start/loading controls. */
+.brand-stamp {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  z-index: 1;
+  width: clamp(58px, 6vw, 90px);
+  padding: 7px;
+  background: rgba(10, 6, 5, 0.76);
+  pointer-events: none;
+}
+
+.game-hud__avatar .brand-logo {
+  width: 90%;
+}
+
+.game-hud__avatar.game-hud__avatar--brand {
+  background: var(--ink-deep);
+  border: 1px solid var(--deck-edge-hi);
+}
+
 :root {
   --font-display: 'Syne', sans-serif;
   --font-mono: 'DM Mono', monospace;
@@ -142,7 +171,7 @@ a:focus-visible {
   align-items: flex-end;
   justify-content: center;
   padding-bottom: var(--art-anchor);
-  background-image: url('/assets/wallpaper_soundquest.webp');
+  background-image: url('/assets/wallpaper_soundquest.png');
   background-position: center;
   background-size: cover;
   background-color: var(--ink);
@@ -1684,17 +1713,6 @@ a:focus-visible {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Boss encounters lean harder into the fire-vs-signal mood of the key art
-   — same feeling, no image involved, just a slow warm ember glow. */
-.battle-overlay.is-boss::before {
-  position: absolute;
-  inset: 0;
-  content: '';
-  background: radial-gradient(ellipse 65% 55% at 74% 28%, color-mix(in srgb, var(--signal) 16%, transparent), transparent 72%);
-  animation: boss-ember-pulse 3.6s ease-in-out infinite;
-  pointer-events: none;
-}
-
 .battle-card,
 .battle-message,
 .battle-action {
@@ -2074,11 +2092,6 @@ a:focus-visible {
   50% { opacity: 1; transform: scale(1.08); }
 }
 
-@keyframes boss-ember-pulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
-
 /* Shared crisp field overlays ------------------------------------------- */
 
 .game-notice-layer,
@@ -2312,7 +2325,7 @@ a:focus-visible {
   overflow: hidden;
   padding-bottom: var(--art-anchor);
   color: #f8ece2;
-  background-image: url('/assets/wallpaper_soundquest.webp');
+  background-image: url('/assets/wallpaper_soundquest.png');
   background-position: center;
   background-size: cover;
   background-color: #110906;
@@ -3287,7 +3300,7 @@ a:focus-visible {
 @media (max-width: 760px) and (orientation: portrait) {
   .title-screen,
   .loading-overlay {
-    background-image: url('/assets/mobile-wallpaper.webp');
+    background-image: url('/assets/mobile-wallpaper.PNG');
   }
 
   /* The portrait artwork puts its horizon higher and its characters lower,

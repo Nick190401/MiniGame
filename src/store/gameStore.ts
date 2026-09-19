@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Attack, GamePhase } from '../types/game.types';
 import { ATTACKS, getAttacksForLevel } from '../game/systems/AttackSystem';
-import { getLevelFromXP } from '../game/systems/XPSystem';
+import { getLevelFromXP, getMaxHpForLevel } from '../game/systems/XPSystem';
 
 interface GameState {
   // Player identity
@@ -72,13 +72,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (newLevel > level) {
       // Level up!
       const newAttacks = getAttacksForLevel(newLevel);
-      const hpBonus = (newLevel - level) * 10;
+      const maxHp = getMaxHpForLevel(newLevel);
+      const hpBonus = maxHp - getMaxHpForLevel(level);
       set({
         xp: newXp,
         level: newLevel,
         unlockedAttacks: newAttacks,
-        maxHp: INITIAL_STATE.maxHp + (newLevel - 1) * 10,
-        hp: Math.min(get().hp + hpBonus, INITIAL_STATE.maxHp + (newLevel - 1) * 10),
+        maxHp,
+        hp: Math.min(get().hp + hpBonus, maxHp),
         maxMp: INITIAL_STATE.maxMp + (newLevel - 1) * 5,
       });
     } else {

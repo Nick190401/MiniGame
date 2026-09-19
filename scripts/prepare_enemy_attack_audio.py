@@ -26,7 +26,7 @@ CUES = [
     ('silence3-wave', 'silence-wave', .46, .58, .94, .14),
     ('void_crush', 'void-crush', .33, .58, .94, .14),
     ('gate_slam', 'gate-slam', .30, .14, .44, .10),
-    ('frequency_lock', 'frequency-lock', .05, .32, .57, .06),
+    ('frequency_lock_new', 'frequency-lock', .14, .32, .57, .06),
 ]
 
 

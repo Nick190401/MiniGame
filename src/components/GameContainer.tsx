@@ -12,7 +12,8 @@ import { ZoneOverlay } from './ZoneOverlay';
 import { RewardModal } from './RewardModal';
 import { useGameStore } from '../store/gameStore';
 import { getAttacksForLevel } from '../game/systems/AttackSystem';
-import { MAX_LEVEL, XP_THRESHOLDS } from '../game/systems/XPSystem';
+import { MAX_LEVEL, XP_THRESHOLDS, getMaxHpForLevel } from '../game/systems/XPSystem';
+import type { WorldScene } from '../game/scenes/WorldScene';
 import { EventBus, EVENTS } from '../game/EventBus';
 import { AudioManager } from '../game/audio/AudioManager';
 
@@ -239,7 +240,6 @@ export function GameContainer({ visible }: GameContainerProps) {
 // ── Console cheat commands ──────────────────────────────────────────────────
 
 function registerCheatCommands(gameRef: React.MutableRefObject<Phaser.Game | null>) {
-  const TILE = 16;
 
   // window.audio.toggleMute() / .setMusicVolume(0.3) / .setSfxVolume(1) / .playSfx('sfx-level-up')
   (window as any).audio = AudioManager;
@@ -257,12 +257,16 @@ function registerCheatCommands(gameRef: React.MutableRefObject<Phaser.Game | nul
     const game = gameRef.current;
     if (!game) { console.log('%c Game not ready!', 'color: red'); return; }
 
-    const store = useGameStore.getState();
+    const worldScene = game.scene.getScene('WorldScene') as WorldScene | undefined;
+    if (!worldScene?.scene.isActive() || !worldScene.teleportToBoss()) {
+      console.log('Boss teleport unavailable: return to the world and finish any active dialog first.');
+      return;
+    }
 
     // Max out level + XP + unlock all attacks
     const maxXp = XP_THRESHOLDS[MAX_LEVEL - 1] + 50;
     const allAttacks = getAttacksForLevel(MAX_LEVEL);
-    const maxHp = 30 + (MAX_LEVEL - 1) * 10;
+    const maxHp = getMaxHpForLevel(MAX_LEVEL);
     const maxMp = 20 + (MAX_LEVEL - 1) * 5;
     useGameStore.setState({
       xp: maxXp,
@@ -274,23 +278,6 @@ function registerCheatCommands(gameRef: React.MutableRefObject<Phaser.Game | nul
       maxMp,
       gateOpen: true,
     });
-
-    // Access WorldScene internals
-    const worldScene = game.scene.getScene('WorldScene') as any;
-    if (!worldScene || !worldScene.scene.isActive('WorldScene')) {
-      console.log('%c WorldScene not active!', 'color: red');
-      return;
-    }
-
-    // Open the physical blockers and the coherent sliding-door artwork.
-    worldScene.openGate(false);
-
-    // Teleport player into the final antechamber, just outside the Core.
-    const player = worldScene.player as Phaser.Physics.Arcade.Sprite;
-    player.setPosition(24 * TILE, 81 * TILE);
-
-    // Reset boss encounter flag so it triggers on entry
-    worldScene.bossEncounterStarted = false;
 
     console.log(
       '%c⚡ CHEAT ACTIVATED ⚡\n' +

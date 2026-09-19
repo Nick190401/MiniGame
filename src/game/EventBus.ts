@@ -113,6 +113,7 @@ export const EVENTS = {
   DEATH_UI_STATE: 'death-ui-state',
   DEATH_UI_ACTION: 'death-ui-action',
   BOSS_DEFEATED: 'boss-defeated',
+  BOSS_SUMMONING: 'boss-summoning',
   BONUS_SONG_UNLOCKED: 'bonus-song-unlocked',
   REWARD_UI_STATE: 'reward-ui-state',
   DIALOG: 'dialog',

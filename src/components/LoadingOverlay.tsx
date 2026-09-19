@@ -1,6 +1,7 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { EventBus, EVENTS, type LoadingUiPayload } from '../game/EventBus';
 import { useCanvasBounds } from './useCanvasBounds';
+import { BrandLogo } from './BrandLogo';
 
 interface LoadingOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
@@ -30,6 +31,7 @@ export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
 
   return (
     <section className="loading-overlay" style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }}>
+      <div className="brand-stamp"><BrandLogo /></div>
       <div className="loading-overlay__prompt">
         <span className="loading-overlay__ring" aria-hidden="true" />
         <span className="loading-overlay__label">{loading.label}</span>

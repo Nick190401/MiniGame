@@ -2,13 +2,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { getXPProgress, getXPForNextLevel, getXPForCurrentLevel, MAX_LEVEL } from '../game/systems/XPSystem';
 
-function HeadphonesIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v6H5a1 1 0 0 1-1-1v-5Zm16 0h-3v6h2a1 1 0 0 0 1-1v-5Z" />
-    </svg>
-  );
-}
+import { BrandLogo } from './BrandLogo';
 
 // Decorative signal waveform beneath the deck — heights as % of track height.
 const WAVE_HEIGHTS = [15, 20, 15, 30, 20, 45, 60, 40, 70, 90, 65, 85, 55, 75, 45, 60, 35, 50, 25, 40, 20, 30, 15, 20, 15];
@@ -56,7 +50,7 @@ export function HUD() {
         <i className="game-hud__screw game-hud__screw--br" aria-hidden="true" />
 
         <div className="game-hud__row">
-          <span className="game-hud__avatar"><HeadphonesIcon /></span>
+          <span className="game-hud__avatar game-hud__avatar--brand"><BrandLogo /></span>
 
           <div className="game-hud__identity">
             <strong className="game-hud__name">{playerName || 'Sound Keeper'}</strong>

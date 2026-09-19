@@ -226,7 +226,7 @@ export class WorldScene extends Phaser.Scene {
     // Boss (hidden until player enters chamber)
     if (!useGameStore.getState().bossDefeated) {
       this.boss = new Boss(this, mapResult.bossPos.x, mapResult.bossPos.y);
-      this.boss.setAlpha(0);
+      this.boss.setRevealAlpha(0);
     } else {
       this.bossEncounterStarted = true;
       this.applyPurifiedCaveInstant();
@@ -1366,39 +1366,65 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  teleportToBoss(): boolean {
+    if (!this.player || this.battleActive || this.dialogActive || this.worldFrozen) return false;
+    if (useGameStore.getState().bossDefeated) {
+      console.log('The boss is already defeated. Start a new game to fight it again.');
+      return false;
+    }
+    this.openGate(false);
+    this.bossEncounterStarted = false;
+    this.player.unfreeze();
+    // Stay one tile north of the trigger; walking south starts the reveal.
+    (this.player.body as Phaser.Physics.Arcade.Body).reset(
+      this.PENTAGRAM_X, this.PENTAGRAM_Y - this.PENTAGRAM_TRIGGER_RADIUS - TILE,
+    );
+    this.cameras.main.centerOn(this.player.x, this.player.y);
+    return true;
+  }
+
   private startBossEncounter(): void {
     if (this.bossEncounterStarted || this.battleActive) return;
     this.bossEncounterStarted = true;
     this.battleActive = true;
     this.player.freeze();
 
-    // Heavy shake + brief zoom pulse
-    this.cameras.main.shake(600, 0.012);
+    // boss_erscheinen.wav peaks at 560 ms and finishes at 1682 ms.
+    // Start its buildup now; reveal and camera impact share the same peak.
+    const impactMs = 560;
+    const revealMs = 280;
+    const dialogMs = 1800;
+    this._approachShakeTimer?.remove();
+    this._approachShakeTimer = undefined;
+    this.boss?.setRevealAlpha(0);
+    EventBus.emit(EVENTS.BOSS_SUMMONING);
+
     this.tweens.add({
       targets: this.cameras.main,
       zoom: 2.4,
-      duration: 800,
+      duration: impactMs,
       ease: 'Sine.easeIn',
       onComplete: () => {
+        this.boss?.setRevealAlpha(1);
+        this.cameras.main.shake(360, 0.012);
         this.tweens.add({ targets: this.cameras.main, zoom: 2.0, duration: 400, ease: 'Sine.easeOut' });
       },
     });
 
-    // Red screen tint overlay (fixed to camera)
-    const tint = this.add.graphics().setDepth(60).setScrollFactor(0);
-    tint.fillStyle(0x440000, 0.0);
-    tint.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.tweens.add({ targets: tint, alpha: 0.22, duration: 1000, ease: 'Sine.easeIn' });
+    const reveal = { alpha: 0 };
+    this.tweens.add({
+      targets: reveal,
+      alpha: 1,
+      delay: impactMs - revealMs,
+      duration: revealMs,
+      ease: 'Sine.easeIn',
+      onUpdate: () => this.boss?.setRevealAlpha(reveal.alpha),
+    });
 
-    // Boss fades in with a short delay
-    this.time.delayedCall(300, () => { this.boss?.setAlpha(1); });
-
-    this.time.delayedCall(800, () => {
+    this.time.delayedCall(dialogMs, () => {
       this.showDialog(
         [
-          'The air goes completely still.',
-          'All sound dies.',
-          'A shape rises from the darkness...',
+          'The summoning fades. The Gatekeeper stands before you.',
           'THE GATEKEEPER:',
           '"No sound passes through The Core."',
           '"Your journey ends here."',
