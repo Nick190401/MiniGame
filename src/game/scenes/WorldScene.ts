@@ -1067,8 +1067,9 @@ export class WorldScene extends Phaser.Scene {
       this.tweens.add({ targets: orbit, angle: 360, duration: 2600, repeat: -1, ease: 'Linear' });
 
       // Vinyl token — high depth so it remains visible above tall grass.
-      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment').setDepth(10).setScale(1.08);
-      frag.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      // 4x texture resolution, same world size and pickup footprint.
+      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment-mr').setDepth(10).setScale(0.27);
+      frag.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.tweens.add({ targets: frag, y: pos.y - 5, duration: 1250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
       // Store glow refs on the sprite for cleanup
@@ -1254,7 +1255,7 @@ export class WorldScene extends Phaser.Scene {
 
     // The record expands once like a struck beat, then dissolves.
     this.tweens.add({
-      targets: sprite, scaleX: 3, scaleY: 3, alpha: 0,
+      targets: sprite, scaleX: sprite.scaleX * (3 / 1.08), scaleY: sprite.scaleY * (3 / 1.08), alpha: 0,
       duration: 300, ease: 'Quad.easeOut',
       onComplete: () => sprite.destroy(),
     });

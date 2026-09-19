@@ -16,7 +16,7 @@
   z-index: 1;
   width: clamp(58px, 6vw, 90px);
   padding: 7px;
-  background: rgba(10, 6, 5, 0.76);
+  background: transparent;
   pointer-events: none;
 }
 
@@ -25,8 +25,9 @@
 }
 
 .game-hud__avatar.game-hud__avatar--brand {
-  background: var(--ink-deep);
-  border: 1px solid var(--deck-edge-hi);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 :root {

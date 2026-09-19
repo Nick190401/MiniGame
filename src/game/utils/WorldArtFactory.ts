@@ -848,56 +848,76 @@ export class WorldArtFactory {
   }
 
   static createItemTextures(scene: Phaser.Scene): void {
-    const c = WorldArtFactory.C;
-    const f = WorldArtFactory.fill;
-    WorldArtFactory.texture(scene, 'item-fragment', 20, 20, g => {
-      // Stepped vinyl silhouette keeps the collectible crisp and unmistakably musical.
-      f(g, c.outline, 7, 1, 6, 1);
-      f(g, c.outline, 5, 2, 10, 1);
-      f(g, c.outline, 3, 3, 14, 2);
-      f(g, c.outline, 2, 5, 16, 2);
-      f(g, c.outline, 1, 7, 18, 6);
-      f(g, c.outline, 2, 13, 16, 2);
-      f(g, c.outline, 3, 15, 14, 2);
-      f(g, c.outline, 5, 17, 10, 1);
-      f(g, c.outline, 7, 18, 6, 1);
+    // Same framed MR monogram as public/assets/mr-logo.svg, drawn into the
+    // texture itself so pickup/reveal animations carry the branding with them.
+    const drawMark = (g: Graphics, x: number, y: number, width: number, color: number) => {
+      const scale = width / 150;
+      const line = (points: number[][], weight: number) => {
+        g.lineStyle(weight * scale, color, 1);
+        g.beginPath();
+        points.forEach(([px, py], i) => {
+          if (i === 0) g.moveTo(x + px * scale, y + py * scale);
+          else g.lineTo(x + px * scale, y + py * scale);
+        });
+        g.strokePath();
+      };
+      line([[10, 8], [146, 6], [144, 88], [4, 88], [10, 8]], 3.5);
+      const mark = [[20, 77], [25, 19], [54, 76], [90, 19], [111, 19]];
+      const curve = (p0: number[], p1: number[], p2: number[], p3: number[]) => {
+        for (let i = 1; i <= 12; i++) {
+          const t = i / 12;
+          const u = 1 - t;
+          mark.push([0, 1].map(axis => u ** 3 * p0[axis] + 3 * u ** 2 * t * p1[axis]
+            + 3 * u * t ** 2 * p2[axis] + t ** 3 * p3[axis]));
+        }
+      };
+      curve([111, 19], [124, 19], [133, 23], [132, 33]);
+      curve([132, 33], [131, 45], [117, 51], [102, 53]);
+      mark.push([126, 76]);
+      line(mark, 6);
+    };
 
-      // Dark teal record body with broken groove highlights.
-      f(g, 0x17372f, 7, 2, 6, 1);
-      f(g, 0x17372f, 5, 3, 10, 2);
-      f(g, 0x17372f, 3, 5, 14, 2);
-      f(g, 0x17372f, 2, 7, 16, 6);
-      f(g, 0x17372f, 3, 13, 14, 2);
-      f(g, 0x17372f, 5, 15, 10, 2);
-      f(g, 0x17372f, 7, 17, 6, 1);
-      f(g, c.teal, 5, 4, 5, 1, 0.62); f(g, c.teal, 3, 7, 1, 5, 0.48);
-      f(g, c.teal, 14, 6, 2, 1, 0.34); f(g, c.teal, 14, 14, 1, 1, 0.42);
-      f(g, c.paper, 6, 3, 3, 1, 0.7);
+    const drawRecord = (g: Graphics, size: number, master: boolean) => {
+      const unit = size / (master ? 48 : 24);
+      const center = size / 2;
+      const radius = center - 2 * unit;
+      const label = master ? 0xe8c477 : 0xe88d54;
+      const rim = master ? 0xe8b465 : 0x6ea8d8;
+      // Dark vinyl, a fine metallic rim and concentric pressing grooves.
+      g.fillStyle(0x05090d); g.fillCircle(center, center, radius + unit);
+      g.lineStyle((master ? 1.4 : 0.8) * unit, rim, 0.9);
+      g.strokeCircle(center, center, radius);
+      g.fillStyle(0x101923); g.fillCircle(center, center, radius - unit);
+      for (let r = radius - 2 * unit; r > radius * 0.64; r -= (master ? 2 : 1.2) * unit) {
+        g.lineStyle((master ? 0.7 : 0.5) * unit, 0x46586b, 0.85);
+        g.strokeCircle(center, center, r);
+      }
+      // Two narrow light reflections make it read as vinyl, without a glow.
+      for (const [start, end] of [[3.65, 4.55], [0.48, 1.22]]) {
+        g.lineStyle((master ? 1.4 : 0.8) * unit, 0xb9d4de, 0.7);
+        g.beginPath(); g.arc(center, center, radius - 2 * unit, start, end); g.strokePath();
+      }
+      const labelRadius = radius * 0.65;
+      g.fillStyle(label); g.fillCircle(center, center, labelRadius);
+      g.lineStyle((master ? 0.8 : 0.5) * unit, 0x74482c, 1);
+      g.strokeCircle(center, center, labelRadius - 0.8 * unit);
+      const markWidth = labelRadius * 1.78;
+      drawMark(g, center - markWidth / 2, center - labelRadius * 0.66, markWidth, 0x17130f);
+      // The spindle sits below the logo rather than cutting through the letters.
+      g.fillStyle(0x17130f); g.fillCircle(center, center + labelRadius * 0.64, (master ? 1.2 : 0.65) * unit);
+      if (master) {
+        // Gold master pressing: distinct four-point glints on the outer rim.
+        for (const [x, y] of [[8, 9], [39, 36]]) {
+          g.fillStyle(0xffe9af);
+          g.fillRect(x - 3, y, 7, 1);
+          g.fillRect(x, y - 3, 1, 7);
+        }
+      }
+    };
 
-      // Oversized acid eighth note with an orange pixel-shadow for instant readability.
-      f(g, c.orange, 11, 6, 2, 8, 0.92);
-      f(g, c.orange, 12, 6, 4, 2, 0.92);
-      f(g, c.orange, 8, 12, 4, 3, 0.92);
-      f(g, c.acid, 10, 5, 2, 8);
-      f(g, c.acid, 11, 5, 4, 2);
-      f(g, c.acid, 7, 11, 4, 3);
-      f(g, c.paper, 10, 5, 1, 1, 0.76);
-    });
-    WorldArtFactory.texture(scene, 'item-lost-track', 48, 48, g => {
-      // Finale master record: broad silhouette, readable grooves and a restored waveform label.
-      g.fillStyle(c.teal, 0.1); g.fillCircle(24, 24, 23);
-      g.lineStyle(2, c.teal, 0.34); g.strokeCircle(24, 24, 21);
-      g.fillStyle(0x030706, 1); g.fillCircle(24, 24, 19);
-      g.lineStyle(1, 0x28473d, 0.9); g.strokeCircle(24, 24, 16); g.strokeCircle(24, 24, 13); g.strokeCircle(24, 24, 10);
-      g.lineStyle(1, c.teal, 0.45); g.beginPath(); g.arc(24, 24, 15, 3.6, 5.3); g.strokePath();
-      g.lineStyle(1, c.orange, 0.5); g.beginPath(); g.arc(24, 24, 12, 0.25, 1.75); g.strokePath();
-      g.fillStyle(c.acid); g.fillCircle(24, 24, 7); g.fillStyle(0x385b43); g.fillCircle(24, 24, 4); g.fillStyle(c.paper); g.fillCircle(24, 24, 1.5);
-      // Tiny equalizer/waveform etched across the center label.
-      f(g, 0x10251d, 18, 23, 2, 2); f(g, 0x10251d, 21, 21, 2, 6);
-      f(g, 0x10251d, 24, 19, 2, 10); f(g, 0x10251d, 27, 22, 2, 4);
-      f(g, c.paper, 14, 8, 4, 2, 0.72); f(g, c.paper, 16, 6, 2, 6, 0.72);
-      f(g, c.teal, 34, 33, 3, 2, 0.82); f(g, c.orange, 11, 34, 2, 4, 0.78);
-    });
+    // Supersample the small pickups so the framed MR strokes survive rendering.
+    WorldArtFactory.texture(scene, 'item-fragment-mr', 96, 96, g => drawRecord(g, 96, false));
+    WorldArtFactory.texture(scene, 'item-lost-track', 48, 48, g => drawRecord(g, 48, true));
   }
 
   static createAll(scene: Phaser.Scene): void {

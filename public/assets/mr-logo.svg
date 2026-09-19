@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 96" fill="none">
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="150" height="96" viewBox="0 0 150 96" fill="none">
   <title>MR</title>
-  <path d="M10 8 146 6 144 88 5 87Z" stroke="#bcbcbc" stroke-width="3.5"/>
-  <path d="M16 77 24 18 51 76 90 18H119C133 18 141 25 139 36S127 51 113 51H97L90 77M110 51 134 77"
-        stroke="#bcbcbc" stroke-width="5.5" stroke-linejoin="miter"/>
+  <path d="M10 8 146 6 144 88 4 88Z" stroke="#b9b9b9" stroke-width="3.5"/>
+  <path d="M20 77 25 19 54 76 90 19H111C124 19 133 23 132 33C131 45 117 51 102 53L126 76"
+        stroke="#b9b9b9" stroke-width="6" stroke-linejoin="miter" stroke-linecap="square"/>
 </svg>
