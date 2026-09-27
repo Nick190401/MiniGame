@@ -479,20 +479,56 @@ export class WorldArtFactory {
 
     landmark('landmark-cave-mouth', 224, 96, g => {
       landmarkShadow(g, 224, 89);
-      f(g, c.outline, 5, 76, 214, 15);
-      f(g, 0x283733, 10, 58, 204, 30);
-      f(g, 0x3e514b, 19, 40, 186, 43);
-      f(g, 0x57665e, 35, 25, 154, 52);
-      f(g, 0x6c776d, 58, 12, 108, 59);
-      f(g, c.stoneLight, 81, 7, 62, 8, 0.42);
-      // Deep, stepped arch with a readable walkable opening at the bottom.
-      f(g, c.outline, 69, 41, 86, 47);
-      f(g, 0x101918, 76, 34, 72, 54);
-      f(g, 0x070d0c, 84, 29, 56, 59);
-      f(g, 0x172724, 93, 38, 38, 50);
-      f(g, c.caveLight, 68, 78, 88, 7); f(g, c.caveMid, 78, 84, 68, 5);
-      f(g, c.teal, 68, 49, 3, 25, 0.34); f(g, c.orange, 153, 55, 3, 18, 0.3);
-      f(g, c.moss, 25, 56, 36, 5, 0.55); f(g, c.grassDark, 161, 62, 34, 5, 0.58);
+      // Layered rock shoulders frame an old, dressed-stone portal.
+      f(g, c.outline, 0, 48, 224, 48);
+      f(g, 0x34443e, 16, 32, 192, 60);
+      f(g, 0x4b5b50, 32, 20, 160, 60);
+      f(g, 0x627063, 54, 10, 116, 34);
+      f(g, c.stoneLight, 76, 8, 66, 4, 0.55);
+      for (let side = 0; side < 2; side++) {
+        const x = side === 0 ? 0 : 176;
+        for (let course = 0; course < 3; course++) {
+          const y = 48 + course * 16;
+          f(g, 0x26362f, x + 2, y + 1, 44, 15);
+          f(g, course % 2 ? 0x4b5b50 : 0x566457, x + 3, y + 2, 42, 11);
+          f(g, 0x82907a, x + 5, y + 2, 25, 2, 0.55);
+          f(g, c.outline, x + (course % 2 ? 15 : 30), y + 3, 2, 10);
+        }
+      }
+      // Opening exactly matches the collision-free columns 29–34.
+      f(g, 0x080f0e, 64, 32, 96, 64);
+      f(g, 0x14221e, 70, 46, 84, 50);
+      f(g, 0x1d3028, 76, 66, 72, 30);
+      for (let y = 80; y < 96; y += 5) {
+        f(g, 0x3c5044, 64, y, 96, 2);
+        f(g, 0x0c1713, 80 + (y % 3) * 16, y + 2, 18, 1);
+      }
+      for (const x of [48, 160]) {
+        f(g, c.outline, x, 28, 16, 68);
+        for (let y = 32; y < 88; y += 14) {
+          f(g, c.stoneDark, x + 1, y, 14, 12);
+          f(g, c.stone, x + 2, y, 11, 3);
+          f(g, c.stoneLight, x + 2, y + 3, 2, 7, 0.65);
+        }
+        f(g, 0x637264, x, 88, 16, 6);
+        f(g, c.teal, x + 7, 51, 2, 12, 0.65);
+        f(g, c.teal, x + 5, 55, 6, 2, 0.5);
+      }
+      // Jointed lintel and a recessed keystone emblem.
+      f(g, c.outline, 44, 22, 136, 12);
+      for (let x = 48; x < 176; x += 16) {
+        f(g, c.stoneDark, x, 23, 15, 9);
+        f(g, c.stone, x + 1, 23, 13, 2);
+      }
+      f(g, c.outline, 101, 15, 22, 23);
+      f(g, c.stone, 104, 16, 16, 18);
+      f(g, c.caveMid, 108, 20, 8, 10);
+      f(g, c.teal, 111, 21, 2, 8, 0.8);
+      f(g, c.teal, 109, 24, 6, 2, 0.6);
+      for (const [x, y, width] of [[22, 43, 19], [32, 67, 13], [183, 38, 15], [191, 82, 23]]) {
+        f(g, c.grassDark, x, y, width, 4);
+        f(g, c.moss, x + 2, y, width - 5, 2, 0.65);
+      }
     });
 
     tile('tile-arena', g => {

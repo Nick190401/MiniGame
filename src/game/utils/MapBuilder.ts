@@ -838,6 +838,17 @@ export class MapBuilder {
     // Seeded pseudo-random for deterministic variety per tile position
     const hash = (r: number, c: number) => ((r * 7919 + c * 104729) & 0xffff) / 0xffff;
 
+    const addCaveGround = (row: number, col: number, x: number, y: number) => {
+      const variant = Math.min(2, Math.floor(hash(row, col) * 3));
+      const suffix = variant === 0 ? '' : `-${variant + 1}`;
+      const floor = markCaveSurface(
+        scene.add.image(x, y, `tile-cave-floor${suffix}`),
+        `tile-cave-floor${suffix}-purified`,
+      );
+      floor.setDepth(0);
+      decorative.add(floor);
+    };
+
     const addOutdoorGround = (row: number, col: number, x: number, y: number) => {
       const blockRow = Math.floor(row / 3);
       const blockCol = Math.floor(col / 3);
@@ -883,6 +894,11 @@ export class MapBuilder {
         const px = col * TILE + TILE / 2;
         const py = row * TILE + TILE / 2;
         const rng = hash(row, col);
+
+        // Transparent cave props need a floor beneath them, including after purification.
+        if (tileType === X || tileType === J || tileType === Q2 || tileType === N || tileType === E) {
+          addCaveGround(row, col, px, py);
+        }
 
         switch (tileType) {
           case W:  { addShadow('tile-wall', px, py); const i = scene.add.image(px, py, 'tile-wall'); i.setDepth(1); walls.add(i); break; }
@@ -948,13 +964,8 @@ export class MapBuilder {
           }
           case A:  { const i = markCaveSurface(scene.add.image(px, py, 'tile-arena'), 'tile-arena-purified'); i.setDepth(0); decorative.add(i); break; }
           case C:  {
-            const caveVariant = Math.min(2, Math.floor(rng * 3));
-            const suffix = caveVariant === 0 ? '' : `-${caveVariant + 1}`;
-            const i = markCaveSurface(
-              scene.add.image(px, py, `tile-cave-floor${suffix}`),
-              `tile-cave-floor${suffix}-purified`,
-            );
-            i.setDepth(0); decorative.add(i); break;
+            addCaveGround(row, col, px, py);
+            break;
           }
           case R:  {
             const i = scene.add.image(px, py, 'tile-water');

@@ -4,3 +4,10 @@ node_modules/
 .firecrawl/
 /dist
 /tmp
+
+# Temporary files and build directories
+/temp/
+/.tmp/
+/.tmp-*/
+*.tmp
+*.temp

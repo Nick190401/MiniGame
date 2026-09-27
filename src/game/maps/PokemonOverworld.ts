@@ -27,6 +27,7 @@ interface LandmarkStamp {
   tint?: number;
   flipX?: boolean;
   collision?: boolean;
+  collisionFootprints?: LandmarkCollider[];
   roofRows?: number;
 }
 
@@ -64,8 +65,15 @@ const landmarks: LandmarkStamp[] = [
   { texture: 'landmark-archive-shrine', col: 7, row: 78, width: 7, height: 7 },
   { texture: 'landmark-ranger-hut', col: 49, row: 82, width: 7, height: 5 },
 
-  // The cave mouth is scenery; the rock grid owns its collision and doorway.
-  { texture: 'landmark-cave-mouth', col: 25, row: 110, width: 14, height: 6, collision: false },
+  // Side masonry blocks movement; the six-tile passage beneath the lintel stays open.
+  { texture: 'landmark-cave-mouth', col: 25, row: 110, width: 14, height: 6,
+    collisionFootprints: [
+      { row1: 2, col1: 1, row2: 2, col2: 3 },
+      { row1: 2, col1: 10, row2: 2, col2: 12 },
+      { row1: 3, col1: 0, row2: 5, col2: 3 },
+      { row1: 3, col1: 10, row2: 5, col2: 13 },
+    ],
+  },
 ];
 
 const treeBands = (row: number, tint?: number): AtlasStamp[] => [
@@ -94,6 +102,12 @@ const atlasStamps: AtlasStamp[] = [
 
 export const OVERWORLD_LANDMARK_COLLIDERS: LandmarkCollider[] = landmarks.flatMap((landmark) => {
   if (landmark.collision === false) return [];
+  if (landmark.collisionFootprints) {
+    return landmark.collisionFootprints.map(({ row1, col1, row2, col2 }) => ({
+      row1: landmark.row + row1, col1: landmark.col + col1,
+      row2: landmark.row + row2, col2: landmark.col + col2,
+    }));
+  }
   return [{
     row1: Math.ceil(landmark.row + (landmark.roofRows ?? 2)),
     col1: Math.ceil(landmark.col),
