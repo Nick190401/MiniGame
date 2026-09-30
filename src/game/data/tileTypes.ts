@@ -39,6 +39,7 @@ export const TILE_TYPES: TileType[] = [
   { id: 29, name: 'Cave Pool',     textureKey: 'tile-cave-water',     passable: false, category: 'Cave',     color: '#163f49' },
   { id: 30, name: 'Cave Stairs',   textureKey: 'tile-cave-stairs',    passable: true,  category: 'Cave',     color: '#52645f' },
   { id: 31, name: 'Cave Boulder',  textureKey: 'tile-cave-boulder',   passable: false, category: 'Cave',     color: '#3a4b49' },
+  { id: 32, name: 'Universe Portal', textureKey: 'tile-universe-portal', passable: false, category: 'Cave', color: '#9270db' },
   // Decor
   { id: 6,  name: 'Sign',          textureKey: 'tile-sign',           passable: true,  category: 'Decor',    color: '#8b6020' },
   // Special

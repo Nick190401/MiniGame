@@ -4,6 +4,7 @@ import { WorldArtFactory } from '../utils/WorldArtFactory';
 import { EventBus, EVENTS } from '../EventBus';
 import { PLAYER_TEXTURE_ASSETS, PLAYER_TEXTURES, createPlayerTextures } from '../assets/PlayerTextures';
 import { NPC_TEXTURE_ASSETS } from '../assets/NpcTextures';
+import { WORLD_IMAGE_ASSETS, WORLD_TILESET_ASSETS } from '../assets/WorldAssets';
 import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from '../audio/AudioLibrary';
 
 export class PreloadScene extends Phaser.Scene {
@@ -16,34 +17,8 @@ export class PreloadScene extends Phaser.Scene {
     // density-adjusted size and exposing four characters in one frame.
     PLAYER_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
     NPC_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
-    this.load.image('player-battle', 'assets/player_model.webp?v=mr-readable-2');
-    this.load.image('npc-elder-muse-v4', 'assets/npc-elder-muse-v4.webp');
-    this.load.image('npc-junction-guard-v3', 'assets/npc-junction-guard-v3.webp');
-    this.load.image('npc-wandering-musician-v3', 'assets/npc-wandering-musician-v3.webp');
-    this.load.image('silence-battle', 'assets/silence_model.webp');
-    this.load.image('staticnoise-battle', 'assets/static-noice.webp');
-    this.load.image('brokensignal-battle', 'assets/brokensignal_model.webp');
-    this.load.image('boss-gatekeeper-battle-phase1', 'assets/boss-gatekeeper-phase1-v2.webp');
-    this.load.image('boss-gatekeeper-battle-phase2', 'assets/boss-gatekeeper-phase2-v2.webp');
-    this.load.image('boss-gatekeeper-battle-phase3', 'assets/boss-gatekeeper-phase3-v2.webp');
-    this.load.image('battle-bg-normal', 'assets/battle-bg-normal.webp');
-    this.load.image('battle-bg-boss', 'assets/battle-bg-boss.webp');
-    this.load.spritesheet(
-      'town-rpg-atlas',
-      'assets/tilesets/town_rpg_pack/town_rpg_pack/graphics/transparent-bg-tiles.png',
-      { frameWidth: 16, frameHeight: 16 },
-    );
-    [
-      ['town-grass-a', 'grass-tile.png'],
-      ['town-grass-b', 'grass-tile-2.png'],
-      ['town-grass-c', 'grass-tile-3.png'],
-    ].forEach(([key, file]) => {
-      this.load.spritesheet(
-        key,
-        `assets/tilesets/town_rpg_pack/town_rpg_pack/graphics/${file}`,
-        { frameWidth: 16, frameHeight: 16 },
-      );
-    });
+    WORLD_IMAGE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
+    WORLD_TILESET_ASSETS.forEach(({ key, url, frameConfig }) => this.load.spritesheet(key, url, frameConfig));
 
     // Music/SFX are optional: files may not exist yet (see AudioLibrary.ts).
     // A missing file just fails to load — it never blocks the other assets

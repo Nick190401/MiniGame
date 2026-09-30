@@ -80,13 +80,64 @@ export class WorldArtFactory {
       f(g, 0x91a65f, 1, 14); f(g, 0x48603a, 15, 1);
     });
 
-    tile('tile-path', g => {
-      f(g, c.sand, 0, 0, 16, 16);
-      f(g, c.sandLight, 0, 0, 16, 2, 0.22);
-      f(g, c.sandDark, 2, 3); f(g, c.sandLight, 9, 2, 2, 1);
-      f(g, 0xa58e59, 13, 7); f(g, c.sandLight, 4, 11);
-      f(g, c.sandDark, 7, 14, 2, 1); f(g, 0xd9c88d, 15, 12);
-    });
+    // Exposed sides: north = 1, east = 2, south = 4, west = 8.
+    // Profiles share their endpoints so neighboring variants meet without steps.
+    const sandEdges = [
+      [1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1],
+      [1, 1, 1, 2, 2, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 1, 1, 1],
+      [1, 1, 1, 2, 1, 1, 1, 2, 2, 1, 1, 2, 2, 1, 1, 1],
+    ];
+    const sandPebbles = [[5, 10], [11, 6], [4, 5], [10, 12]];
+    const drawSand = (g: Graphics, variant: number, edgeMask: number) => {
+      const north = (edgeMask & 1) !== 0;
+      const east = (edgeMask & 2) !== 0;
+      const south = (edgeMask & 4) !== 0;
+      const west = (edgeMask & 8) !== 0;
+      const [pebbleX, pebbleY] = sandPebbles[variant];
+
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+          let edgeDistance = 8;
+          if (north) edgeDistance = Math.min(edgeDistance, y - sandEdges[variant][x]);
+          if (east) edgeDistance = Math.min(edgeDistance, 15 - x - sandEdges[(variant + 1) % 4][y]);
+          if (south) edgeDistance = Math.min(edgeDistance, 15 - y - sandEdges[(variant + 2) % 4][x]);
+          if (west) edgeDistance = Math.min(edgeDistance, x - sandEdges[(variant + 3) % 4][y]);
+
+          // Round only exterior corners; transparent pixels reveal the grass below.
+          if (north && west) edgeDistance = Math.min(edgeDistance, x + y - 5);
+          if (north && east) edgeDistance = Math.min(edgeDistance, 15 - x + y - 5);
+          if (south && west) edgeDistance = Math.min(edgeDistance, x + 15 - y - 5);
+          if (south && east) edgeDistance = Math.min(edgeDistance, 30 - x - y - 5);
+          if (edgeDistance < 0) continue;
+
+          let grain = Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263) ^ Math.imul(variant + 1, 1274126177);
+          grain = Math.imul(grain ^ (grain >>> 13), 1274126177);
+          grain = (grain ^ (grain >>> 16)) >>> 0;
+
+          // A muted soil shoulder fades into a softly worn, continuous sand center.
+          const base = edgeDistance === 0 ? 0x9e9364
+            : edgeDistance === 1 ? 0xb09d66
+            : edgeDistance === 2 ? 0xb9a269 : c.sand;
+          f(g, base, x, y);
+          if (edgeDistance > 2) f(g, c.sandLight, x, y, 1, 1, Math.min(0.13, (edgeDistance - 2) * 0.025));
+          if (grain % 31 < 3) f(g, c.sandDark, x, y, 1, 1, 0.18);
+          else if (grain % 31 > 27) f(g, c.sandLight, x, y, 1, 1, 0.26);
+
+          // Sparse two-pixel stones stay subtle and never cross the grassy margin.
+          if (variant !== 2 && edgeDistance > 2 && y === pebbleY && (x === pebbleX || x === pebbleX + 1)) {
+            f(g, x === pebbleX ? 0xa99569 : 0xd4bf8b, x, y, 1, 1, 0.68);
+          }
+        }
+      }
+    };
+
+    tile('tile-path', g => drawSand(g, 0, 0));
+    for (let variant = 0; variant < 4; variant++) {
+      for (let edgeMask = 0; edgeMask < 16; edgeMask++) {
+        tile(`tile-path-sand-${variant}-${edgeMask}`, g => drawSand(g, variant, edgeMask));
+      }
+    }
 
     tile('tile-path-2', g => {
       f(g, 0x758075, 0, 0, 16, 16);
@@ -110,23 +161,198 @@ export class WorldArtFactory {
       });
     }
 
-    tile('tile-bridge', g => {
-      f(g, c.woodDark, 0, 0, 16, 16);
-      for (let y = 1; y < 16; y += 5) {
-        f(g, c.wood, 0, y, 16, 4);
-        f(g, c.woodLight, 0, y, 16, 1, 0.72);
-        f(g, c.outline, 0, y + 4, 16, 1, 0.45);
+    // Eight tiles form a 64 x 32 repeat: horizontal boards continue through
+    // neighboring tiles, with offset joints instead of a beam on every tile.
+    const drawBridgeDeck = (g: Graphics, variant: number) => {
+      const patchCol = variant % 4;
+      const patchRow = Math.floor(variant / 4);
+      const boardColors = [0x99764f, 0x92704c, 0x9e7b52, 0x95714b];
+      const boardJoints = [20, 44, 8, 36];
+      for (let board = 0; board < 2; board++) {
+        const index = patchRow * 2 + board;
+        const y = board * 8;
+        f(g, boardColors[index], 0, y, 16, 8);
+        f(g, 0xc1a171, 0, y, 16, 1, 0.68);
+        f(g, 0xaf8c5f, 0, y + 1, 16, 1, 0.3);
+        f(g, 0x75573c, 0, y + 6, 16, 1, 0.5);
+        f(g, 0x5e4b37, 0, y + 7, 16, 1);
+
+        // Grain uses the whole board's coordinates so it crosses tile edges.
+        for (let x = 0; x < 16; x++) {
+          const boardX = patchCol * 16 + x;
+          if ((boardX + index * 11) % 29 < 13) {
+            f(g, 0x684f35, x, y + 3, 1, 1, 0.23);
+          }
+          if ((boardX + index * 7) % 37 < 9) {
+            f(g, 0xd0b483, x, y + 5, 1, 1, 0.22);
+          }
+          const jointDistance = boardX - boardJoints[index];
+          if (jointDistance === 0) f(g, 0x604b36, x, y + 1, 1, 6, 0.84);
+          if (jointDistance === 1) f(g, 0xc1a171, x, y + 1, 1, 5, 0.5);
+          if (Math.abs(jointDistance) === 3 && index % 2 === 0) {
+            f(g, 0x464a41, x, y + 2, 1, 1, 0.86);
+            f(g, 0xd4c6a0, x, y + 1, 1, 1, 0.3);
+          }
+        }
+        if ((index === 1 && patchCol === 1) || (index === 3 && patchCol === 3)) {
+          f(g, 0x715135, 9, y + 3, 4, 1, 0.38);
+          f(g, 0x715135, 10, y + 4, 2, 1, 0.52);
+          f(g, 0xc1a171, 8, y + 4, 2, 1, 0.35);
+        }
       }
-      f(g, c.stoneDark, 2, 0, 2, 16, 0.42); f(g, c.stoneDark, 12, 0, 2, 16, 0.42);
-      f(g, c.acid, 8, 7, 1, 1, 0.35);
+    };
+    tile('tile-bridge', g => drawBridgeDeck(g, 0));
+    for (let variant = 0; variant < 8; variant++) {
+      tile(`tile-bridge-deck-${variant}`, g => drawBridgeDeck(g, variant));
+    }
+
+    WorldArtFactory.texture(scene, 'bridge-rail-segment', 10, 16, g => {
+      // Continuous north/south rail; posts are separate, taller silhouettes.
+      f(g, c.ink, 7, 0, 3, 16, 0.18);
+      f(g, 0x352e25, 2, 0, 6, 16);
+      f(g, 0xc2a173, 3, 0, 1, 16);
+      f(g, 0xa08055, 4, 0, 2, 16);
+      f(g, 0x715039, 6, 0, 1, 16);
+      f(g, 0x715039, 5, 3, 1, 5, 0.4);
+      f(g, 0xe0c794, 3, 1, 1, 5, 0.35);
+      f(g, 0x4c3c2c, 4, 11, 1, 3, 0.28);
     });
 
-    tile('tile-water', g => {
-      f(g, c.water, 0, 0, 16, 16);
-      f(g, 0x2d666c, 0, 5, 16, 3);
-      f(g, c.waterLight, 0, 2, 6); f(g, c.waterLight, 9, 2, 5);
-      f(g, c.waterBright, 4, 8, 7); f(g, c.waterLight, 0, 13, 4); f(g, c.waterLight, 11, 13, 5);
-      f(g, c.paper, 7, 3, 2, 1, 0.32); f(g, c.teal, 12, 9, 2, 1, 0.38);
+    WorldArtFactory.texture(scene, 'bridge-rail-post', 12, 24, g => {
+      f(g, c.ink, 1, 20, 11, 4, 0.38);
+      f(g, 0x322e26, 2, 3, 8, 20);
+      f(g, 0x8d6d48, 3, 5, 6, 16);
+      f(g, 0xbc9a66, 3, 5, 2, 15);
+      f(g, 0x604631, 8, 5, 1, 15);
+      f(g, 0x715333, 6, 11, 1, 4, 0.65);
+      for (const y of [8, 17]) {
+        f(g, 0x303a35, 2, y, 8, 3);
+        f(g, 0x6f7964, 3, y, 6, 1);
+        f(g, 0xadb392, 4, y + 1, 1, 1, 0.75);
+      }
+      f(g, 0x493c2b, 1, 2, 10, 4);
+      f(g, 0xd0b27e, 2, 1, 8, 3);
+      f(g, 0xe7d09c, 3, 1, 6, 1);
+      f(g, 0xa78754, 2, 4, 8, 1);
+      f(g, 0x2e342c, 1, 21, 10, 2);
+      f(g, 0x6d7158, 2, 21, 8, 1);
+    });
+
+    tile('tile-bridge-landing', g => {
+      // Dressed stone shoulders meet continuously across the bridge width.
+      f(g, 0x3e5048, 0, 0, 16, 16);
+      f(g, 0x8a937b, 0, 1, 16, 10);
+      f(g, 0xb3b79a, 0, 1, 16, 2, 0.72);
+      f(g, 0x9da388, 0, 4, 16, 5, 0.36);
+      f(g, 0x717d67, 0, 10, 16, 2);
+      f(g, 0x526351, 0, 12, 16, 3);
+      f(g, 0x8b9579, 0, 12, 16, 1, 0.56);
+      f(g, 0x53614f, 11, 3, 1, 8, 0.6);
+      f(g, 0xc2c5a6, 12, 3, 1, 6, 0.34);
+      f(g, 0x66745a, 3, 6, 3, 1, 0.34);
+      f(g, 0xd0cdae, 7, 8, 2, 1, 0.34);
+    });
+
+    // All water shares the village pond's continuous surface; only its small
+    // reflection overlays move. Exposed shore bits use N=1, E=2, S=4, W=8.
+    const pondEdges = [
+      [0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+    ];
+    const pondPalette = {
+      depth: [0x486353, 0x53938b, 0x47898a, 0x3d7e84, 0x37767f, 0x326f79, 0x306b76],
+      stoneLight: 0x749887, stoneDark: 0x234f5c, glimmer: 0x83bcb2,
+    };
+    const caveWaterPalette = {
+      depth: [0x2b4140, 0x376b6c, 0x306369, 0x295963, 0x23515d, 0x204956, 0x1d4451],
+      stoneLight: 0x688b83, stoneDark: 0x15303e, glimmer: 0x79b6b3,
+    };
+    const purifiedWaterPalette = {
+      depth: [0x456753, 0x609f8d, 0x51958a, 0x448b86, 0x3b8281, 0x357a7b, 0x317577],
+      stoneLight: 0x99bba0, stoneDark: 0x275d60, glimmer: 0xa6e0c6,
+    };
+    const pondStones = [[4, 3], [12, 10], [5, 12], [11, 4]];
+    const pondGlimmers = [[9, 10], [4, 6], [10, 4], [6, 11]];
+    const drawWater = (g: Graphics, variant: number, edgeMask: number, palette: typeof pondPalette) => {
+      const north = (edgeMask & 1) !== 0;
+      const east = (edgeMask & 2) !== 0;
+      const south = (edgeMask & 4) !== 0;
+      const west = (edgeMask & 8) !== 0;
+      const [stoneX, stoneY] = pondStones[variant];
+      const [glimmerX, glimmerY] = pondGlimmers[variant];
+
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+          let depth = 6;
+          if (north) depth = Math.min(depth, y - pondEdges[variant][x]);
+          if (east) depth = Math.min(depth, 15 - x - pondEdges[(variant + 1) % 4][y]);
+          if (south) depth = Math.min(depth, 15 - y - pondEdges[(variant + 2) % 4][x]);
+          if (west) depth = Math.min(depth, x - pondEdges[(variant + 3) % 4][y]);
+
+          // Round exposed outer corners and let the terrain underlay show.
+          if (north && west) depth = Math.min(depth, x + y - 4);
+          if (north && east) depth = Math.min(depth, 15 - x + y - 4);
+          if (south && west) depth = Math.min(depth, x + 15 - y - 4);
+          if (south && east) depth = Math.min(depth, 30 - x - y - 4);
+          if (depth < 0) continue;
+          f(g, palette.depth[depth], x, y);
+
+          // Muted submerged pebbles only appear in the shallow water.
+          if (depth > 1 && depth < 5 && y === stoneY && (x === stoneX || x === stoneX + 1)) {
+            f(g, x === stoneX ? palette.stoneLight : palette.stoneDark, x, y, 1, 1, 0.3);
+          }
+          // A few faint light fragments avoid a repeated stripe texture.
+          if (depth > 2 && ((y === glimmerY && x >= glimmerX && x <= glimmerX + 1)
+            || (variant % 2 === 0 && y === glimmerY + 1 && x === glimmerX - 1))) {
+            f(g, palette.glimmer, x, y, 1, 1, 0.13);
+          }
+        }
+      }
+    };
+
+    tile('tile-water', g => drawWater(g, 0, 0, pondPalette));
+    for (let variant = 0; variant < 4; variant++) {
+      for (let edgeMask = 0; edgeMask < 16; edgeMask++) {
+        tile(`tile-pond-water-${variant}-${edgeMask}`, g => drawWater(g, variant, edgeMask, pondPalette));
+        tile(`tile-cave-water-${variant}-${edgeMask}`, g => drawWater(g, variant, edgeMask, caveWaterPalette));
+        tile(`tile-cave-water-${variant}-${edgeMask}-purified`, g => drawWater(g, variant, edgeMask, purifiedWaterPalette));
+      }
+    }
+
+    tile('pond-ripple-0', g => {
+      f(g, 0x91c8bb, 4, 5, 4, 1, 0.55);
+      f(g, 0x76b6ae, 2, 6, 2, 1, 0.4); f(g, 0x76b6ae, 8, 6, 2, 1, 0.4);
+      f(g, 0xb9ded0, 5, 5, 2, 1, 0.3);
+      f(g, 0x76b6ae, 8, 10, 4, 1, 0.38); f(g, 0x91c8bb, 11, 9, 2, 1, 0.25);
+    });
+    tile('pond-ripple-1', g => {
+      f(g, 0x91c8bb, 5, 5, 5, 1, 0.42);
+      f(g, 0x76b6ae, 3, 6, 2, 1, 0.3); f(g, 0x76b6ae, 10, 6, 2, 1, 0.3);
+      f(g, 0x76b6ae, 2, 7, 1, 2, 0.2); f(g, 0x76b6ae, 12, 7, 1, 2, 0.2);
+      f(g, 0x91c8bb, 4, 10, 3, 1, 0.32); f(g, 0x91c8bb, 9, 10, 2, 1, 0.28);
+      f(g, 0xb9ded0, 6, 5, 2, 1, 0.2);
+    });
+    tile('pond-lily', g => {
+      f(g, 0x173e46, 3, 9, 9, 3, 0.5);
+      f(g, 0x315c42, 2, 8, 7, 3); f(g, 0x315c42, 3, 7, 5, 5);
+      f(g, 0x628748, 3, 7, 5, 3); f(g, 0x789a54, 4, 7, 3, 1);
+      f(g, 0x306b76, 5, 10, 1, 2); f(g, 0x306b76, 6, 11);
+      f(g, 0x416e45, 9, 6, 4, 3); f(g, 0x7e9d5b, 10, 6, 2, 1);
+      f(g, 0x30534a, 8, 6, 3, 2);
+      f(g, 0xe1a7af, 8, 4, 3, 3); f(g, 0xf1dcd1, 9, 3, 1, 4);
+      f(g, 0xf1dcd1, 7, 5, 5, 1); f(g, 0xd7b765, 9, 5);
+    });
+    tile('pond-reeds', g => {
+      f(g, 0x204c4e, 3, 13, 10, 2, 0.45);
+      f(g, 0x3d6846, 5, 8, 1, 6); f(g, 0x87a266, 5, 7, 1, 4);
+      f(g, 0x709056, 8, 4, 1, 10); f(g, 0x9caf70, 8, 5, 1, 4);
+      f(g, 0x4c794d, 11, 6, 1, 8); f(g, 0x88a164, 11, 6, 1, 4);
+      f(g, 0x3a6240, 7, 11, 1, 4); f(g, 0x739252, 6, 9, 1, 3);
+      f(g, 0x4c7547, 9, 10, 1, 5); f(g, 0x88a061, 10, 8, 1, 3);
+      f(g, 0x5d523b, 7, 2, 2, 4); f(g, 0x9a7950, 8, 2, 1, 3);
+      f(g, 0x64543c, 10, 4, 2, 3); f(g, 0xb0955d, 11, 4, 1, 2);
     });
 
     tile('tile-wall', g => {
@@ -531,6 +757,137 @@ export class WorldArtFactory {
       }
     });
 
+    tile('tile-universe-portal', g => {
+      f(g, c.cave, 0, 0, 16, 16);
+      f(g, 0x263b3c, 3, 2, 10, 12);
+      f(g, 0x647b70, 5, 1, 6, 2);
+      f(g, 0x73877a, 3, 3, 2, 9);
+      f(g, 0x4d655e, 11, 3, 2, 9);
+      f(g, 0x221d40, 5, 3, 6, 10);
+      f(g, 0x9b80d3, 6, 4, 3, 1);
+      f(g, 0x755ca7, 9, 5, 1, 5);
+      f(g, 0x74c9c7, 6, 7, 1, 4);
+      f(g, 0x74c9c7, 7, 10, 2, 1);
+      f(g, 0x456059, 2, 13, 12, 2);
+      f(g, 0x89b6a5, 3, 13, 10, 1);
+      f(g, 0xa1e0ce, 3, 6, 1, 2);
+      f(g, 0xa1e0ce, 11, 8, 1, 2);
+    });
+
+    landmark('landmark-universe-portal', 96, 96, g => {
+      // One upright, weathered stone ring; its opening is centered at (48, 43).
+      // The transparent shoulder lets both cave floor palettes show through.
+      landmarkShadow(g, 96, 87);
+      for (let y = 1; y < 86; y += 2) {
+        for (let x = 8; x < 88; x += 2) {
+          const dx = (x - 48) / 34;
+          const dy = (y - 43) / 39;
+          const radius = Math.hypot(dx, dy);
+          if (radius > 1 && radius < 1.16) {
+            f(g, 0x7965cf, x, y, 2, 2, (1.16 - radius) * 0.65);
+          }
+        }
+      }
+
+      for (let y = 5; y < 83; y += 2) {
+        for (let x = 14; x < 82; x += 2) {
+          const dx = (x - 48) / 34;
+          const dy = (y - 43) / 39;
+          const radius = Math.hypot(dx, dy);
+          const opening = Math.hypot((x - 48) / 23, (y - 43) / 28);
+          if (radius > 1) continue;
+
+          if (opening < 1) {
+            // Violet clouds fall away into a dark center, with no flat fill.
+            const angle = Math.atan2((y - 43) / 28, (x - 48) / 23);
+            const curl = Math.sin(angle * 2.5 - opening * 10);
+            const tone = opening < 0.28 ? 0x0b1020
+              : curl > 0.4 ? 0x30234f : curl < -0.4 ? 0x151b34 : 0x211d3e;
+            f(g, tone, x, y, 2, 2);
+            if (opening > 0.87) {
+              f(g, dx < 0 ? 0x6fbebd : 0x9270d0, x, y, 2, 2, 0.66);
+            }
+            continue;
+          }
+
+          // Individual voussoirs, chipped edges and restrained mineral grain.
+          const angle = Math.atan2(dy, dx);
+          const course = (angle + Math.PI) / (Math.PI * 2) * 12;
+          const joint = Math.abs(course - Math.round(course)) < 0.07;
+          const grain = (x * 13 + y * 7) % 19;
+          const highlight = dx + dy < -0.6;
+          const tone = radius > 0.96 ? 0x142025
+            : opening < 1.1 ? 0x25383d
+            : joint ? 0x263036
+            : highlight ? (grain < 4 ? 0x84918a : 0x697975)
+            : grain < 4 ? 0x61716d : 0x475955;
+          f(g, tone, x, y, 2, 2);
+          if (radius > 0.86 && radius < 0.92 && highlight && !joint) {
+            f(g, 0xb0b8a3, x, y, 2, 1, 0.45);
+          }
+        }
+      }
+
+      // Small carved glyphs sit on stone, separate from the moving energy.
+      const runes = [
+        { x: 45, y: 10, rows: ['01110', '01010', '11111', '00100', '00100'] },
+        { x: 24, y: 22, rows: ['10001', '01010', '00100', '01010', '01010'] },
+        { x: 17, y: 42, rows: ['11100', '00100', '01110', '00100', '00111'] },
+        { x: 25, y: 62, rows: ['00100', '01110', '10101', '00100', '01110'] },
+        { x: 66, y: 22, rows: ['01110', '01000', '01110', '00010', '01110'] },
+        { x: 74, y: 42, rows: ['00100', '01110', '00100', '00101', '00110'] },
+        { x: 64, y: 62, rows: ['01010', '01010', '01110', '00100', '00100'] },
+      ];
+      for (const { x, y, rows } of runes) {
+        f(g, 0x16272c, x - 1, y - 1, 7, 7, 0.68);
+        rows.forEach((row, rowIndex) => {
+          for (let col = 0; col < row.length; col++) {
+            if (row[col] === '1') f(g, 0x87d9cd, x + col, y + rowIndex, 1, 1, 0.88);
+          }
+        });
+      }
+
+      // A substantial plinth and two feet anchor the vertical ring to the floor.
+      f(g, 0x102023, 19, 77, 58, 13);
+      f(g, 0x3b504b, 21, 78, 54, 9);
+      f(g, 0x7a9080, 23, 78, 50, 2);
+      f(g, 0x1e3233, 29, 83, 38, 4);
+      f(g, 0x526b62, 31, 83, 34, 2);
+      f(g, 0x7cc5b7, 35, 80, 26, 1, 0.56);
+      for (const x of [12, 66]) {
+        f(g, 0x142327, x, 73, 18, 17);
+        f(g, 0x4a5e56, x + 2, 74, 14, 13);
+        f(g, 0x859383, x + 2, 74, 14, 2);
+        f(g, 0x64786a, x + 2, 76, 3, 8);
+        f(g, 0x283d3b, x + 5, 82, 11, 5);
+        f(g, 0x112024, x - 2, 87, 22, 4);
+        f(g, 0x52685d, x, 87, 18, 2);
+      }
+      f(g, 0x4d7970, 9, 90, 5, 2, 0.75);
+      f(g, 0x6f8170, 81, 90, 4, 2, 0.65);
+    });
+
+    WorldArtFactory.texture(scene, 'universe-portal-energy', 48, 56, g => {
+      // This transparent inset can breathe independently of the stone ring.
+      for (let arm = 0; arm < 2; arm++) {
+        for (let step = 0; step < 90; step++) {
+          const t = step / 89;
+          const radius = 0.14 + t * 0.72;
+          const angle = arm * Math.PI + t * Math.PI * 2.05;
+          const x = Math.round(24 + Math.cos(angle) * 22 * radius);
+          const y = Math.round(28 + Math.sin(angle) * 26 * radius);
+          const color = arm === 0 ? 0x87d9d7 : 0xb79aee;
+          f(g, color, x - 1, y - 1, 3, 3, 0.09 + t * 0.06);
+          if (step % 7 < 4) f(g, color, x, y, 1, 1, 0.3 + t * 0.38);
+        }
+      }
+      for (const [x, y] of [[15, 12], [31, 17], [10, 31], [35, 37], [20, 46]]) {
+        f(g, 0x9dbddc, x - 1, y, 3, 1, 0.3);
+        f(g, 0xd6eae5, x, y, 1, 1, 0.82);
+      }
+      f(g, 0xb89fed, 26, 27, 2, 1, 0.68);
+    });
+
     tile('tile-arena', g => {
       f(g, 0x101816, 0, 0, 16, 16); f(g, 0x192622, 1, 1, 14, 14);
       f(g, 0x27362f, 0, 7, 16); f(g, 0x27362f, 7, 0, 1, 16);
@@ -649,15 +1006,8 @@ export class WorldArtFactory {
     tile('tile-cave-wall-face', g => caveWallFace(g, false));
     tile('tile-cave-wall-face-purified', g => caveWallFace(g, true));
 
-    const caveWater = (g: Graphics, purified: boolean) => {
-      f(g, purified ? 0x315d54 : 0x162f35, 0, 0, 16, 16);
-      f(g, purified ? 0x4f8a76 : 0x24505a, 0, 3, 11, 2, 0.78);
-      f(g, purified ? c.teal : 0x39737a, 6, 8, 10, 2, 0.65);
-      f(g, purified ? c.acid : 0x4b8180, 1, 13, 8, 1, purified ? 0.38 : 0.25);
-      f(g, 0x071011, 0, 0, 16, 1, 0.45);
-    };
-    tile('tile-cave-water', g => caveWater(g, false));
-    tile('tile-cave-water-purified', g => caveWater(g, true));
+    tile('tile-cave-water', g => drawWater(g, 0, 0, caveWaterPalette));
+    tile('tile-cave-water-purified', g => drawWater(g, 0, 0, purifiedWaterPalette));
 
     const caveStairs = (g: Graphics, purified: boolean) => {
       caveFloor(g, 1, purified);

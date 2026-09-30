@@ -1,7 +1,7 @@
 export const XP_THRESHOLDS = [0, 30, 70, 120, 999999];
 export const MAX_LEVEL = 4;
 
-const HP_BY_LEVEL = [30, 40, 50, 70];
+const HP_BY_LEVEL = [30, 40, 50, 64];
 
 export function getMaxHpForLevel(level: number): number {
   return HP_BY_LEVEL[Math.max(0, Math.min(MAX_LEVEL - 1, Math.floor(level) - 1))];

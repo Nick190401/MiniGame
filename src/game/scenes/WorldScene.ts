@@ -65,6 +65,9 @@ export class WorldScene extends Phaser.Scene {
   private runeGraphics: Phaser.GameObjects.GameObject[] = [];
   private caveSurfaceTiles: Phaser.GameObjects.Image[] = [];
   private caveCorruptionObjects: Phaser.GameObjects.GameObject[] = [];
+  private universePortals: Array<{ x: number; y: number }> = [];
+  private nearbyUniversePortals = new Set<number>();
+  private nextUniversePortalNoticeAt = 0;
   private purifiedCaveEffects: Phaser.GameObjects.GameObject[] = [];
   private cavePurified = false;
   private finaleOverlay?: Phaser.GameObjects.Container;
@@ -154,7 +157,6 @@ export class WorldScene extends Phaser.Scene {
 
   // Modern world presentation
   private playerShadow?: Phaser.GameObjects.Ellipse;
-  private waterTiles: Phaser.GameObjects.Image[] = [];
   private zoneHud?: Phaser.GameObjects.Container;
   private zoneHudTitle?: Phaser.GameObjects.Text;
   private zoneHudMeta?: Phaser.GameObjects.Text;
@@ -174,6 +176,9 @@ export class WorldScene extends Phaser.Scene {
     // Build map
     const mapResult = MapBuilder.build(this);
     this.walls = mapResult.walls;
+    this.universePortals = mapResult.universePortals;
+    this.nearbyUniversePortals.clear();
+    this.nextUniversePortalNoticeAt = 0;
     if (useGameStore.getState().gateOpen) {
       this.gateOpen = true;
       this.setGateOpenVisual(false);
@@ -287,6 +292,7 @@ export class WorldScene extends Phaser.Scene {
     // ── NPC proximity interactions ─────────────────────────────────────────
     const interactionRequested = mobileAction || Phaser.Input.Keyboard.JustDown(this.interactKey);
     this.checkNpcProximity(interactionRequested);
+    this.checkUniversePortalProximity(interactionRequested);
 
     // ── Sign proximity (E to read) ─────────────────────────────────────────
     if (!this.dialogActive && interactionRequested) {
@@ -376,23 +382,6 @@ export class WorldScene extends Phaser.Scene {
 
     this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 1.5, 14, 5, 0x110906, 0.34);
     this.playerShadow.setDepth(4);
-
-    this.waterTiles = this.children.getChildren().filter(
-      child => child instanceof Phaser.GameObjects.Image && child.name === 'water-tile'
-    ) as Phaser.GameObjects.Image[];
-
-    let waterPhase = 0;
-    this.time.addEvent({
-      delay: 340,
-      loop: true,
-      callback: () => {
-        waterPhase++;
-        this.waterTiles.forEach((water, index) => {
-          const shimmer = (index + waterPhase) % 4;
-          water.setAlpha(shimmer === 0 ? 0.88 : shimmer === 1 ? 0.95 : 1);
-        });
-      },
-    });
 
     // Slow luminous pollen gives the open world depth without hiding the pixel art.
     for (let index = 0; index < 34; index++) {
@@ -643,6 +632,36 @@ export class WorldScene extends Phaser.Scene {
       yoyo: true,
       ease: 'Cubic.easeOut',
     });
+  }
+
+  private checkUniversePortalProximity(interactionRequested: boolean): void {
+    if (this.dialogActive || this.worldFrozen || this.battleActive) return;
+
+    for (let index = 0; index < this.universePortals.length; index++) {
+      const portal = this.universePortals[index];
+      const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, portal.x, portal.y);
+      if (distance > 56) {
+        this.nearbyUniversePortals.delete(index);
+        continue;
+      }
+      if (distance > 42) continue;
+      if (this.nearbyUniversePortals.has(index) && !interactionRequested) continue;
+      if (this.time.now < this.nextUniversePortalNoticeAt) continue;
+
+      // Stay quiet while the player remains nearby; E/touch can repeat the notice.
+      this.nearbyUniversePortals.add(index);
+      this.nextUniversePortalNoticeAt = this.time.now + 4500;
+      EventBus.emit(EVENTS.GATE_BLOCKED);
+      EventBus.emit(EVENTS.UI_NOTICE, {
+        eyebrow: 'UNIVERSE PORTAL // SOON',
+        title: 'Universe travel locked',
+        detail: "You can't switch universes yet. Coming soon!",
+        accent: '#b59aff',
+        tone: 'info',
+        duration: 4500,
+      });
+      return;
+    }
   }
 
   private checkNpcProximity(interactionRequested: boolean): void {

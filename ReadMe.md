@@ -428,6 +428,15 @@ Create an optimized production build:
 npm run build
 ```
 
+The build copies only runtime assets into `dist`; archives, source artwork and
+unused recordings stay in `public`. Images and generated sprite paths come from
+the manifests in `src/game/assets`, and music/SFX from `AudioLibrary.ts`. Literal
+`assets/...` URLs in UI components and CSS are included automatically. Register
+new dynamically generated paths in a manifest used by `vite.config.ts`.
+Missing required assets fail the build; optional audio slots may remain empty.
+
+Run `npm run test:build` to check the asset selection rules.
+
 Preview the production version locally:
 
 ```bash

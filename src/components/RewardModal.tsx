@@ -151,6 +151,16 @@ export function RewardModal() {
 
           {audioError && <p role="alert">The song could not be played. Please try again.</p>}
 
+          <a
+            className="reward-continue reward-community"
+            href="https://chat.whatsapp.com/DbOJG6cX5AuIstZURlWxOt"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={playUiClick}
+          >
+            Join the WhatsApp Community <span aria-hidden="true">↗</span>
+          </a>
+
           <button className="reward-continue" onClick={closeModal}>Return to the world <span>→</span></button>
         </section>
       </article>

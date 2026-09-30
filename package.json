@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test:build": "node --test scripts/runtimeAssets.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^22.20.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.0.0",

@@ -5,6 +5,7 @@ import {
 } from '../maps/PokemonOverworld';
 
 const TILE = 16;
+const BROOK_BRIDGE = { top: 44, bottom: 49, left: 28, right: 35 } as const;
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 const _ = 0;   // grass (background colour, no sprite)
@@ -38,6 +39,7 @@ const H  = 28; // invisible collision beneath authored overworld landmarks
 const I  = 29; // underground water (collision)
 const Z  = 30; // underground stone stairs (walkable)
 const E  = 31; // underground boulder (collision)
+const PORTAL = 32; // sealed universe portal (collision + approach interaction)
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -89,6 +91,7 @@ export interface MapBuildResult {
   // Key world positions
   gatePos:    { x: number; y: number };
   bossPos:    { x: number; y: number };
+  universePortals: Array<{ x: number; y: number }>;
   // Fragment pickup positions
   fragment1Pos: { x: number; y: number };
   fragment2Pos: { x: number; y: number };
@@ -304,7 +307,7 @@ function applyExpandedWorldLayout(grid: number[][]): void {
   // BROOKSIDE CROSSING — a river landmark, bridge and inhabited side loop.
   fill(BROOK_START_ROW, 29, 44, 34, P);
   fill(45, 4, 48, 59, R);
-  fill(44, 28, 49, 35, P);     // broad timber bridge footprint
+  fill(BROOK_BRIDGE.top, BROOK_BRIDGE.left, BROOK_BRIDGE.bottom, BROOK_BRIDGE.right, P);
   paintRoad([
     [49, 32], [50, 35], [51, 39], [52, 43], [53, 42], [54, 38], [55, 34],
   ]);
@@ -397,7 +400,7 @@ function applyExpandedWorldLayout(grid: number[][]): void {
   fill(122, 14, 125, 31, C);
   ellipse(14, 128, 9, 6, C);                 // west echo chamber
   fill(122, 33, 125, 51, C);
-  ellipse(51, 127, 9, 6, C);                 // crystal pool chamber
+  ellipse(51, 127, 9, 6, C);                 // universe portal chamber
   fill(126, 29, 137, 35, C);
   ellipse(32, 136, 11, 7, C);                // central descending room
   fill(135, 14, 139, 31, C);
@@ -407,8 +410,8 @@ function applyExpandedWorldLayout(grid: number[][]): void {
   fill(140, 28, 149, 36, C);
   ellipse(32, 146, 13, 4, C);                // Core antechamber
 
-  // Underground lakes stay at room edges and create loops, not dead ends.
-  ellipse(53, 127, 4, 3, I);
+  // The former eastern pool is a dry approach to the sealed universe portal.
+  ellipse(53, 127, 4, 3, C);
   fill(125, 47, 130, 49, C);
   ellipse(10, 142, 3, 2, I);
   fill(139, 13, 145, 15, C);
@@ -439,6 +442,7 @@ function applyExpandedWorldLayout(grid: number[][]): void {
   for (const [row, col] of [
     [129, 8], [129, 19], [128, 45], [141, 18], [139, 47], [146, 25], [146, 39],
   ] as Array<[number, number]>) set(row, col, Q2);
+  set(129, 53, PORTAL);
 
   // THE CORE — a broad elliptical arena with one dramatic entrance.
   fill(CORE_START_ROW, 0, MAP_ROWS - 1, MAP_COLS - 1, K);
@@ -798,6 +802,7 @@ export class MapBuilder {
     const tallGrassFrontTiles: Phaser.GameObjects.Image[] = [];
     const caveSurfaceTiles: Phaser.GameObjects.Image[] = [];
     const caveCorruptionObjects: Phaser.GameObjects.GameObject[] = [];
+    const universePortals: Array<{ x: number; y: number }> = [];
 
     const markCaveSurface = (image: Phaser.GameObjects.Image, purifiedTexture: string) => {
       image.setName('cave-surface').setData('purifiedTexture', purifiedTexture);
@@ -879,6 +884,114 @@ export class MapBuilder {
       return image;
     };
 
+    const addSandPath = (row: number, col: number, x: number, y: number) => {
+      const connectsToPath = (r: number, c: number) => {
+        const neighbor = grid[r]?.[c];
+        return neighbor === P || neighbor === G || neighbor === H
+          || neighbor === D || neighbor === D2 || neighbor === C || neighbor === Z;
+      };
+      // Only exposed banks get an edge; crossings and entrances stay continuous.
+      const edges = (connectsToPath(row - 1, col) ? 0 : 1)
+        | (connectsToPath(row, col + 1) ? 0 : 2)
+        | (connectsToPath(row + 1, col) ? 0 : 4)
+        | (connectsToPath(row, col - 1) ? 0 : 8);
+      const variant = Math.min(3, Math.floor(hash(row * 7 + col, col * 3 + row) * 4));
+
+      // Real grass shows through the irregular, transparent path banks.
+      if (edges !== 0) addOutdoorGround(row, col, x, y);
+      const image = scene.add.image(x, y, `tile-path-sand-${variant}-${edges}`).setDepth(0.1);
+      if (row >= FADING_START_ROW) image.setTint(0xb6b49e);
+      decorative.add(image);
+    };
+
+    const isBridgeTile = (row: number, col: number) => grid[row]?.[col] === P
+      && row >= BROOK_BRIDGE.top && row <= BROOK_BRIDGE.bottom
+      && col >= BROOK_BRIDGE.left && col <= BROOK_BRIDGE.right;
+
+    const bridgeShadows = scene.add.graphics().setDepth(0.3);
+    decorative.add(bridgeShadows);
+    const addBridgeTile = (row: number, col: number, x: number, y: number) => {
+      const localRow = row - BROOK_BRIDGE.top;
+      const localCol = col - BROOK_BRIDGE.left;
+      const landing = row === BROOK_BRIDGE.top || row === BROOK_BRIDGE.bottom;
+      const texture = landing ? 'tile-bridge-landing'
+        : `tile-bridge-deck-${(localRow % 2) * 4 + localCol % 4}`;
+      const deck = scene.add.image(x, y, texture).setDepth(0.15).setName('bridge-deck');
+      decorative.add(deck);
+
+      if (col !== BROOK_BRIDGE.left && col !== BROOK_BRIDGE.right) return;
+      const railX = col === BROOK_BRIDGE.left ? col * TILE + 3 : (col + 1) * TILE - 3;
+      const tileTop = row * TILE;
+      // Narrow shadows anchor the timber above the river and shade the deck edge.
+      bridgeShadows.fillStyle(0x112b2e, 0.22);
+      bridgeShadows.fillRect(railX - 4, tileTop + 2, 12, TILE);
+      bridgeShadows.fillStyle(0x30291f, 0.18);
+      bridgeShadows.fillRect(railX + 3, tileTop, 5, TILE);
+      const rail = scene.add.image(railX, tileTop + TILE, 'bridge-rail-segment')
+        .setOrigin(0.5, 1).setDepth(5 + tileTop / 10000).setName('bridge-rail');
+      decorative.add(rail);
+
+      // Collision follows only the side rails; both approaches remain open.
+      const blocker = scene.add.zone(railX, y, 8, TILE).setName('bridge-rail-blocker');
+      walls.add(blocker);
+      for (const offset of [8, 36, 64, 92]) {
+        const footY = BROOK_BRIDGE.top * TILE + offset;
+        if (Math.floor(footY / TILE) !== row) continue;
+        const post = scene.add.image(railX, footY, 'bridge-rail-post')
+          .setOrigin(0.5, 1).setDepth(5 + footY / 10000 + 0.0001).setName('bridge-post');
+        decorative.add(post);
+      }
+    };
+
+    const addWater = (row: number, col: number, x: number, y: number, underground: boolean) => {
+      const connectsToWater = (r: number, c: number) => grid[r]?.[c] === R
+        || grid[r]?.[c] === I || isBridgeTile(r, c);
+      // Water reaches beneath bridge decks instead of growing a grassy bank there.
+      const shores = (connectsToWater(row - 1, col) ? 0 : 1)
+        | (connectsToWater(row, col + 1) ? 0 : 2)
+        | (connectsToWater(row + 1, col) ? 0 : 4)
+        | (connectsToWater(row, col - 1) ? 0 : 8);
+      const seed = hash(row * 7 + col, col * 3 + row);
+      const variant = Math.min(3, Math.floor(seed * 4));
+      if (shores !== 0) {
+        if (underground) addCaveGround(row, col, x, y);
+        else addOutdoorGround(row, col, x, y);
+      }
+
+      // The water and its collider stay fixed; only surface details drift.
+      const texture = `${underground ? 'tile-cave-water' : 'tile-pond-water'}-${variant}-${shores}`;
+      const water = scene.add.image(x, y, texture).setDepth(0.1);
+      if (underground) markCaveSurface(water, `${texture}-purified`);
+      water.setName('water-surface').setData('underground', underground);
+      walls.add(water);
+
+      const nearBridge = isBridgeTile(row, col - 1) || isBridgeTile(row, col + 1)
+        || isBridgeTile(row - 1, col) || isBridgeTile(row + 1, col);
+      const hasLily = !underground && !nearBridge && shores === 0 && (row < SIGNAL_START_ROW
+        ? (row === 12 && col === 38) || (row === 14 && col === 40)
+        : hash(row * 11 + col, col * 5 + row) < 0.08);
+      if (hasLily) {
+        const lily = scene.add.image(x, y, 'pond-lily').setDepth(0.3);
+        decorative.add(lily);
+        scene.tweens.add({ targets: lily, y: y + 1, duration: 2400 + seed * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else if (seed < 0.48) {
+        const ripple = scene.add.image(x, y, `pond-ripple-${variant % 2}`)
+          .setName('pond-ripple').setDepth(0.2).setAlpha(0.12);
+        decorative.add(ripple);
+        scene.tweens.add({
+          targets: ripple, x: x + 1, alpha: { from: 0.12, to: 0.55 },
+          duration: 1800 + seed * 1600, delay: seed * 1800,
+          yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+      }
+
+      if (!underground && !nearBridge && (shores & 5) !== 0 && seed > 0.6) {
+        const bankY = (shores & 1) !== 0 ? y - TILE / 2 + 3 : y + TILE / 2 - 2;
+        const reeds = scene.add.image(x, bankY, 'pond-reeds').setOrigin(0.5, 1).setDepth(0.4);
+        decorative.add(reeds);
+      }
+    };
+
     const addShadow = (texture: string, x: number, y: number, depth = 0.5) => {
       const shadow = scene.add.image(x + 2, y + 2, texture);
       shadow.setTint(0x07100c).setAlpha(0.22).setDepth(depth);
@@ -919,8 +1032,7 @@ export class MapBuilder {
           }
           case G:  {
             // A real road surface remains visible after the doors slide away.
-            const floor = scene.add.image(px, py, 'tile-path');
-            floor.setDepth(0); decorative.add(floor);
+            addSandPath(row, col, px, py);
             // Collision is independent from the coherent multi-tile door artwork.
             const blocker = scene.add.image(px, py, 'tile-gate');
             blocker.setAlpha(0).setDepth(1).setName('gate-blocker');
@@ -935,13 +1047,18 @@ export class MapBuilder {
             break;
           }
           case P: {
-            const isBridge = row >= 44 && row <= 49 && col >= 28 && col <= 35;
+            const isBridge = isBridgeTile(row, col);
+            if (isBridge) {
+              addBridgeTile(row, col, px, py);
+              break;
+            }
             const isJunction = row >= JUNCTION_START_ROW && row < GROVE_START_ROW;
-            const pathKey = isBridge ? 'tile-bridge'
-              : isJunction ? `tile-junction-paving-${(row % 2) * 2 + col % 2}`
-                : 'tile-path';
+            if (!isJunction) {
+              addSandPath(row, col, px, py);
+              break;
+            }
+            const pathKey = `tile-junction-paving-${(row % 2) * 2 + col % 2}`;
             const i = scene.add.image(px, py, pathKey);
-            if (!isJunction) i.setFlip(rng > 0.52, rng > 0.82);
             if (isJunction) {
               const x = col * TILE, y = row * TILE;
               const isEdge = (r: number, c: number) => grid[r]?.[c] !== P && grid[r]?.[c] !== H;
@@ -968,8 +1085,8 @@ export class MapBuilder {
             break;
           }
           case R:  {
-            const i = scene.add.image(px, py, 'tile-water');
-            i.setName('water-tile').setData('baseY', py).setDepth(0); walls.add(i); break;
+            addWater(row, col, px, py, row >= CAVE_START_ROW);
+            break;
           }
           case L: {
             addOutdoorGround(row, col, px, py);
@@ -1019,8 +1136,31 @@ export class MapBuilder {
           case Q2: { const i = scene.add.image(px, py, 'tile-skull'); i.setDepth(1); decorative.add(i); caveCorruptionObjects.push(i); break; }
           case N:  { const i = scene.add.image(px, py, 'tile-stalactite');  i.setDepth(2); decorative.add(i); break; }
           case I:  {
-            const i = markCaveSurface(scene.add.image(px, py, 'tile-cave-water'), 'tile-cave-water-purified');
-            i.setName('water-tile').setData('baseY', py).setDepth(0); walls.add(i); break;
+            addWater(row, col, px, py, true);
+            break;
+          }
+          case PORTAL: {
+            addCaveGround(row, col, px, py);
+            const frame = scene.add.image(px, py + 8, 'landmark-universe-portal')
+              .setOrigin(0.5, 1).setDepth(3.5).setName('universe-portal');
+            const energy = scene.add.image(px, py - 45, 'universe-portal-energy')
+              .setDepth(3.6).setAlpha(0.72).setName('universe-portal-energy');
+            decorative.addMultiple([frame, energy]);
+            scene.tweens.add({
+              targets: energy, alpha: { from: 0.42, to: 0.9 },
+              scaleX: { from: 0.96, to: 1.02 }, scaleY: { from: 0.98, to: 1.02 },
+              duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            });
+            // Solid feet and the sealed threshold stop entry without sealing the room.
+            const blocker = scene.add.zone(px, py - 4, 72, 16).setName('universe-portal-blocker');
+            walls.add(blocker);
+            const label = scene.add.text(px, py + 14, 'UNIVERSE // SOON', {
+              fontFamily: 'monospace', fontSize: '6px', color: '#c4b1ed',
+              backgroundColor: '#171323', padding: { x: 3, y: 2 },
+            }).setOrigin(0.5, 0).setDepth(3.7);
+            decorative.add(label);
+            universePortals.push({ x: px, y: py });
+            break;
           }
           case Z:  {
             const i = markCaveSurface(scene.add.image(px, py, 'tile-cave-stairs'), 'tile-cave-stairs-purified');
@@ -1135,7 +1275,7 @@ export class MapBuilder {
       spawnX, spawnY,
       npcPos, npc2Pos, npc3Pos,
       signPos, sign2Pos,
-      gatePos, bossPos,
+      gatePos, bossPos, universePortals,
       fragment1Pos, fragment2Pos, fragment3Pos,
       tallGrassZones, tallGrassFrontTiles,
       runeGraphics,
@@ -1383,7 +1523,7 @@ export class MapBuilder {
       [27 * TILE, 116 * TILE, 0xff4400],
       [37 * TILE, 116 * TILE, 0xff4400],
       [8 * TILE, 128 * TILE, 0xff2200],
-      [56 * TILE, 127 * TILE, 0xff2200],
+      [58 * TILE, 128 * TILE, 0xff2200],
       [17 * TILE, 141 * TILE, 0xcc0044],
       [48 * TILE, 140 * TILE, 0xcc0044],
       [18 * TILE, 159 * TILE, 0xff2200],
