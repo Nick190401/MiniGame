@@ -2,8 +2,8 @@
 export const WORLD_IMAGE_ASSETS = [
   { key: 'player-battle', url: 'assets/player_model.webp?v=mr-readable-2' },
   { key: 'npc-elder-muse-v4', url: 'assets/npc-elder-muse-v4.webp' },
-  { key: 'npc-junction-guard-v3', url: 'assets/npc-junction-guard-v3.webp' },
-  { key: 'npc-wandering-musician-v3', url: 'assets/npc-wandering-musician-v3.webp' },
+  { key: 'npc-junction-guard-v3', url: 'assets/npc-junction-guard-v4.png' },
+  { key: 'npc-wandering-musician-v3', url: 'assets/npc-wandering-musician-v4.png' },
   { key: 'silence-battle', url: 'assets/silence_model.webp' },
   { key: 'staticnoise-battle', url: 'assets/static-noice.webp' },
   { key: 'brokensignal-battle', url: 'assets/brokensignal_model.webp' },

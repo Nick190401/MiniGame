@@ -55,6 +55,8 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     body.setSize(BODY_WIDTH, BODY_HEIGHT);
     body.setOffset((FRAME_SIZE - BODY_WIDTH) / 2, FOOT_BASELINE - BODY_HEIGHT);
     body.setCollideWorldBounds(true);
+    // Keep patrol movement and wall collisions, but reject pushes from the player.
+    this.setPushable(false);
 
     this.chooseNextMotion();
   }

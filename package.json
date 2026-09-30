@@ -6,6 +6,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test:build": "node --test scripts/runtimeAssets.test.mjs",
+    "test:battle": "node --test scripts/battleTurns.test.mjs",
+    "test:waveform": "node --test scripts/waveform.test.mjs",
+    "test:dialog": "node --test scripts/dialogCooldown.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

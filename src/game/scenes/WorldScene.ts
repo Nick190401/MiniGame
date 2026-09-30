@@ -26,6 +26,7 @@ import { consumeMobileAction } from '../input/MobileInput';
 import type { FootstepSurface } from '../audio/AudioLibrary';
 
 const TILE = 16;
+const NPC_DIALOG_COOLDOWN_MS = 1200;
 
 interface NpcVisualConfig {
   portraitTexture: string;
@@ -91,6 +92,7 @@ export class WorldScene extends Phaser.Scene {
   // Dialog
   private dialogBox?: Phaser.GameObjects.Container;
   private dialogActive = false;
+  private npcInteractionReadyAt = 0;
   private dialogQueue: string[] = [];
   private isTyping = false;
   private currentTypeTimer?: Phaser.Time.TimerEvent;
@@ -170,6 +172,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.npcInteractionReadyAt = 0;
     if (!this.scene.isActive('UIScene')) this.scene.launch('UIScene');
     EventBus.emit(EVENTS.CUTSCENE_STATE, true);
 
@@ -270,6 +273,8 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const mobileAction = consumeMobileAction();
+    // Consume E even while dialogue freezes the world, so it cannot carry over.
+    const keyboardAction = Phaser.Input.Keyboard.JustDown(this.interactKey);
     if (mobileAction && this.dialogActive) {
       this.handleDialogAdvance();
       (this.player?.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
@@ -290,7 +295,7 @@ export class WorldScene extends Phaser.Scene {
     );
 
     // ── NPC proximity interactions ─────────────────────────────────────────
-    const interactionRequested = mobileAction || Phaser.Input.Keyboard.JustDown(this.interactKey);
+    const interactionRequested = mobileAction || keyboardAction;
     this.checkNpcProximity(interactionRequested);
     this.checkUniversePortalProximity(interactionRequested);
 
@@ -665,6 +670,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private checkNpcProximity(interactionRequested: boolean): void {
+    if (this.time.now < this.npcInteractionReadyAt) {
+      this.npcInteractLabel?.setVisible(false);
+      this.npc2InteractLabel?.setVisible(false);
+      this.npc3InteractLabel?.setVisible(false);
+      return;
+    }
     const px = this.player.x;
     const py = this.player.y;
 
@@ -674,8 +685,9 @@ export class WorldScene extends Phaser.Scene {
       : 999;
     const near1 = d1 < 30;
     this.npcInteractLabel?.setVisible(near1 && !this.dialogActive);
-    if (near1 && !this.dialogActive && interactionRequested) {
-      this.npcSprite?.faceToward(px, py);
+    if (near1 && this.npcSprite && !this.dialogActive && interactionRequested) {
+      this.player.faceToward(this.npcSprite.x, this.npcSprite.y);
+      this.npcSprite.faceToward(px, py);
       this.triggerNpc1();
     }
 
@@ -685,8 +697,9 @@ export class WorldScene extends Phaser.Scene {
       : 999;
     const near2 = d2 < 30;
     this.npc2InteractLabel?.setVisible(near2 && !this.dialogActive);
-    if (near2 && !this.dialogActive && interactionRequested) {
-      this.npc2Sprite?.faceToward(px, py);
+    if (near2 && this.npc2Sprite && !this.dialogActive && interactionRequested) {
+      this.player.faceToward(this.npc2Sprite.x, this.npc2Sprite.y);
+      this.npc2Sprite.faceToward(px, py);
       this.triggerNpc2();
     }
 
@@ -696,8 +709,9 @@ export class WorldScene extends Phaser.Scene {
       : 999;
     const near3 = d3 < 30;
     this.npc3InteractLabel?.setVisible(near3 && !this.dialogActive);
-    if (near3 && !this.dialogActive && interactionRequested) {
-      this.npc3Sprite?.faceToward(px, py);
+    if (near3 && this.npc3Sprite && !this.dialogActive && interactionRequested) {
+      this.player.faceToward(this.npc3Sprite.x, this.npc3Sprite.y);
+      this.npc3Sprite.faceToward(px, py);
       this.triggerNpc3();
     }
   }
@@ -2356,6 +2370,7 @@ export class WorldScene extends Phaser.Scene {
       this.dialogBox.setVisible(false);
       this.dialogActive = false;
       this.worldFrozen = false;
+      this.npcInteractionReadyAt = this.time.now + NPC_DIALOG_COOLDOWN_MS;
       EventBus.emit(EVENTS.DIALOG_CLEAR);
       const cb = this.dialogBox.getData('callback') as (() => void) | null;
       this.dialogBox.setData('callback', null);

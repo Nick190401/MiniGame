@@ -1,0 +1,26 @@
+NPC edge cleanup v4
+Mode: built-in image_gen image editing (not CLI).
+
+Saved assets (relative to project root):
+public/assets/npc-junction-guard-v4.png
+public/assets/npc-wandering-musician-v4.png
+public/assets/npc/sheets/npc-guard-overworld-v4.png
+public/assets/npc/sheets/npc-musician-overworld-v4.png
+public/assets/npc/overworld/guard-v4/npc-guard-{down,up,left,right}-{0,1,2,3}.png
+public/assets/npc/overworld/musician-v4/npc-musician-{down,up,left,right}-{0,1,2,3}.png
+
+The generated sheets are sliced into 313x313 frames, preserving the original
+per-frame character height, horizontal center and foot baseline. Original v3
+assets are retained. Runtime URLs reference the new v4 assets.
+
+Final prompt: Guard sprite sheet
+Use case: background-extraction. Edit target: the supplied existing 4 by 4 pixel-art sprite sheet of Quincy Guard. Remove ONLY the thin white/gray matte fringe and stray bright pixels surrounding the outer contour of each sprite. Deliver actual transparent RGBA background, not a checkerboard or solid background. Preserve all sixteen original poses, precise cell positions, foot baselines, proportions, clothes, face, all interior colors and pixels as closely as possible. This is cleanup of an existing animation sheet, not a redesign. Keep the 4-column 4-row layout exactly, row 1 front, row 2 back, row 3 left, row 4 right. Each frame centered in its original cell. Natural dark pixel contours with NO added white border, glow, drop shadow or halo. Preserve small cyan uniform details and yellow armband inside the character. Original canvas 1252 by 1252 if possible; otherwise a square canvas with precisely equal 4 by 4 cells and exactly the original relative layout. Do not add/remove/redraw poses.
+
+Final prompt: Musician sprite sheet
+Use case: background-extraction. Edit target: existing 4 by 4 pixel-art animation sprite sheet for Kian Vero. Remove ONLY thin white/light gray fringe pixels on the outer silhouettes of all 16 sprites, replacing white matte contaminated edges with transparent edges and their natural dark pixel contours. Output actual transparent RGBA background, never checkerboard. Preserve all sixteen original poses, exact relative cell positions, original foot baselines, image proportions, clothing colors, hair, instrument and face details. Original square 1252x1252 canvas, four equal rows and columns, row 1 front row 2 back row 3 left row 4 right. Keep equal grid and identical relative alignment if output resolution changes. Do not redesign the character or animation. No added outlines, glow, white edging or drop shadow. Maintain all interior character pixels as closely as possible. Clean cutout on transparency.
+
+Final prompt: Guard portrait
+Use case: background-extraction. Edit target is Quincy Guard full-body pixel-art game portrait. Remove the checkerboard/white background and all white/light gray fringes around the character. Actual transparent RGBA background required, NOT a painted checkerboard. Preserve the original character exactly: same dark cap and uniform, cyan piping, yellow armband, face, skin, eyes, pose, proportions and full-body framing. This is background removal and edge cleanup only. Preserve the natural dark pixel-art silhouette with no bright matte halo, no glow, no added border and no shadow. Transparent gaps between legs and hands/body must also be clean. Keep all original detail inside character, including white eyes. Center the full original character with head and both feet completely visible. Square canvas same framing.
+
+Final prompt: Musician portrait
+Use case: background-extraction. Edit target is Kian Vero full-body pixel-art game portrait. Remove the checkerboard/white background and all white/light gray fringes around the character. Actual transparent RGBA background required, NOT a painted checkerboard. Preserve original character exactly: same spiky brown hair, orange jacket, green pants, teal scarf, face, skin, eyes, back-mounted instrument, pose and proportions. This is background removal and edge cleanup only. Preserve natural dark pixel-art contours with no bright matte halo, no glow, no added border and no shadow. Transparent gaps between legs and between hands/body also clean. Keep all original interior colors and pixels as closely as possible including white eyes and instrument highlights. Center full original character with hair tips and both shoes completely visible. Square canvas same framing.

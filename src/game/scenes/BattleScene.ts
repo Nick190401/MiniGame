@@ -6,7 +6,7 @@ import { BOSS_DEFINITION } from '../entities/Enemy';
 import { BOSS_PHASES } from '../entities/Boss';
 import type { EnemyData, Attack } from '../../types/game.types';
 
-type TurnState = 'player-choose' | 'player-attack' | 'enemy-attack' | 'phase-change' | 'battle-end';
+type TurnState = 'intro' | 'player-choose' | 'player-attack' | 'enemy-attack' | 'phase-change' | 'battle-end';
 
 /** Bounding box of a texture's non-transparent pixels, in source-image space. */
 interface ContentBounds {
@@ -78,8 +78,8 @@ export class BattleScene extends Phaser.Scene {
   private messageReady = false;
 
   // State
-  private turnState: TurnState = 'player-choose';
-  private inputBlocked = false;
+  private turnState: TurnState = 'intro';
+  private inputBlocked = true;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -92,7 +92,9 @@ export class BattleScene extends Phaser.Scene {
     this.bossPhaseIndex = 0;
     this.attackButtons = [];
     this.ambientParticles = [];
-    this.turnState = 'player-choose';
+    this.turnState = 'intro';
+    this.inputBlocked = true;
+    this.messageReady = false;
   }
 
   create(): void {
@@ -427,7 +429,7 @@ export class BattleScene extends Phaser.Scene {
       : `A wild ${this.enemyData.name}\nappears!`);
 
     this.time.delayedCall(1400, () => {
-      this.setTurnState('player-choose');
+      this.finishBattleIntro();
     });
   }
 
@@ -441,6 +443,7 @@ export class BattleScene extends Phaser.Scene {
     if (!this.enemyData || !this.attackButtons.length) return;
     const store = useGameStore.getState();
     const turnLabels: Record<TurnState, { label: string; color: string }> = {
+      'intro': { label: 'ENCOUNTER', color: '#82776f' },
       'player-choose': { label: 'YOUR TURN', color: '#ff7a2b' },
       'player-attack': { label: 'TRANSMITTING', color: '#6ea8d8' },
       'enemy-attack': { label: 'INCOMING', color: '#f0362c' },
@@ -987,6 +990,11 @@ export class BattleScene extends Phaser.Scene {
     this.executePlayerAttack(entry.attack, index);
   }
 
+  private finishBattleIntro(): void {
+    // A delayed intro callback must never reopen an attack already in progress.
+    if (this.turnState === 'intro') this.setTurnState('player-choose');
+  }
+
   // ── Battle logic ──────────────────────────────────────────────────────────
 
   private setTurnState(state: TurnState): void {
@@ -994,6 +1002,7 @@ export class BattleScene extends Phaser.Scene {
     this.inputBlocked = state !== 'player-choose';
 
     const turnLabels: Record<TurnState, { label: string; color: string }> = {
+      'intro': { label: 'ENCOUNTER', color: '#82776f' },
       'player-choose': { label: 'YOUR TURN', color: '#ff7a2b' },
       'player-attack': { label: 'TRANSMITTING', color: '#6ea8d8' },
       'enemy-attack': { label: 'INCOMING', color: '#f0362c' },
@@ -1075,8 +1084,10 @@ export class BattleScene extends Phaser.Scene {
 
     const store = useGameStore.getState();
     const phaseMultiplier = this.isBoss ? BOSS_PHASES[this.bossPhaseIndex].attackMultiplier : 1;
+    // Normal enemies deal 75/85/95/100% damage at levels 1–4; bosses stay fixed.
+    const levelMultiplier = this.isBoss ? 1 : Math.min(1, 0.75 + (Math.max(1, Math.min(4, store.level)) - 1) * 0.1);
     const attack = this.enemyData.attacks[Math.floor(Math.random() * this.enemyData.attacks.length)];
-    const rawDmg  = Math.round(attack.damage * phaseMultiplier);
+    const rawDmg  = Math.round(attack.damage * phaseMultiplier * levelMultiplier);
     const damage  = applyDamageVariance(rawDmg);
 
     this.setMessage(`${this.enemyData.name}\nuses ${attack.name}!`);

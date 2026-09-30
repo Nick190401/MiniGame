@@ -172,7 +172,7 @@ a:focus-visible {
   align-items: flex-end;
   justify-content: center;
   padding-bottom: var(--art-anchor);
-  background-image: url('/assets/wallpaper_soundquest.webp');
+  background-image: url('/assets/wallpaper_soundquest.png');
   background-position: center;
   background-size: cover;
   background-color: var(--ink);
@@ -2333,7 +2333,7 @@ a:focus-visible {
   overflow: hidden;
   padding-bottom: var(--art-anchor);
   color: #f8ece2;
-  background-image: url('/assets/wallpaper_soundquest.webp');
+  background-image: url('/assets/wallpaper_soundquest.png');
   background-position: center;
   background-size: cover;
   background-color: #110906;
@@ -3308,7 +3308,7 @@ a:focus-visible {
 @media (max-width: 760px) and (orientation: portrait) {
   .title-screen,
   .loading-overlay {
-    background-image: url('/assets/mobile-wallpaper.webp');
+    background-image: url('/assets/mobile-wallpaper.PNG');
   }
 
   /* The portrait artwork puts its horizon higher and its characters lower,
@@ -3789,15 +3789,16 @@ a:focus-visible {
     transition-duration: 1ms !important;
   }
 }
-/* Dialog portraits use alpha-trimmed busts at every viewport size. */
-.dialog-overlay { animation: none; }
+/* Fit the entire alpha-trimmed character inside the available dialog height. */
+.dialog-overlay { animation: none; grid-template-rows: minmax(0, 1fr); }
+.dialog-overlay__portrait { min-height: 0; }
 .dialog-overlay .dialog-overlay__portrait img {
-  inset: 6px 0 0;
-  width: 100%;
-  height: calc(100% - 6px);
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
   max-width: 100%;
   object-fit: contain;
-  object-position: center top;
+  object-position: center;
   transform: none;
   filter: none;
 }

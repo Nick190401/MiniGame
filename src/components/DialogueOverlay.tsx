@@ -14,12 +14,12 @@ interface OverlayBounds {
 
 const PORTRAITS: Partial<Record<NonNullable<DialogPayload['portrait']>, string>> = {
   elder: '/assets/npc-elder-muse-v4.webp',
-  guard: '/assets/npc-junction-guard-v3.webp',
-  musician: '/assets/npc-wandering-musician-v3.webp',
+  guard: '/assets/npc-junction-guard-v4.png',
+  musician: '/assets/npc-wandering-musician-v4.png',
   gatekeeper: '/assets/boss-gatekeeper-phase1-v2.webp',
 };
 
-// Cache tightly framed busts instead of squeezing padded full-body art into a square.
+// Remove transparent margins while preserving the complete character and its proportions.
 const portraitCache = new Map<string, Promise<string>>();
 function preparePortrait(url: string): Promise<string> {
   if (!portraitCache.has(url)) portraitCache.set(url, (async () => {
@@ -38,10 +38,14 @@ function preparePortrait(url: string): Promise<string> {
       left = Math.min(left, x); right = Math.max(right, x);
       top = Math.min(top, y); bottom = Math.max(bottom, y);
     }
-    const width = right - left + 1;
-    const height = Math.min(bottom - top + 1, width * 1.2);
-    canvas.width = 256; canvas.height = 308;
-    ctx.drawImage(image, left, top, width, height, 0, 0, 256, 308);
+    if (right < left || bottom < top) return url;
+    // Include the pixels between samples at the right and bottom edges.
+    const width = Math.min(canvas.width - left, right - left + 2);
+    const height = Math.min(canvas.height - top, bottom - top + 2);
+    const scale = Math.min(256 / width, 308 / height);
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    ctx.drawImage(image, left, top, width, height, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL('image/png');
   })().catch(() => url));
   return portraitCache.get(url)!;
