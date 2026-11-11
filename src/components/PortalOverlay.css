@@ -1,0 +1,26 @@
+.portal-overlay {
+  position: absolute;
+  z-index: 22;
+  overflow: hidden;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.portal-overlay__label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(196, 177, 237, 0.45);
+  background: rgba(23, 19, 35, 0.96);
+  color: #d8c9f6;
+  font-family: var(--font-display);
+  font-size: clamp(14px, 1.5cqw, 17px);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.portal-overlay__label strong { color: #f8f2ff; font-weight: 700; }
+.portal-overlay__label span[aria-hidden] { color: #a99ac6; }

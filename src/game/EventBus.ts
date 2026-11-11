@@ -17,6 +17,13 @@ export interface DialogPayload {
   portrait?: 'elder' | 'guard' | 'musician' | 'gatekeeper';
 }
 
+export interface PortalLabelPayload {
+  id: number;
+  /** Position relative to the game canvas (0–1). */
+  x: number;
+  y: number;
+}
+
 export interface BattleAttackPayload {
   id: string;
   name: string;
@@ -105,6 +112,8 @@ export const EVENTS = {
   BATTLE_UI_REQUEST: 'battle-ui-request',
   BATTLE_UI_ACTION: 'battle-ui-action',
   CUTSCENE_STATE: 'cutscene-state',
+  INTRO_UI_STATE: 'intro-ui-state',
+  PORTAL_LABEL_STATE: 'portal-label-state',
   UI_NOTICE: 'ui-notice',
   UI_NOTICE_CLEAR: 'ui-notice-clear',
   ZONE_UI_STATE: 'zone-ui-state',

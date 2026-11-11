@@ -1154,11 +1154,7 @@ export class MapBuilder {
             // Solid feet and the sealed threshold stop entry without sealing the room.
             const blocker = scene.add.zone(px, py - 4, 72, 16).setName('universe-portal-blocker');
             walls.add(blocker);
-            const label = scene.add.text(px, py + 14, 'UNIVERSE // SOON', {
-              fontFamily: 'monospace', fontSize: '6px', color: '#c4b1ed',
-              backgroundColor: '#171323', padding: { x: 3, y: 2 },
-            }).setOrigin(0.5, 0).setDepth(3.7);
-            decorative.add(label);
+            // The world scene anchors a crisp HTML label to this portal.
             universePortals.push({ x: px, y: py });
             break;
           }

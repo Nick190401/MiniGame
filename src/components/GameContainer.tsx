@@ -10,6 +10,8 @@ import { GameNoticeOverlay } from './GameNoticeOverlay';
 import { LoadingOverlay } from './LoadingOverlay';
 import { ZoneOverlay } from './ZoneOverlay';
 import { RewardModal } from './RewardModal';
+import { IntroOverlay } from './IntroOverlay';
+import { PortalOverlay } from './PortalOverlay';
 import { useGameStore } from '../store/gameStore';
 import { getAttacksForLevel } from '../game/systems/AttackSystem';
 import { MAX_LEVEL, XP_THRESHOLDS, getMaxHpForLevel } from '../game/systems/XPSystem';
@@ -222,6 +224,8 @@ export function GameContainer({ visible }: GameContainerProps) {
       {/* React UI overlays */}
       {visible && (
         <>
+          <IntroOverlay canvasParentRef={containerRef} />
+          {worldReady && !battleActive && !deathActive && !cutsceneActive && <PortalOverlay canvasParentRef={containerRef} />}
           {worldReady && !battleActive && !deathActive && !cutsceneActive && <HUD />}
           {worldReady && !battleActive && !deathActive && !cutsceneActive && <MobileControls />}
           {worldReady && !battleActive && !deathActive && <DialogueOverlay canvasParentRef={containerRef} />}

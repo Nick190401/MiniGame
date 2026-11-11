@@ -20,7 +20,7 @@ import {
   MapBuilder,
   SIGNAL_START_ROW,
 } from '../utils/MapBuilder';
-import { EventBus, EVENTS, type DialogPayload } from '../EventBus';
+import { EventBus, EVENTS, type DialogPayload, type PortalLabelPayload } from '../EventBus';
 import { useGameStore } from '../../store/gameStore';
 import { consumeMobileAction } from '../input/MobileInput';
 import type { FootstepSurface } from '../audio/AudioLibrary';
@@ -100,10 +100,6 @@ export class WorldScene extends Phaser.Scene {
   private activeDialogSpeaker?: string;
   private introActive = false;
   private introCameraBeat = -1;
-  private introCinematicOverlay?: {
-    scene: Phaser.Scene;
-    items: Phaser.GameObjects.GameObject[];
-  };
 
   // State
   private battleActive = false;
@@ -180,6 +176,12 @@ export class WorldScene extends Phaser.Scene {
     const mapResult = MapBuilder.build(this);
     this.walls = mapResult.walls;
     this.universePortals = mapResult.universePortals;
+    // Camera transforms are current after rendering, including pans and zooms.
+    this.events.on(Phaser.Scenes.Events.RENDER, this.emitPortalLabels, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.RENDER, this.emitPortalLabels, this);
+      EventBus.emit(EVENTS.PORTAL_LABEL_STATE, []);
+    });
     this.nearbyUniversePortals.clear();
     this.nextUniversePortalNoticeAt = 0;
     if (useGameStore.getState().gateOpen) {
@@ -639,6 +641,20 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  private emitPortalLabels(): void {
+    const camera = this.cameras.main;
+    const labels: PortalLabelPayload[] = [];
+    this.universePortals.forEach((portal, id) => {
+      const point = {
+        x: camera.x + (portal.x - camera.worldView.x) * camera.zoomX,
+        y: camera.y + (portal.y + 14 - camera.worldView.y) * camera.zoomY,
+      };
+      if (point.x < 0 || point.x > this.scale.width || point.y < 0 || point.y > this.scale.height) return;
+      labels.push({ id, x: point.x / this.scale.width, y: point.y / this.scale.height });
+    });
+    EventBus.emit(EVENTS.PORTAL_LABEL_STATE, labels);
+  }
+
   private checkUniversePortalProximity(interactionRequested: boolean): void {
     if (this.dialogActive || this.worldFrozen || this.battleActive) return;
 
@@ -939,65 +955,15 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createIntroCinematicOverlay(): void {
-    this.introCinematicOverlay?.items.forEach(item => item.destroy());
-
-    // Fixed cinematic chrome belongs to UIScene. World-space objects with a
-    // zero scroll factor can still be culled during the long flight to the
-    // gate; the UI camera stays at the origin for the entire sequence.
-    const ui = this.scene.get('UIScene') as Phaser.Scene;
-    const width = ui.scale.width;
-    const height = ui.scale.height;
-    const barHeight = Phaser.Math.Clamp(Math.round(height * 0.075), 26, 42);
-    const bars = ui.add.graphics().setDepth(90).setAlpha(0);
-    bars.fillStyle(0x050908, 0.96);
-    bars.fillRect(0, 0, width, barHeight);
-    bars.fillRect(0, height - barHeight, width, barHeight);
-    bars.fillStyle(0xff7a2b, 0.9);
-    bars.fillRect(18, barHeight - 2, Math.min(118, width * 0.25), 1);
-    const chapter = ui.add.text(18, Math.max(7, barHeight * 0.27), 'FIRST TRANSMISSION', {
-      fontFamily: 'DM Mono',
-      fontSize: '7px',
-      color: '#f8ece2',
-      letterSpacing: 2,
-    }).setDepth(91).setResolution(2).setAlpha(0);
-    const location = ui.add.text(width - 18, barHeight / 2, 'ECHO VILLAGE // ORIGIN SIGNAL', {
-      fontFamily: 'DM Mono',
-      fontSize: '6px',
-      color: '#8fbdde',
-      letterSpacing: 1,
-    }).setOrigin(1, 0.5).setDepth(91).setResolution(2).setAlpha(0);
-
-    const items: Phaser.GameObjects.GameObject[] = [bars, chapter, location];
-    this.introCinematicOverlay = { scene: ui, items };
-
-    ui.tweens.add({
-      targets: items,
-      alpha: 1,
-      duration: 520,
-      ease: 'Sine.easeOut',
-    });
-    ui.tweens.add({
-      targets: [chapter, location],
-      alpha: { from: 0.35, to: 1 },
-      duration: 620,
-      delay: 260,
-      yoyo: true,
-      hold: 1050,
-      ease: 'Sine.easeInOut',
+    // Render text at display resolution, independently of the pixel-art canvas.
+    EventBus.emit(EVENTS.INTRO_UI_STATE, true);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      EventBus.emit(EVENTS.INTRO_UI_STATE, false);
     });
   }
 
   private dismissIntroCinematicOverlay(): void {
-    const overlay = this.introCinematicOverlay;
-    if (!overlay) return;
-    this.introCinematicOverlay = undefined;
-    overlay.scene.tweens.add({
-      targets: overlay.items,
-      alpha: 0,
-      duration: 440,
-      ease: 'Sine.easeIn',
-      onComplete: () => overlay.items.forEach(item => item.destroy()),
-    });
+    EventBus.emit(EVENTS.INTRO_UI_STATE, false);
   }
 
   private pulseProfessorSignal(): void {
