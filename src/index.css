@@ -253,6 +253,15 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
+.title-screen__prompt--coming-soon {
+  cursor: default;
+  text-align: center;
+}
+
+.title-screen__prompt--coming-soon .title-screen__prompt-text {
+  animation: none;
+}
+
 .title-screen__meta {
   position: absolute;
   right: 3vw;

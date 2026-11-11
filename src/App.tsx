@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from 'react';
 import { useGameStore } from './store/gameStore';
 import { TitleScreen } from './components/TitleScreen';
 import { MenuMusic } from './components/MenuMusic';
+import { COMING_SOON } from './config';
 
 // Phaser is 1.5 MB of engine that the title screen has no use for, so the two
 // components that own it are split out and fetched on the way in rather than
@@ -13,12 +14,12 @@ const MapEditor = lazy(() =>
 
 export default function App() {
   const gamePhase = useGameStore(s => s.gamePhase);
-  const onTitle = gamePhase === 'title';
+  const onTitle = COMING_SOON || gamePhase === 'title';
 
   // Warm the engine chunk while the player is still reading the title screen,
   // so pressing start doesn't wait on a download.
   useEffect(() => {
-    if (!onTitle) return;
+    if (COMING_SOON || !onTitle) return;
     const warm = () => { void import('./components/GameContainer'); };
     const idle = window.requestIdleCallback;
     if (idle) {
@@ -33,10 +34,12 @@ export default function App() {
     <div className="app-shell relative w-screen h-screen overflow-hidden">
       <MenuMusic />
       {onTitle && <TitleScreen />}
-      <Suspense fallback={null}>
-        {gamePhase === 'editor' && <MapEditor />}
-        {!onTitle && gamePhase !== 'editor' && <GameContainer visible />}
-      </Suspense>
+      {!COMING_SOON && (
+        <Suspense fallback={null}>
+          {gamePhase === 'editor' && <MapEditor />}
+          {!onTitle && gamePhase !== 'editor' && <GameContainer visible />}
+        </Suspense>
+      )}
     </div>
   );
 }

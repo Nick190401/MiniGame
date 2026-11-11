@@ -3,6 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import { AudioManager } from '../game/audio/AudioManager';
 import { SFX } from '../game/audio/AudioLibrary';
 import { BrandLogo } from './BrandLogo';
+import { COMING_SOON } from '../config';
 
 const playUiClick = () => AudioManager.playSfx(SFX.uiClick.key);
 
@@ -13,6 +14,7 @@ export function TitleScreen() {
   const [name, setName] = useState('');
 
   const openModal = useCallback(() => {
+    if (COMING_SOON) return;
     playUiClick();
     setShowModal(true);
   }, []);
@@ -34,7 +36,7 @@ export function TitleScreen() {
 
   // Classic arcade convention: any key opens the modal, not just a click.
   useEffect(() => {
-    if (showModal) return;
+    if (COMING_SOON || showModal) return;
     const onKeyDown = () => openModal();
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -49,19 +51,27 @@ export function TitleScreen() {
 
   return (
     <div className="title-screen">
-      {!showModal && (
+      {(COMING_SOON || !showModal) && (
         <>
           <div className="brand-stamp"><BrandLogo /></div>
-          <button className="title-screen__prompt" onClick={openModal} aria-label="Press start">
-            <span className="title-screen__prompt-glow" aria-hidden="true" />
-            <span className="title-screen__prompt-text">Press Start</span>
-            <span className="title-screen__prompt-sub">Tap or press any key</span>
-          </button>
+          {COMING_SOON ? (
+            <div className="title-screen__prompt title-screen__prompt--coming-soon">
+              <span className="title-screen__prompt-glow" aria-hidden="true" />
+              <span className="title-screen__prompt-text">Coming Soon</span>
+              <span className="title-screen__prompt-sub">Sound Quest is in development</span>
+            </div>
+          ) : (
+            <button className="title-screen__prompt" onClick={openModal} aria-label="Press start">
+              <span className="title-screen__prompt-glow" aria-hidden="true" />
+              <span className="title-screen__prompt-text">Press Start</span>
+              <span className="title-screen__prompt-sub">Tap or press any key</span>
+            </button>
+          )}
           <p className="title-screen__meta">SQ-2026 // First transmission</p>
         </>
       )}
 
-      {showModal && (
+      {!COMING_SOON && showModal && (
         <div className="name-modal-scrim" onClick={closeModal}>
           <div
             className="name-modal"

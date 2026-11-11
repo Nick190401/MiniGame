@@ -1141,11 +1141,17 @@ export class MapBuilder {
           }
           case PORTAL: {
             addCaveGround(row, col, px, py);
-            const frame = scene.add.image(px, py + 8, 'landmark-universe-portal')
-              .setOrigin(0.5, 1).setDepth(3.5).setName('universe-portal');
-            const energy = scene.add.image(px, py - 45, 'universe-portal-energy')
-              .setDepth(3.6).setAlpha(0.72).setName('universe-portal-energy');
-            decorative.addMultiple([frame, energy]);
+            const portal = scene.add.container(px, py).setDepth(3.5).setName('universe-portal');
+            const frame = scene.add.image(0, 8, 'landmark-universe-portal').setOrigin(0.5, 1);
+            const energy = scene.add.image(0, -45, 'universe-portal-energy').setAlpha(0.72);
+            const plaque = scene.add.graphics();
+            plaque.fillStyle(0x171323, 0.96).fillRect(-36, -96, 72, 14);
+            plaque.lineStyle(1, 0x9270b8).strokeRect(-36, -96, 72, 14);
+            const label = scene.add.text(0, -89, 'UNIVERSE // SOON', {
+              fontFamily: 'DM Mono', fontSize: '6px', color: '#dbc9ff',
+            }).setOrigin(0.5).setResolution(2);
+            portal.add([frame, energy, plaque, label]);
+            decorative.add(portal);
             scene.tweens.add({
               targets: energy, alpha: { from: 0.42, to: 0.9 },
               scaleX: { from: 0.96, to: 1.02 }, scaleY: { from: 0.98, to: 1.02 },
@@ -1154,11 +1160,6 @@ export class MapBuilder {
             // Solid feet and the sealed threshold stop entry without sealing the room.
             const blocker = scene.add.zone(px, py - 4, 72, 16).setName('universe-portal-blocker');
             walls.add(blocker);
-            const label = scene.add.text(px, py + 14, 'UNIVERSE // SOON', {
-              fontFamily: 'monospace', fontSize: '6px', color: '#c4b1ed',
-              backgroundColor: '#171323', padding: { x: 3, y: 2 },
-            }).setOrigin(0.5, 0).setDepth(3.7);
-            decorative.add(label);
             universePortals.push({ x: px, y: py });
             break;
           }

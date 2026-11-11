@@ -954,16 +954,17 @@ export class WorldScene extends Phaser.Scene {
     bars.fillRect(0, height - barHeight, width, barHeight);
     bars.fillStyle(0xff7a2b, 0.9);
     bars.fillRect(18, barHeight - 2, Math.min(118, width * 0.25), 1);
-    const chapter = ui.add.text(18, Math.max(7, barHeight * 0.27), 'FIRST TRANSMISSION', {
+    const chapter = ui.add.text(18, barHeight / 2, 'FIRST TRANSMISSION', {
       fontFamily: 'DM Mono',
-      fontSize: '7px',
+      fontSize: '8px',
+      fontStyle: 'bold',
       color: '#f8ece2',
-      letterSpacing: 2,
-    }).setDepth(91).setResolution(2).setAlpha(0);
+      letterSpacing: 1,
+    }).setOrigin(0, 0.5).setDepth(91).setResolution(2).setAlpha(0);
     const location = ui.add.text(width - 18, barHeight / 2, 'ECHO VILLAGE // ORIGIN SIGNAL', {
       fontFamily: 'DM Mono',
-      fontSize: '6px',
-      color: '#8fbdde',
+      fontSize: '7px',
+      color: '#d6ecfb',
       letterSpacing: 1,
     }).setOrigin(1, 0.5).setDepth(91).setResolution(2).setAlpha(0);
 
@@ -975,15 +976,6 @@ export class WorldScene extends Phaser.Scene {
       alpha: 1,
       duration: 520,
       ease: 'Sine.easeOut',
-    });
-    ui.tweens.add({
-      targets: [chapter, location],
-      alpha: { from: 0.35, to: 1 },
-      duration: 620,
-      delay: 260,
-      yoyo: true,
-      hold: 1050,
-      ease: 'Sine.easeInOut',
     });
   }
 
