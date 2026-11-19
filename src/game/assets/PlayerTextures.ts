@@ -9,7 +9,7 @@ export const CHARACTER_DIRECTIONS: readonly PlayerDirection[] = ['down', 'up', '
 export const CHARACTER_FRAME = { w: 256, h: 320, footX: 128, footY: 308, figure: 280 } as const;
 
 /** Walk-cycle frames per direction; index 0 of every list is the standing pose. */
-export const WALK_FRAMES = 4;
+export const WALK_FRAMES = 8;
 
 export const characterFrameKey = (id: string, direction: PlayerDirection, frame: number) =>
   `char-${id}-${direction}-${frame}`;

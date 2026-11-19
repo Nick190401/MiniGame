@@ -796,7 +796,7 @@ export const LANDMARK_ART: Record<string, LandmarkArtEntry> = {
   'landmark-cottage': { w: 112, h: 96, paint: cottage, decorate: smoke(112 * 0.7 + 3, 8) },
   'landmark-professor-lab': { w: 160, h: 112, paint: professorLab, decorate: blinker(160 * 0.76, 2, 0xff4b3a) },
   'landmark-clinic': { w: 128, h: 96, paint: (c, w, h) => clinic(c, w, h) },
-  'landmark-inn': { w: 128, h: 96, paint: (c, w, h) => inn(c, w, h), decorate: smoke(27, 0) },
+  'landmark-inn': { w: 128, h: 96, paint: (c, w, h) => inn(c, w, h), decorate: smoke(32, 0) },
   'landmark-workshop': { w: 112, h: 80, paint: (c, w, h) => workshop(c, w, h) },
   'landmark-riverside-hut': { w: 112, h: 80, paint: riversideHut },
   'landmark-signal-station': { w: 192, h: 84, paint: signalStation, decorate: combine(blinker(192 - 14, 1, 0xff4b3a, 1200), blinker(96, 37.5, 0x7ff6ff, 2600)) },

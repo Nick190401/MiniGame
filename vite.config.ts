@@ -5,6 +5,7 @@ import { runtimeAssetsPlugin } from './scripts/runtimeAssets';
 import { PLAYER_TEXTURE_ASSETS } from './src/game/assets/PlayerTextures';
 import { NPC_TEXTURE_ASSETS } from './src/game/assets/NpcTextures';
 import { WORLD_IMAGE_ASSETS, WORLD_TILESET_ASSETS } from './src/game/assets/WorldAssets';
+import { PAINTED_WORLD_ART } from './src/game/assets/WorldArt';
 import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from './src/game/audio/AudioLibrary';
 
 export default defineConfig({
@@ -14,6 +15,7 @@ export default defineConfig({
       ...NPC_TEXTURE_ASSETS.map(asset => asset.url),
       ...WORLD_IMAGE_ASSETS.map(asset => asset.url),
       ...WORLD_TILESET_ASSETS.map(asset => asset.url),
+      ...PAINTED_WORLD_ART.map(asset => asset.url),
       '.htaccess',
     ],
     optional: [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS].map(asset => asset.url),

@@ -1,55 +1,45 @@
 import { useEffect, useState } from 'react';
-import { paintKeyArt } from '../game/art/keyArt';
 
 const PORTRAIT_QUERY = '(max-width: 760px) and (orientation: portrait)';
-const HEROES = ['professor', 'musician', 'guard', 'player'] as const;
-const cache = new Map<'landscape' | 'portrait', string>();
 
-let heroBacks: Promise<HTMLImageElement[]> | null = null;
-/** The heroes' painted back views; the art is painted without them if one fails to load. */
-function loadHeroes(): Promise<HTMLImageElement[]> {
-  heroBacks ??= Promise.all(HEROES.map(id => {
-    const image = new Image();
-    image.src = `assets/characters/${id}/up-0.webp`;
-    return image.decode().then(() => image);
-  })).catch(() => []);
-  return heroBacks;
-}
+/** Hand-painted title artwork, framed for wide screens and for phones held upright. */
+const KEY_ART = {
+  landscape: 'assets/title/keyart-landscape.webp',
+  portrait: 'assets/title/keyart-portrait.webp',
+} as const;
 
-function artFor(layout: 'landscape' | 'portrait', figures: HTMLImageElement[]): string {
-  const cached = cache.get(layout);
-  if (cached) return cached;
-  const canvas = layout === 'portrait'
-    ? paintKeyArt({ width: 1080, height: 1920, figures })
-    : paintKeyArt({ width: 1920, height: 1080, figures });
-  const url = canvas.toDataURL('image/jpeg', 0.9);
-  cache.set(layout, url);
-  return url;
-}
+const decoded = new Set<string>();
+
+const urlFor = (portrait: boolean) => KEY_ART[portrait ? 'portrait' : 'landscape'];
 
 /**
- * The painted key art as an image URL, rendered after first paint so the
- * title never blocks on it. Follows the phone's orientation.
+ * The title key art for the current orientation, handed out once it has
+ * decoded so the title fades it in whole instead of drawing it top-down.
+ * Follows the phone's orientation.
  */
 export function useKeyArt(): string | null {
   const [url, setUrl] = useState<string | null>(() => {
-    const layout = window.matchMedia(PORTRAIT_QUERY).matches ? 'portrait' : 'landscape';
-    return cache.get(layout) ?? null;
+    const next = urlFor(window.matchMedia(PORTRAIT_QUERY).matches);
+    return decoded.has(next) ? next : null;
   });
 
   useEffect(() => {
     const media = window.matchMedia(PORTRAIT_QUERY);
     let cancelled = false;
-    const render = () => {
-      const layout = media.matches ? 'portrait' : 'landscape';
-      const cached = cache.get(layout);
-      if (cached) { setUrl(cached); return; }
-      // The title chrome paints first; the artwork follows once the heroes have loaded.
-      void loadHeroes().then(figures => { if (!cancelled) setUrl(artFor(layout, figures)); });
+    const show = () => {
+      const next = urlFor(media.matches);
+      if (decoded.has(next)) { setUrl(next); return; }
+      const image = new Image();
+      image.src = next;
+      // Without the art the title keeps its dark backdrop; nothing else depends on it.
+      void image.decode().then(() => {
+        decoded.add(next);
+        if (!cancelled) setUrl(next);
+      }).catch(() => {});
     };
-    render();
-    media.addEventListener('change', render);
-    return () => { cancelled = true; media.removeEventListener('change', render); };
+    show();
+    media.addEventListener('change', show);
+    return () => { cancelled = true; media.removeEventListener('change', show); };
   }, []);
 
   return url;

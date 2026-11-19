@@ -28,6 +28,7 @@ import { createVegetationTextures, TREE_SIZE, VEGETATION } from '../art/vegetati
 import { createStructureTextures, STRUCTURES } from '../art/structures';
 import { CAVE_ART, createCaveTextures } from '../art/caveArt';
 import { createLandmarkTextures } from '../art/landmarkArt';
+import { loadPaintedWorldArt, registerPaintedWorldArt } from '../art/paintedArt';
 import { buildingTileTexture, isBuildingTile, isDoorTile } from '../art/buildingTiles';
 
 const TILE = 16;
@@ -112,11 +113,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Textures are generated in create() to match the live game exactly.
+    // Code-painted textures are generated in create() to match the live game.
+    loadPaintedWorldArt(this);
   }
 
   create(): void {
     // The editor shows the map with the game's own terrain shader and artwork.
+    registerPaintedWorldArt(this);
     ensureTerrainTextures(this);
     createFxTextures(this);
     createVegetationTextures(this);

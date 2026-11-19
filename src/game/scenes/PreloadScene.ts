@@ -14,6 +14,7 @@ import { createStructureTextures } from '../art/structures';
 import { createLandmarkTextures } from '../art/landmarkArt';
 import { createCaveTextures } from '../art/caveArt';
 import { createItemTextures } from '../art/items';
+import { loadPaintedWorldArt, registerPaintedWorldArt } from '../art/paintedArt';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -27,6 +28,8 @@ export class PreloadScene extends Phaser.Scene {
     // Painted character frames, the player's full-body art and NPC portraits.
     [...PLAYER_TEXTURE_ASSETS, ...NPC_TEXTURE_ASSETS].forEach(({ key, url }) => this.load.image(key, url));
     WORLD_TILESET_ASSETS.forEach(({ key, url, frameConfig }) => this.load.spritesheet(key, url, frameConfig));
+    // Hand-painted world art; it takes over these keys from the code painters.
+    loadPaintedWorldArt(this);
 
     // Music/SFX are optional: files may not exist yet (see AudioLibrary.ts).
     // A missing file just fails to load — it never blocks the other assets
@@ -220,6 +223,7 @@ export class PreloadScene extends Phaser.Scene {
       {
         label: 'Shaping the land',
         fn: () => {
+          registerPaintedWorldArt(this);
           ensureTerrainTextures(this);
           createFxTextures(this);
           createVegetationTextures(this);

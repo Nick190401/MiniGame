@@ -8,8 +8,8 @@ import { FX } from '../art/fx';
 
 const NPC_SPEED = 24;
 const NPC_SCALE = 1 / TEXEL;
-// Unhurried pace: a full stride takes ~800 ms.
-const WALK_FRAME_MS = 190;
+// Unhurried pace: a full stride (eight frames) takes ~800 ms.
+const WALK_FRAME_MS = 95;
 // Collision footprint in world units, converted to texture space for Arcade.
 const BODY_WIDTH = 12.18 * TEXEL;
 const BODY_HEIGHT = 7.35 * TEXEL;

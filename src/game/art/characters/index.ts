@@ -32,6 +32,8 @@ export function createCharacterTextures(scene: Phaser.Scene): void {
         if (scene.textures.exists(key) || !scene.textures.exists(sourceKey)) continue;
         const source = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement;
         scene.textures.addCanvas(key, downsample(source, width, height));
+        // Only this one reduction needs the full-size frame; free its memory.
+        scene.textures.remove(sourceKey);
       }
     }
   }

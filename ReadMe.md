@@ -516,26 +516,25 @@ The result is a world somewhere between a classic RPG and a broken audio worksta
 
 ### How the art is made
 
-The overworld is generated in code when the game loads; the characters,
-enemies, the boss and the battle arenas are painted HD images based on the
-original designs:
+The ground is generated in code when the game loads; buildings, trees, props,
+characters, enemies, the boss, the battle arenas and the title artwork are
+painted HD images based on the original designs:
 
 | Area | Source |
 | --- | --- |
 | Terrain | `src/game/world/terrain` (splat maps from the tile grid + shader) |
-| Trees, bushes, rocks, grass, flowers | `src/game/art/foliage.ts` (modelled as lit volumes) |
-| Buildings, structures, cave | `src/game/art/landmarkArt.ts`, `structures.ts`, `buildingTiles.ts`, `caveArt.ts` |
-| Characters | `public/assets/characters/<id>`: walk cycles in four directions, a full-body illustration and a dialogue portrait, painted in HD from the original character designs |
+| Buildings, trees, bushes, rocks, flowers, bridge, gate, signs, cave props | `public/assets/world`, listed in `src/game/assets/WorldArt.ts` |
+| Tall grass, gate wall, core circle and arch | `src/game/art` (painted in code) |
+| Characters | `public/assets/characters/<id>`: 8-frame walk cycles in four directions, a full-body illustration and a dialogue portrait |
 | Enemies, boss and arenas | `public/assets/battle` |
-| Title key art | `src/game/art/keyArt.ts` |
+| Title key art | `public/assets/title` |
 
-Objects are lit rather than flat-shaded. Buildings, structures and cave props
-are painted with a material map (height, gloss, glow) that
-`src/game/art/relief.ts` lights per pixel, so eaves shade the walls, frames and
-sills cast small shadows, glass catches the sun and lit windows glow. Foliage
-and stones are built from lit volumes with self-shadowing and light passing
-through thin leaves (`src/game/art/litSprite.ts`). Everything standing in the
-sun casts a projected shadow onto the ground (`src/game/art/castShadow.ts`).
+World images are stored at 5 pixels per world unit and resampled once at load
+to the screen's density (`src/game/art/paintedArt.ts`). They take over the
+texture keys of the code painters, so placement, collision and the projected
+shadows (`src/game/art/castShadow.ts`) stay as they are; if an image cannot be
+loaded, the code painter draws that object instead. Light comes from the upper
+left everywhere, matching the direction of the cast shadows.
 
 The canvas renders at a multiple of the logical 640 x 480 board
 (`src/game/render/RenderScale.ts`), so the game stays sharp on high-density
