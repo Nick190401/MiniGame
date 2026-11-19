@@ -9,12 +9,7 @@ import {
 
 type Direction = MobileDirection;
 
-const ARROWS: Record<Direction, string> = {
-  up: '\u2191',
-  right: '\u2192',
-  down: '\u2193',
-  left: '\u2190',
-};
+const DIRECTIONS: Direction[] = ['up', 'right', 'down', 'left'];
 
 export function MobileControls() {
   const [visible, setVisible] = useState(false);
@@ -22,6 +17,8 @@ export function MobileControls() {
   const [dialogActive, setDialogActive] = useState(false);
   const activeDirectionRef = useRef<Direction | null>(null);
   const movementPointerRef = useRef<number | null>(null);
+  const dpadRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef<HTMLButtonElement>(null);
 
   const applyDirection = (direction: Direction | null, haptic = false) => {
     if (activeDirectionRef.current === direction) return;
@@ -76,6 +73,29 @@ export function MobileControls() {
     };
   }, []);
 
+  // Publish how much of the screen bottom the controls cover, so the dialogue
+  // box can sit above them on an upright phone.
+  useEffect(() => {
+    if (!visible) return;
+    const publish = () => {
+      const tops = [dpadRef.current, actionRef.current]
+        .filter((el): el is HTMLDivElement | HTMLButtonElement => el !== null)
+        .map(el => el.getBoundingClientRect().top);
+      if (!tops.length) return;
+      const viewportBottom = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty('--touch-controls-h', `${Math.max(0, Math.round(viewportBottom - Math.min(...tops)))}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    if (dpadRef.current) observer.observe(dpadRef.current);
+    window.addEventListener('resize', publish);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', publish);
+      document.documentElement.style.removeProperty('--touch-controls-h');
+    };
+  }, [visible]);
+
   if (!visible) return null;
 
   const resolveDirection = (
@@ -120,50 +140,43 @@ export function MobileControls() {
 
   return (
     <>
-      <div className="mobile-control-wrap" aria-label="Movement controls">
-        <div className="mobile-control-label"><span>Signal pad</span><small>4-way input</small></div>
-        <div
-          className={`mobile-dpad${activeDirection ? ' is-engaged' : ''}`}
-          data-direction={activeDirection ?? 'idle'}
-          role="group"
-          aria-label="Four-way movement pad"
-          onPointerDown={beginMovement}
-          onPointerMove={updateMovement}
-          onPointerUp={endMovement}
-          onPointerCancel={endMovement}
-          onLostPointerCapture={releaseMovement}
-          onContextMenu={event => event.preventDefault()}
-        >
-          <div className="mobile-dpad__ring" />
-          {(Object.keys(ARROWS) as Direction[]).map((direction) => (
-            <button
-              key={direction}
-              type="button"
-              className={`mobile-dpad__button mobile-dpad__button--${direction}${activeDirection === direction ? ' is-active' : ''}`}
-              aria-label={`Move ${direction}`}
-              tabIndex={-1}
-            >
-              <span aria-hidden="true">{ARROWS[direction]}</span>
-            </button>
-          ))}
-          <div className={`mobile-dpad__core ${activeDirection ? 'is-active' : ''}`}>
-            <i />
-            <span>{activeDirection ? ARROWS[activeDirection] : 'SQ'}</span>
-            <small>{activeDirection ? 'MOVE' : 'NAV'}</small>
-          </div>
-        </div>
+      <div
+        ref={dpadRef}
+        className="touch-dpad"
+        data-direction={activeDirection ?? 'idle'}
+        role="group"
+        aria-label="Movement pad"
+        onPointerDown={beginMovement}
+        onPointerMove={updateMovement}
+        onPointerUp={endMovement}
+        onPointerCancel={endMovement}
+        onLostPointerCapture={releaseMovement}
+        onContextMenu={event => event.preventDefault()}
+      >
+        <span className="touch-dpad__thumb" aria-hidden="true" />
+        {DIRECTIONS.map((direction) => (
+          <span
+            key={direction}
+            className={`touch-dpad__arrow touch-dpad__arrow--${direction}${activeDirection === direction ? ' is-active' : ''}`}
+            aria-hidden="true"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 14 6-6 6 6" />
+            </svg>
+          </span>
+        ))}
       </div>
-      <div className={`mobile-action-wrap${dialogActive ? ' is-dialog' : ''}`}>
-        <button
-          className="mobile-action"
-          aria-label={dialogActive ? 'Continue dialogue' : 'Interact'}
-          onPointerDown={triggerAction}
-          onContextMenu={event => event.preventDefault()}
-        >
-          <strong>A</strong>
-          <span>{dialogActive ? 'Next' : 'Action'}</span>
-        </button>
-      </div>
+      <button
+        ref={actionRef}
+        type="button"
+        className={`touch-action${dialogActive ? ' is-dialog' : ''}`}
+        aria-label={dialogActive ? 'Continue dialogue' : 'Interact'}
+        onPointerDown={triggerAction}
+        onContextMenu={event => event.preventDefault()}
+      >
+        <span className="touch-action__key" aria-hidden="true">A</span>
+        <span className="touch-action__label" aria-hidden="true">{dialogActive ? 'Next' : 'Interact'}</span>
+      </button>
     </>
   );
 }

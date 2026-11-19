@@ -12,7 +12,7 @@ interface LoadingOverlayProps {
 const initialLoading: LoadingUiPayload = {
   step: 0,
   total: 6,
-  label: 'OPENING SONIC ARCHIVE',
+  label: 'Opening the sound archive',
   progress: 0,
 };
 
@@ -30,11 +30,11 @@ export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
   }, []);
 
   if (!bounds) return null;
-  const progress = Math.max(0, Math.min(100, loading.progress));
+  const progress = Math.round(Math.max(0, Math.min(100, loading.progress)));
 
   return (
     <section
-      className="loading-overlay"
+      className="ui-layer loading-screen"
       style={{
         left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height,
         backgroundImage: keyArt ? `url(${keyArt})` : undefined,
@@ -42,11 +42,20 @@ export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
     >
       <div className="brand-stamp"><BrandLogo /></div>
       <GameLogo compact />
-      <div className="loading-overlay__prompt">
-        <span className="loading-overlay__ring" aria-hidden="true" />
-        <span className="loading-overlay__label">{loading.label}</span>
-        <div className="loading-overlay__track"><i style={{ width: `${progress}%` }} /></div>
-        <span className="loading-overlay__percent">{String(Math.round(progress)).padStart(2, '0')}%</span>
+      <div
+        className="loading-screen__status"
+        role="progressbar"
+        aria-label="Loading the world"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
+        aria-valuetext={`${loading.label}, ${progress}%`}
+      >
+        <div className="loading-screen__row">
+          <span className="loading-screen__label">{loading.label}</span>
+          <span className="loading-screen__percent">{progress}%</span>
+        </div>
+        <div className="meter meter--loading"><i className="meter__fill" style={{ width: `${progress}%` }} /></div>
       </div>
     </section>
   );

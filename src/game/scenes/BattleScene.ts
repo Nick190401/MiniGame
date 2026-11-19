@@ -264,14 +264,6 @@ export class BattleScene extends Phaser.Scene {
       this.ambientParticles.push(p);
     }
 
-    // Restrained broadcast frame with hard signal corners.
-    const border = this.add.graphics().setDepth(31);
-    border.lineStyle(1, 0x5b4940, 0.72);
-    border.strokeRect(3.5, 3.5, W - 7, H - 7);
-    border.lineStyle(2, 0xff7a2b, 0.8);
-    border.lineBetween(3, 3, 46, 3); border.lineBetween(3, 3, 3, 28);
-    border.lineBetween(W - 46, H - 3, W - 3, H - 3); border.lineBetween(W - 3, H - 28, W - 3, H - 3);
-
     // Ground platforms now live in the background art itself — the
     // combatants below are anchored directly to those painted circles.
 
@@ -418,8 +410,8 @@ export class BattleScene extends Phaser.Scene {
     // ── Start ─────────────────────────────────────────────────────────────
     this.cameras.main.fadeIn(300);
     this.setMessage(this.isBoss
-      ? 'THE GATEKEEPER\nblocks your path!'
-      : `A wild ${this.enemyData.name}\nappears!`);
+      ? `${this.enemyData.name} blocks your path!`
+      : `A wild ${this.enemyData.name} appears!`);
 
     this.time.delayedCall(1400, () => {
       this.finishBattleIntro();
@@ -436,16 +428,16 @@ export class BattleScene extends Phaser.Scene {
     if (!this.enemyData || !this.attackButtons.length) return;
     const store = useGameStore.getState();
     const turnLabels: Record<TurnState, { label: string; color: string }> = {
-      'intro': { label: 'ENCOUNTER', color: '#82776f' },
-      'player-choose': { label: 'YOUR TURN', color: '#ff7a2b' },
-      'player-attack': { label: 'TRANSMITTING', color: '#6ea8d8' },
-      'enemy-attack': { label: 'INCOMING', color: '#f0362c' },
-      'phase-change': { label: 'PHASE SHIFT', color: '#f0362c' },
-      'battle-end': { label: 'CLOSED', color: '#a19790' },
+      'intro': { label: 'Get ready', color: '#a69485' },
+      'player-choose': { label: 'Your turn', color: '#ff7a2b' },
+      'player-attack': { label: 'Attacking', color: '#78b4e6' },
+      'enemy-attack': { label: 'Enemy turn', color: '#ff5a4a' },
+      'phase-change': { label: 'Phase change', color: '#ff5a4a' },
+      'battle-end': { label: 'Battle over', color: '#a69485' },
     };
     const status = turnLabels[this.turnState];
     const enemyAccent = this.isBoss ? 0xf0362c : this.enemyData.color;
-    const phase = this.isBoss ? ['PHASE I', 'PHASE II', 'PHASE III'][this.bossPhaseIndex] : 'LIVE';
+    const phase = this.isBoss ? ['Phase I', 'Phase II', 'Phase III'][this.bossPhaseIndex] : '';
     const payload: BattleUiPayload = {
       isBoss: this.isBoss,
       phase,
@@ -995,18 +987,18 @@ export class BattleScene extends Phaser.Scene {
     this.inputBlocked = state !== 'player-choose';
 
     const turnLabels: Record<TurnState, { label: string; color: string }> = {
-      'intro': { label: 'ENCOUNTER', color: '#82776f' },
-      'player-choose': { label: 'YOUR TURN', color: '#ff7a2b' },
-      'player-attack': { label: 'TRANSMITTING', color: '#6ea8d8' },
-      'enemy-attack': { label: 'INCOMING', color: '#f0362c' },
-      'phase-change': { label: 'PHASE SHIFT', color: '#f0362c' },
-      'battle-end': { label: 'CLOSED', color: '#82776f' },
+      'intro': { label: 'Get ready', color: '#a69485' },
+      'player-choose': { label: 'Your turn', color: '#ff7a2b' },
+      'player-attack': { label: 'Attacking', color: '#78b4e6' },
+      'enemy-attack': { label: 'Enemy turn', color: '#ff5a4a' },
+      'phase-change': { label: 'Phase change', color: '#ff5a4a' },
+      'battle-end': { label: 'Battle over', color: '#a69485' },
     };
     const status = turnLabels[state];
     this.turnStatusText?.setText(status.label).setColor(status.color);
 
     if (state === 'player-choose') {
-      this.setMessage('Choose your next track.');
+      this.setMessage('Choose your move.');
       this.setAttackButtonsEnabled(true);
     } else {
       this.setAttackButtonsEnabled(false);
@@ -1083,7 +1075,7 @@ export class BattleScene extends Phaser.Scene {
     const rawDmg  = Math.round(attack.damage * phaseMultiplier * levelMultiplier);
     const damage  = applyDamageVariance(rawDmg);
 
-    this.setMessage(`${this.enemyData.name}\nuses ${attack.name}!`);
+    this.setMessage(`${this.enemyData.name} uses ${attack.name}!`);
     this.time.delayedCall(600, () => {
       this.playEnemyAttackAnimation(attack, () => {
         store.takeDamage(damage);
@@ -1222,7 +1214,7 @@ export class BattleScene extends Phaser.Scene {
   private triggerPhaseChange(phaseIdx: number): void {
     this.setTurnState('phase-change');
     EventBus.emit(EVENTS.BOSS_PHASE_CHANGED, phaseIdx);
-    const phaseLabels  = ['PHASE I', 'PHASE II', 'PHASE III'];
+    const phaseLabels  = ['Phase I', 'Phase II', 'Phase III'];
     // Boss phases climb the hostile ramp: ember -> signal -> deep signal.
     const phaseColors  = ['#ff7a2b', '#f0362c', '#8f1a16'];
     const hasBossBattleArt = this.textures.exists('boss-gatekeeper-battle-phase1');
@@ -1231,8 +1223,8 @@ export class BattleScene extends Phaser.Scene {
       : ['boss-gatekeeper', 'boss-gatekeeper-phase2', 'boss-gatekeeper-phase3'];
     const phaseMessages = [
       '',
-      `${this.enemyData.name}\nenrages! PHASE II!`,
-      `THE GATEKEEPER\nFURY UNLEASHED!\nPHASE III!`,
+      `${this.enemyData.name} is enraged!`,
+      `${this.enemyData.name} unleashes its full fury!`,
     ];
 
     this.cameras.main.flash(400, 150, 0, 200);
@@ -1246,9 +1238,9 @@ export class BattleScene extends Phaser.Scene {
     this.enemySprite.setTexture(textureKeys[phaseIdx]);
     this.plantOnPlatform(this.enemySprite, textureKeys[phaseIdx], this.enemyPlatform, this.enemyTargetHeight);
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: 'BOSS SIGNAL // MUTATION DETECTED',
+      eyebrow: `${this.enemyData.name} changes form`,
       title: phaseLabels[phaseIdx],
-      detail: phaseIdx === 2 ? 'Fury unleashed. Terminal frequency unstable.' : 'Hostile signal strength rising.',
+      detail: phaseIdx === 2 ? 'Final phase. Its attacks hit hardest now.' : 'Its attacks hit harder now.',
       accent: phaseColors[phaseIdx],
       tone: 'danger',
       variant: 'hero',
@@ -1301,8 +1293,8 @@ export class BattleScene extends Phaser.Scene {
       this.enemySprite.clearTint().setAlpha(1);
       this.children.getByName('boss-contact-shadow')?.destroy();
       this.setMessage(this.isBoss
-        ? 'THE GATEKEEPER\nhas been silenced!'
-        : `${this.enemyData.name}\nwas defeated!`);
+        ? `${this.enemyData.name} has been silenced!`
+        : `${this.enemyData.name} was defeated!`);
       EventBus.emit(EVENTS.ENEMY_DEFEATED, this.isBoss);
 
       // Defeat animation: blink → shrink-spin → burst particles
@@ -1334,13 +1326,13 @@ export class BattleScene extends Phaser.Scene {
         EventBus.emit(EVENTS.XP_GAINED, this.enemyData.xpReward);
 
         const xpMsg = `+${this.enemyData.xpReward} XP`;
-        this.setMessage(`${this.enemyData.name} defeated!\n${xpMsg}`);
+        this.setMessage(`${this.enemyData.name} defeated! ${xpMsg}`);
 
         const currentLevel = useGameStore.getState().level;
         if (currentLevel > prevLevel) {
           EventBus.emit(EVENTS.LEVEL_UP, currentLevel);
           this.time.delayedCall(500, () => {
-            this.setMessage(`${this.enemyData.name} defeated!\n${xpMsg}\nLEVEL UP! → ${currentLevel}!`);
+            this.setMessage(`${this.enemyData.name} defeated! ${xpMsg}. Level up: you reached level ${currentLevel}!`);
           });
         }
       }
@@ -1354,7 +1346,7 @@ export class BattleScene extends Phaser.Scene {
       });
 
     } else {
-      this.setMessage('You were overcome\nby the silence...');
+      this.setMessage('You were overcome by the silence…');
       this.cameras.main.shake(500, 0.01);
 
       // Player sprite fades and drops
@@ -1426,7 +1418,7 @@ export class BattleScene extends Phaser.Scene {
     const colorHex = `#${attack.color.toString(16).padStart(6, '0')}`;
     const trackIndex = ['bass-drop', 'echo-wave', 'hook-impact', 'reverb-strike'].indexOf(attack.id) + 1;
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: `TRACK 0${trackIndex} // PLAYER SIGNAL`,
+      eyebrow: `Move ${trackIndex}`,
       title: attack.name,
       detail: attack.description,
       accent: colorHex,
@@ -2405,9 +2397,9 @@ export class BattleScene extends Phaser.Scene {
     const hostileColor = this.isBoss ? 0xff3d57 : 0xe8b465;
     const hostileHex = `#${hostileColor.toString(16).padStart(6, '0')}`;
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: `HOSTILE TRANSMISSION // ${this.enemyData.name.toUpperCase()}`,
+      eyebrow: `${this.enemyData.name} attacks`,
       title: attack.name,
-      detail: 'Incoming signal. Brace for impact.',
+      detail: 'Brace yourself.',
       accent: hostileHex,
       tone: 'danger',
       duration: 900,

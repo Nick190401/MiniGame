@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { useLogicalCamera } from '../render/RenderScale';
 import { EventBus, EVENTS } from '../EventBus';
+import { ATTACK_ORDER, ATTACKS } from '../systems/AttackSystem';
 
 /**
  * Lightweight Phaser bridge for global interface events.
@@ -18,10 +19,11 @@ export class UIScene extends Phaser.Scene {
   }
 
   private onLevelUp(newLevel: number): void {
+    const newMove = ATTACK_ORDER.map(id => ATTACKS[id]).find(attack => attack.unlockLevel === newLevel);
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: 'CHANNEL UPGRADE // COMPLETE',
-      title: `Level ${String(newLevel).padStart(2, '0')} reached`,
-      detail: 'Your signal is stronger. New tracks may now be available.',
+      eyebrow: 'Level up',
+      title: `Level ${newLevel} reached`,
+      detail: newMove ? `New move: ${newMove.name}` : 'Your max HP went up.',
       tone: 'success',
       duration: 2400,
     });

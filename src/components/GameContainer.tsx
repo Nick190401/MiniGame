@@ -118,8 +118,11 @@ export function GameContainer({ visible }: GameContainerProps) {
       // Phaser reads the parent size during construction. Production CSS can
       // arrive from cache a frame later, so refresh once the full-screen stage
       // has settled instead of keeping the 640x480 fallback display size.
+      // Phaser also takes the display aspect ratio from the configured size
+      // clamped to scale.max at boot, which squashes a tall high-density phone
+      // board; setting the size again restores the true ratio, then refreshes.
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => gameRef.current?.scale.refresh());
+        requestAnimationFrame(() => gameRef.current?.scale.setGameSize(responsiveSize.width, responsiveSize.height));
       });
 
       // Expose game instance for console commands
@@ -217,22 +220,10 @@ export function GameContainer({ visible }: GameContainerProps) {
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       />
 
-      <div className="game-stage__frame" aria-hidden="true">
-        <span className="game-stage__corner game-stage__corner--tl" />
-        <span className="game-stage__corner game-stage__corner--tr" />
-        <span className="game-stage__corner game-stage__corner--bl" />
-        <span className="game-stage__corner game-stage__corner--br" />
-        {!battleActive && (
-          <span className="game-stage__mode">
-            {deathActive ? 'Signal state // lost' : 'Field mode // live'}
-          </span>
-        )}
-      </div>
-
       {/* React UI overlays */}
       {visible && (
         <>
-          {worldReady && !battleActive && !deathActive && !cutsceneActive && <HUD />}
+          {worldReady && !battleActive && !deathActive && !cutsceneActive && <HUD canvasParentRef={containerRef} />}
           {worldReady && !battleActive && !deathActive && !cutsceneActive && <MobileControls />}
           {worldReady && !battleActive && !deathActive && <DialogueOverlay canvasParentRef={containerRef} />}
           {!worldReady && <LoadingOverlay canvasParentRef={containerRef} />}

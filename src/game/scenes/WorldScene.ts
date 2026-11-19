@@ -629,18 +629,18 @@ export class WorldScene extends Phaser.Scene {
     this.currentZoneIndex = zoneIndex;
 
     const zones = [
-      { title: 'Echo Village', meta: 'ORIGIN // OPEN SIGNAL', accent: 0xff7a2b, wash: 0x725d4e, alpha: 0.025 },
-      { title: 'Signal Meadow', meta: 'WILD BAND // CH. 02', accent: 0xab907c, wash: 0x6d4f40, alpha: 0.035 },
-      { title: 'Brookside Crossing', meta: 'RIVER RELAY // CH. 03', accent: 0x75b7ad, wash: 0x35564e, alpha: 0.035 },
-      { title: 'Neon Junction', meta: 'RELAY DISTRICT // CH. 04', accent: 0x6ea8d8, wash: 0x5d3e2f, alpha: 0.045 },
-      { title: 'Whisper Grove', meta: 'ARCHIVE WOODS // CH. 05', accent: 0x89a97c, wash: 0x314a39, alpha: 0.05 },
-      { title: 'Fading Highlands', meta: 'WEAK SIGNAL // CH. 06', accent: 0x9e806b, wash: 0x3c2d25, alpha: 0.07 },
+      { title: 'Echo Village', meta: 'Where the journey begins', accent: 0xff7a2b, wash: 0x725d4e, alpha: 0.025 },
+      { title: 'Signal Meadow', meta: 'Open fields', accent: 0xab907c, wash: 0x6d4f40, alpha: 0.035 },
+      { title: 'Brookside Crossing', meta: 'River crossing', accent: 0x75b7ad, wash: 0x35564e, alpha: 0.035 },
+      { title: 'Neon Junction', meta: 'Relay district', accent: 0x6ea8d8, wash: 0x5d3e2f, alpha: 0.045 },
+      { title: 'Whisper Grove', meta: 'Old woods', accent: 0x89a97c, wash: 0x314a39, alpha: 0.05 },
+      { title: 'Fading Highlands', meta: 'The signal grows weak', accent: 0x9e806b, wash: 0x3c2d25, alpha: 0.07 },
       this.cavePurified
-        ? { title: 'Resonant Cave', meta: 'SIGNAL RESTORED // CH. 07', accent: 0xff7a2b, wash: 0x5d3e2f, alpha: 0.065 }
-        : { title: 'Void Cave', meta: 'NO CARRIER // CH. 07', accent: 0x6ea8d8, wash: 0x301e15, alpha: 0.09 },
+        ? { title: 'Resonant Cave', meta: 'Sound restored', accent: 0xff7a2b, wash: 0x5d3e2f, alpha: 0.065 }
+        : { title: 'Void Cave', meta: 'Nothing but silence', accent: 0x6ea8d8, wash: 0x301e15, alpha: 0.09 },
       this.cavePurified
-        ? { title: 'The Living Core', meta: 'MASTER FREQUENCY // CLEAN', accent: 0x6ea8d8, wash: 0x4f3122, alpha: 0.07 }
-        : { title: 'The Core', meta: 'TERMINAL FREQUENCY', accent: 0xe8b465, wash: 0x351612, alpha: 0.12 },
+        ? { title: 'The Living Core', meta: 'Sound restored', accent: 0x6ea8d8, wash: 0x4f3122, alpha: 0.07 }
+        : { title: 'The Core', meta: 'The Gatekeeper waits', accent: 0xe8b465, wash: 0x351612, alpha: 0.12 },
     ];
     const zone = zones[zoneIndex];
     EventBus.emit(EVENTS.ZONE_UI_STATE, {
@@ -690,9 +690,9 @@ export class WorldScene extends Phaser.Scene {
       this.nextUniversePortalNoticeAt = this.time.now + 4500;
       EventBus.emit(EVENTS.GATE_BLOCKED);
       EventBus.emit(EVENTS.UI_NOTICE, {
-        eyebrow: 'UNIVERSE PORTAL // SOON',
-        title: 'Universe travel locked',
-        detail: "You can't switch universes yet. Coming soon!",
+        eyebrow: 'Universe portal',
+        title: 'Not open yet',
+        detail: 'Travel between universes is coming soon.',
         accent: '#b59aff',
         tone: 'info',
         duration: 4500,
@@ -751,21 +751,22 @@ export class WorldScene extends Phaser.Scene {
   // ── Spawning ──────────────────────────────────────────────────────────────
 
   private createInteractLabel(x: number, y: number): Phaser.GameObjects.Container {
-    // A small key cap floating over the NPC: soft glow, rounded cap, crisp "E".
-    const halo = this.add.image(0, 0, FX.glow).setDisplaySize(26, 18).setTint(0xff7a2b).setAlpha(0.35)
+    // A speech-bubble key cap over the NPC, naming the key that starts the talk:
+    // E on a keyboard, the on-screen A button on a touch screen.
+    const touch = window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    const halo = this.add.image(0, 0, FX.glow).setDisplaySize(24, 18).setTint(0xff7a2b).setAlpha(0.22)
       .setBlendMode(Phaser.BlendModes.ADD);
     const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.35);
-    bg.fillRoundedRect(-7, -5.2, 14, 12, 3.2);
-    bg.fillStyle(0x1c120d, 0.96);
-    bg.fillRoundedRect(-7, -6, 14, 12, 3.2);
-    bg.lineStyle(0.8, 0xff8a3d, 1);
-    bg.strokeRoundedRect(-7, -6, 14, 12, 3.2);
-    bg.fillStyle(0xffb27a, 0.18);
-    bg.fillRoundedRect(-6, -5.2, 12, 4, 2.4);
-    const glyph = this.add.text(0, -0.2, 'E', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '8px', color: '#ffb27a',
-    }).setOrigin(0.5);
+    bg.fillStyle(0x000000, 0.3);
+    bg.fillRoundedRect(-7, -5.4, 14, 13, 3.6);
+    bg.fillStyle(0x15100d, 0.94);
+    bg.fillRoundedRect(-7, -6.5, 14, 13, 3.6);
+    bg.fillTriangle(-2.6, 6.3, 2.6, 6.3, 0, 9.2);
+    bg.lineStyle(0.7, 0xffffff, 0.3);
+    bg.strokeRoundedRect(-7, -6.5, 14, 13, 3.6);
+    const glyph = this.add.text(0, -0.1, touch ? 'A' : 'E', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '8px', color: '#ffa36b',
+    }).setOrigin(0.5).setResolution(4);
 
     const marker = this.add.container(0, -(CHARACTER_HEIGHT + 9), [halo, bg, glyph]);
     const container = this.add.container(x, y, [marker]);
@@ -893,7 +894,7 @@ export class WorldScene extends Phaser.Scene {
       this.moveIntroCamera(targetX, targetY - 8, this.introZoom(1.72), 980, 'Cubic.easeInOut');
       this.time.delayedCall(610, () => {
         if (this.introActive && this.introCameraBeat === beat) {
-          this.pulseIntroTarget(targetX, targetY, 'SOUND FRAGMENT // 01', 0x6ea8d8);
+          this.pulseIntroTarget(targetX, targetY, 'Sound fragment', 0x78b4e6);
         }
       });
       return;
@@ -907,7 +908,7 @@ export class WorldScene extends Phaser.Scene {
       this.moveIntroCamera(gateX, gateY, this.introZoom(1.28), 1450, 'Sine.easeInOut');
       this.time.delayedCall(1110, () => {
         if (this.introActive && this.introCameraBeat === beat) {
-          this.pulseIntroTarget(gateX, gateY, 'FREQUENCY GATE // LOCKED', 0xff7a2b);
+          this.pulseIntroTarget(gateX, gateY, 'Locked gate', 0xff7a2b);
           this.cameras.main.shake(180, 0.0018);
         }
       });
@@ -931,10 +932,10 @@ export class WorldScene extends Phaser.Scene {
     this.time.delayedCall(460, () => {
       if (!this.introActive) return;
       EventBus.emit(EVENTS.UI_NOTICE, {
-        eyebrow: 'MISSION TAPE // SIDE A',
+        eyebrow: 'New quest',
         title: 'Recover the Lost Track',
-        detail: '3 fragments  /  Level 2  /  Defeat the Gatekeeper',
-        accent: '#d7ff4a',
+        detail: 'Find 3 sound fragments, reach level 2 and defeat the Gatekeeper.',
+        accent: '#f2c35f',
         tone: 'info',
         variant: 'hero',
         duration: 2300,
@@ -982,24 +983,26 @@ export class WorldScene extends Phaser.Scene {
     const { width, height } = logicalSize(ui);
     const barHeight = Phaser.Math.Clamp(Math.round(height * 0.075), 26, 42);
     const bars = ui.add.graphics().setDepth(90).setAlpha(0);
-    bars.fillStyle(0x050908, 0.96);
+    bars.fillStyle(0x070504, 0.96);
     bars.fillRect(0, 0, width, barHeight);
     bars.fillRect(0, height - barHeight, width, barHeight);
     bars.fillStyle(0xff7a2b, 0.9);
     bars.fillRect(18, barHeight - 2, Math.min(118, width * 0.25), 1);
-    const chapter = ui.add.text(18, barHeight / 2, 'FIRST TRANSMISSION', {
-      fontFamily: 'DM Mono',
-      fontSize: '8px',
+    // Type is sized in screen pixels, so the captions read the same on a
+    // phone (board shrunk) and on a monitor (board enlarged).
+    const screenPerUnit = Math.max(0.1, ui.scale.displaySize.width / width);
+    const screenPx = (px: number) => `${Math.round((px / screenPerUnit) * 10) / 10}px`;
+    const chapter = ui.add.text(18, barHeight / 2, 'Prologue', {
+      fontFamily: 'Syne',
+      fontSize: screenPx(15),
       fontStyle: 'bold',
-      color: '#f8ece2',
-      letterSpacing: 1,
-    }).setOrigin(0, 0.5).setDepth(91).setResolution(2).setAlpha(0);
-    const location = ui.add.text(width - 18, barHeight / 2, 'ECHO VILLAGE // ORIGIN SIGNAL', {
-      fontFamily: 'DM Mono',
-      fontSize: '7px',
-      color: '#d6ecfb',
-      letterSpacing: 1,
-    }).setOrigin(1, 0.5).setDepth(91).setResolution(2).setAlpha(0);
+      color: '#f7efe8',
+    }).setOrigin(0, 0.5).setDepth(91).setResolution(4).setAlpha(0);
+    const location = ui.add.text(width - 18, barHeight / 2, 'Echo Village', {
+      fontFamily: 'DM Sans',
+      fontSize: screenPx(14),
+      color: '#cfc2b6',
+    }).setOrigin(1, 0.5).setDepth(91).setResolution(4).setAlpha(0);
 
     const items: Phaser.GameObjects.GameObject[] = [bars, chapter, location];
     this.introCinematicOverlay = { scene: ui, items };
@@ -1061,13 +1064,13 @@ export class WorldScene extends Phaser.Scene {
     marker.lineBetween(0, 20, 0, 31);
 
     const targetLabel = this.add.text(x, y - 39, label, {
-      fontFamily: 'DM Mono',
-      fontSize: '6px',
-      color: '#f8ece2',
-      backgroundColor: '#0a0605',
-      padding: { x: 5, y: 3 },
-      letterSpacing: 1,
-    }).setOrigin(0.5).setDepth(15).setResolution(2).setAlpha(0);
+      fontFamily: 'DM Sans',
+      fontStyle: 'bold',
+      fontSize: '7px',
+      color: '#f7efe8',
+      backgroundColor: '#100c0a',
+      padding: { x: 6, y: 3 },
+    }).setOrigin(0.5).setDepth(15).setResolution(4).setAlpha(0);
 
     this.tweens.add({
       targets: marker,
@@ -1329,9 +1332,9 @@ export class WorldScene extends Phaser.Scene {
     }).setDepth(12).setOrigin(0.5).setScale(0.42).setVisible(false);
     EventBus.emit(EVENTS.ITEM_COLLECTED, 'sound-fragment');
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: 'ARCHIVE PICKUP // RESONANCE',
-      title: '+10 resonance',
-      detail: 'A sound fragment was added to your channel.',
+      eyebrow: 'Sound fragment found',
+      title: '+10 XP',
+      detail: 'One step closer to the Lost Track.',
       tone: 'success',
       duration: 1500,
     });
@@ -1781,9 +1784,9 @@ export class WorldScene extends Phaser.Scene {
 
   private showPurificationBanner(): void {
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: 'VOID CAVE // PURIFICATION COMPLETE',
+      eyebrow: 'Void Cave cleansed',
       title: 'Signal restored',
-      detail: 'Corruption cleared. The original frequency is returning.',
+      detail: 'The corruption is gone and the sound is returning.',
       tone: 'success',
       variant: 'hero',
       duration: 2800,
@@ -1917,9 +1920,9 @@ export class WorldScene extends Phaser.Scene {
 
   private showLostTrackRevealBanner(): void {
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: 'FINAL RECOVERY // MASTER SIGNAL',
+      eyebrow: 'Found it',
       title: 'The Lost Track',
-      detail: 'Original frequency restored.',
+      detail: 'The original sound is back.',
       tone: 'success',
       variant: 'hero',
       duration: 3000,
@@ -2065,9 +2068,9 @@ export class WorldScene extends Phaser.Scene {
 
   private showFinalMasterAcquired(): void {
     EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: 'FINAL OBJECTIVE // COMPLETE',
-      title: 'Master acquired',
-      detail: 'The Lost Track // Signal 100%',
+      eyebrow: 'Quest complete',
+      title: 'Lost Track recovered',
+      detail: 'The world can hear its song again.',
       tone: 'success',
       variant: 'hero',
       duration: 3600,
@@ -2702,7 +2705,7 @@ export class WorldScene extends Phaser.Scene {
         .setDepth(21)
         .setScale(0.44);
       EventBus.emit(EVENTS.UI_NOTICE, {
-        eyebrow: 'HEALING FREQUENCY // SYNCED',
+        eyebrow: 'Healed',
         title: `+${restoredAmount} HP`,
         detail: 'Your health is fully restored.',
         accent: accentCss,

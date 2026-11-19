@@ -47,7 +47,7 @@ export class PreloadScene extends Phaser.Scene {
     EventBus.emit(EVENTS.LOADING_UI_STATE, {
       step: 0,
       total: 6,
-      label: 'OPENING SONIC ARCHIVE',
+      label: 'Opening the sound archive',
       progress: 0,
     });
 
@@ -218,7 +218,7 @@ export class PreloadScene extends Phaser.Scene {
 
     const steps = [
       {
-        label: 'MAPPING TERRAIN',
+        label: 'Shaping the land',
         fn: () => {
           ensureTerrainTextures(this);
           createFxTextures(this);
@@ -226,24 +226,24 @@ export class PreloadScene extends Phaser.Scene {
         },
       },
       {
-        label: 'RAISING THE VILLAGES',
+        label: 'Building the villages',
         fn: () => {
           createStructureTextures(this);
           createLandmarkTextures(this);
         },
       },
       {
-        label: 'CALIBRATING PLAYER SIGNAL',
+        label: 'Getting the heroes ready',
         fn: () => createCharacterTextures(this),
       },
       {
-        label: 'LOCATING DISTORTIONS',
+        label: 'Waking the enemies',
         fn: () => {
           createCaveTextures(this);
         },
       },
-      { label: 'LOCATING LOST TRACK', fn: () => createItemTextures(this) },
-      { label: 'SYNCING INTERFACE', fn: () => TextureFactory.createUITextures(this) },
+      { label: 'Hiding the sound fragments', fn: () => createItemTextures(this) },
+      { label: 'Preparing the interface', fn: () => TextureFactory.createUITextures(this) },
     ];
 
     let step = 0;
@@ -254,7 +254,7 @@ export class PreloadScene extends Phaser.Scene {
         EventBus.emit(EVENTS.LOADING_UI_STATE, {
           step: steps.length,
           total: steps.length,
-          label: 'SIGNAL LOCKED - WORLD READY',
+          label: 'World ready',
           progress: 100,
           ready: true,
         });

@@ -1,15 +1,9 @@
-import { useEffect, useLayoutEffect, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { EventBus, EVENTS, type DialogPayload } from '../game/EventBus';
+import { useCanvasBounds } from './useCanvasBounds';
 
 interface DialogueOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
-}
-
-interface OverlayBounds {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
 }
 
 const PORTRAITS: Partial<Record<NonNullable<DialogPayload['portrait']>, string>> = {
@@ -53,9 +47,18 @@ function preparePortrait(url: string): Promise<string> {
 
 Object.values(PORTRAITS).forEach(url => { void preparePortrait(url); });
 
+/** Lines without a speaker are narration and carry no name tag. */
+const NARRATOR = 'FIELD TRANSMISSION';
+
+/** Story data shouts a few names in capitals; the tag reads them in title case. */
+function displayName(speaker: string): string {
+  if (speaker !== speaker.toUpperCase()) return speaker;
+  return speaker.toLowerCase().replace(/(^|\s)\S/g, letter => letter.toUpperCase());
+}
+
 export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
+  const bounds = useCanvasBounds(canvasParentRef);
   const [dialog, setDialog] = useState<DialogPayload | null>(null);
-  const [bounds, setBounds] = useState<OverlayBounds | null>(null);
   const [portraits, setPortraits] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -67,7 +70,7 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
     });
     const onDialog = (payload: DialogPayload | string) => {
       setDialog(typeof payload === 'string'
-        ? { text: payload, speaker: 'FIELD TRANSMISSION', accent: '#ff7a2b' }
+        ? { text: payload, speaker: NARRATOR, accent: '#ff7a2b' }
         : payload);
     };
     const onClear = () => setDialog(null);
@@ -80,88 +83,38 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
     };
   }, []);
 
-  useLayoutEffect(() => {
-    const parent = canvasParentRef.current;
-    if (!parent) return;
-
-    const measure = () => {
-      const canvas = parent.querySelector('canvas');
-      if (!canvas) return;
-      const stageRect = parent.parentElement?.getBoundingClientRect() ?? parent.getBoundingClientRect();
-      const canvasRect = canvas.getBoundingClientRect();
-      if (canvasRect.width <= 0 || canvasRect.height <= 0) return;
-      const width = canvasRect.width * 0.9;
-      const height = Math.min(190, Math.max(88, canvasRect.height * 0.28));
-      setBounds({
-        left: canvasRect.left - stageRect.left + canvasRect.width * 0.05,
-        top: canvasRect.bottom - stageRect.top - height - Math.max(4, canvasRect.height * 0.012),
-        width,
-        height,
-      });
-    };
-
-    const mutationObserver = new MutationObserver(measure);
-    mutationObserver.observe(parent, { childList: true });
-    const resizeObserver = new ResizeObserver(measure);
-    resizeObserver.observe(parent);
-    const canvas = parent.querySelector('canvas');
-    if (canvas) resizeObserver.observe(canvas);
-    window.addEventListener('resize', measure);
-    measure();
-    const frame = requestAnimationFrame(measure);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      mutationObserver.disconnect();
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [canvasParentRef]);
-
   if (!dialog || !bounds) return null;
   const portraitUrl = dialog.portrait ? PORTRAITS[dialog.portrait] : undefined;
-  const style = {
-    left: bounds.left,
-    top: bounds.top,
-    width: bounds.width,
-    height: bounds.height,
-    '--dialog-accent': dialog.accent,
-  } as CSSProperties;
+  const speaker = dialog.speaker && dialog.speaker !== NARRATOR ? displayName(dialog.speaker) : null;
+  const classes = ['dialogue'];
+  if (portraitUrl) classes.push('has-portrait');
+  if (dialog.portrait === 'gatekeeper') classes.push('is-gatekeeper');
 
   return (
-    <aside
-      className={`dialog-overlay${dialog.portrait === 'gatekeeper' ? ' has-gatekeeper' : ''}`}
-      style={style}
-      role="status"
-      aria-live="polite"
-    >
-      <span className="dialog-overlay__rail" aria-hidden="true" />
-      <div className="dialog-overlay__portrait" aria-hidden="true">
-        {portraitUrl ? (
-          <img
-            className={`dialog-overlay__portrait-image is-${dialog.portrait}`}
-            src={portraits[portraitUrl] ?? portraitUrl}
-            alt=""
-          />
-        ) : (
-          <span className={`dialog-overlay__signal ${dialog.portrait === 'gatekeeper' ? 'is-gatekeeper' : ''}`}>
-            {dialog.portrait === 'gatekeeper' ? '◇' : '◎'}
-          </span>
+    <div className="ui-layer dialogue-layer" style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }}>
+      <aside
+        className={classes.join(' ')}
+        style={{ '--dialog-accent': dialog.accent } as CSSProperties}
+        role="status"
+        aria-live="polite"
+      >
+        {portraitUrl && (
+          <div className="dialogue__portrait" aria-hidden="true">
+            <img src={portraits[portraitUrl] ?? portraitUrl} alt="" draggable={false} />
+          </div>
         )}
-      </div>
-      <div className="dialog-overlay__content">
-        <header className="dialog-overlay__header">
-          <strong>{dialog.speaker}</strong>
-          <span>Voice // Live</span>
-        </header>
-        <p>{dialog.text}</p>
-        <div className="dialog-overlay__continue">
-          <span className="dialog-hint--desktop">E</span>
-          <span className="dialog-hint--desktop">SPACE</span>
-          <span className="dialog-hint--mobile">A / TAP</span>
-          <i aria-hidden="true">↓</i>
+        <div className="dialogue__body">
+          {speaker && <p className="dialogue__name">{speaker}</p>}
+          <p className="dialogue__text">{dialog.text}</p>
+          <p className="dialogue__continue" aria-hidden="true">
+            <span className="hint-desktop"><kbd className="keycap">E</kbd> Continue</span>
+            <span className="hint-touch">Tap to continue</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </p>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </div>
   );
 }

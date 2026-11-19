@@ -62,67 +62,62 @@ export function TitleScreen() {
           <div className="brand-stamp"><BrandLogo /></div>
           <GameLogo />
           {COMING_SOON ? (
-            <div className="title-screen__prompt title-screen__prompt--coming-soon">
-              <span className="title-screen__prompt-glow" aria-hidden="true" />
-              <span className="title-screen__prompt-text">Coming Soon</span>
-              <span className="title-screen__prompt-sub">Sound Quest is in development</span>
+            <div className="title-screen__soon">
+              <span className="title-screen__soon-badge">Coming soon</span>
+              <span className="title-screen__soon-text">Sound Quest is in development.</span>
             </div>
           ) : (
-            <button className="title-screen__prompt" onClick={openModal} aria-label="Press start">
-              <span className="title-screen__prompt-glow" aria-hidden="true" />
-              <span className="title-screen__prompt-text">Press Start</span>
-              <span className="title-screen__prompt-sub">Tap or press any key</span>
-            </button>
+            <div className="title-screen__cta">
+              <button type="button" className="title-screen__start" onClick={openModal}>
+                Start game
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" /></svg>
+              </button>
+              <p className="title-screen__start-hint hint-desktop">or press any key</p>
+            </div>
           )}
-          <p className="title-screen__meta">SQ-2026 // First transmission</p>
         </>
       )}
 
       {!COMING_SOON && showModal && (
-        <div className="name-modal-scrim" onClick={closeModal}>
+        <div className="name-dialog-scrim" onClick={closeModal}>
           <div
-            className="name-modal"
+            className="name-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Enter your callsign"
+            aria-labelledby="name-dialog-title"
+            aria-describedby="name-dialog-hint"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="name-modal__topline">
-              <span>Identity channel</span>
-              <span className="name-modal__topline-index">A/01</span>
-            </div>
+            <h2 id="name-dialog-title" className="name-dialog__title">What should we call you?</h2>
+            <p id="name-dialog-hint" className="name-dialog__hint">Characters in the world will greet you by this name.</p>
 
-            <h2 className="name-modal__title">Tune your signal.</h2>
-            <p className="name-modal__hint">Choose a callsign before you enter the frequency.</p>
-
-            <label className="name-modal__field">
-              <span className="name-modal__field-label">
-                Callsign <small>{name.length.toString().padStart(2, '0')} / 16</small>
+            <label className="name-dialog__field">
+              <span className="name-dialog__label-row">
+                Your name <span className="name-dialog__count">{name.length}/16</span>
               </span>
-              <span className="name-modal__field-control">
-                <span className="name-modal__field-prefix">@</span>
-                <input
-                  type="text"
-                  autoFocus
-                  value={name}
-                  onChange={(event) => setName(event.target.value.slice(0, 16))}
-                  onKeyDown={(event) => { if (event.key === 'Enter') handleStart(); }}
-                  placeholder="Sound Keeper"
-                  maxLength={16}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </span>
+              <input
+                className="name-dialog__input"
+                type="text"
+                autoFocus
+                value={name}
+                onChange={(event) => setName(event.target.value.slice(0, 16))}
+                onKeyDown={(event) => { if (event.key === 'Enter') handleStart(); }}
+                placeholder="Sound Keeper"
+                maxLength={16}
+                autoComplete="off"
+                spellCheck={false}
+              />
             </label>
 
-            <button className="name-modal__submit" onClick={handleStart}>
-              <span>Enter the frequency</span>
-              <span className="name-modal__submit-icon" aria-hidden="true">↗</span>
-            </button>
+            <div className="name-dialog__actions">
+              <button type="button" className="btn btn--ghost" onClick={closeModal}>Back</button>
+              <button type="button" className="btn btn--primary" onClick={handleStart}>
+                Start journey
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+              </button>
+            </div>
 
-            <button className="name-modal__secondary" onClick={openEditor}>
-              <span aria-hidden="true">⌗</span> Open world editor
-            </button>
+            <button type="button" className="name-dialog__editor" onClick={openEditor}>Open world editor</button>
           </div>
         </div>
       )}

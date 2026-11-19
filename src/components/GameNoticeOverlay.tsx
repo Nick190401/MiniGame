@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { EventBus, EVENTS, type NoticePayload } from '../game/EventBus';
 import { useCanvasBounds } from './useCanvasBounds';
 
@@ -6,19 +6,28 @@ interface GameNoticeOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
 }
 
-/** Default accent per tone, so every notice lands in the right palette role
- *  without each caller having to remember a hex. An explicit `accent` (an
- *  attack's own colour, an NPC's channel) still wins. */
-const TONE_ACCENT: Record<NonNullable<NoticePayload['tone']>, string> = {
-  info: 'var(--ember)',
+type Tone = NonNullable<NoticePayload['tone']>;
+
+/** Default accent per tone. An explicit `accent` (an attack's own colour, an
+ *  NPC's colour) still wins. */
+const TONE_ACCENT: Record<Tone, string> = {
+  info: 'var(--steel)',
   success: 'var(--gold)',
-  danger: 'var(--signal)',
+  danger: 'var(--danger)',
   combat: 'var(--ember)',
+};
+
+/** Each tone has its own glyph, so the kind of news never rests on colour alone. */
+const TONE_ICON: Record<Tone, ReactNode> = {
+  info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5v.5" /></>,
+  success: <><circle cx="12" cy="12" r="9" /><path d="m8 12.5 2.7 2.7L16.2 9.6" /></>,
+  danger: <><path d="M10.3 4.6 2.9 17.5A2 2 0 0 0 4.6 20.5h14.8a2 2 0 0 0 1.7-3L13.7 4.6a2 2 0 0 0-3.4 0Z" /><path d="M12 10v4M12 17v.5" /></>,
+  combat: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" />,
 };
 
 export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
   const bounds = useCanvasBounds(canvasParentRef);
-  const [notice, setNotice] = useState<(NoticePayload & { key: number }) | null>(null);
+  const [notice, setNotice] = useState<(NoticePayload & { key: number; ms: number }) | null>(null);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -29,8 +38,9 @@ export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
     };
     const show = (payload: NoticePayload) => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      setNotice({ ...payload, key: Date.now() });
-      timerRef.current = window.setTimeout(clear, payload.duration ?? (payload.variant === 'hero' ? 3200 : 1900));
+      const ms = payload.duration ?? (payload.variant === 'hero' ? 3200 : 2200);
+      setNotice({ ...payload, key: Date.now(), ms });
+      timerRef.current = window.setTimeout(clear, ms);
     };
     EventBus.on(EVENTS.UI_NOTICE, show);
     EventBus.on(EVENTS.UI_NOTICE_CLEAR, clear);
@@ -42,23 +52,28 @@ export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
   }, []);
 
   if (!bounds || !notice) return null;
+  const tone = notice.tone ?? 'info';
   const style = {
-    left: bounds.left,
-    top: bounds.top,
-    width: bounds.width,
-    height: bounds.height,
-    '--notice-accent': notice.accent ?? TONE_ACCENT[notice.tone ?? 'info'],
+    '--notice-accent': notice.accent ?? TONE_ACCENT[tone],
+    '--notice-ms': `${notice.ms}ms`,
   } as CSSProperties;
 
   return (
-    <div className={`game-notice-layer is-${notice.variant ?? 'compact'}`} style={style} aria-live="assertive">
-      <article key={notice.key} className={`game-notice is-${notice.tone ?? 'info'}`}>
-        <span className="game-notice__rail" aria-hidden="true" />
-        <span className="game-notice__pulse" aria-hidden="true"><i /><i /><b /></span>
-        <div>
-          <small>{notice.eyebrow ?? 'FIELD UPDATE // LIVE'}</small>
-          <strong>{notice.title}</strong>
-          {notice.detail && <p>{notice.detail}</p>}
+    <div
+      className={`ui-layer notice-layer is-${notice.variant ?? 'compact'}`}
+      style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }}
+      role="status"
+    >
+      <article key={notice.key} className="notice" style={style}>
+        <span className="notice__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {TONE_ICON[tone]}
+          </svg>
+        </span>
+        <div className="notice__copy">
+          {notice.eyebrow && <p className="notice__eyebrow">{notice.eyebrow}</p>}
+          <p className="notice__title">{notice.title}</p>
+          {notice.detail && <p className="notice__detail">{notice.detail}</p>}
         </div>
       </article>
     </div>
