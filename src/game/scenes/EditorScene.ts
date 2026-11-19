@@ -411,7 +411,8 @@ export class EditorScene extends Phaser.Scene {
           : VEGETATION.broadleaf(Math.floor(seed * 89) % VEGETATION.variants.broadleaf);
         // Like the game: a trunk tile below carries the tree's foot.
         const foot = (this.grid[row + 1]?.[col] === T.TRUNK ? bottom + TILE : bottom) - 1;
-        return [art(key, foot, (size.h - 2) / size.h, standingDepth(foot)).setScale(WORLD_TEXTURE_SCALE * 0.42)];
+        // About 26 units tall: a recognisable tree that leaves its neighbours editable.
+        return [art(key, foot, (size.h - size.footInset) / size.h, standingDepth(foot)).setScale(WORLD_TEXTURE_SCALE * 26 / size.h)];
       }
       case T.CRYSTAL: return [art(CAVE_ART.crystal, bottom - 2, 0.92, standingDepth(bottom))];
       case T.PILLAR: return [art(CAVE_ART.pillar, bottom - 2, 0.94, standingDepth(bottom))];

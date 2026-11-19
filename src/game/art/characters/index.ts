@@ -10,9 +10,14 @@ export type { CharacterId } from './outfits';
 
 /**
  * Overworld frame layout in design units. A figure is ~100 units tall and is
- * shown 33 world units tall, so one design unit is 0.33 world units.
+ * shown 27 world units tall (one design unit = 0.27 world units). At that
+ * height a 16-unit tile is about a metre, so doors (~31 units), windows,
+ * trees and props keep real-world proportions next to a person.
  */
-export const CHARACTER_FRAME = { w: 76, h: 120, footX: 38, footY: 113, unitsToWorld: 0.33 } as const;
+export const CHARACTER_FRAME = { w: 76, h: 120, footX: 38, footY: 113, unitsToWorld: 0.27 } as const;
+
+/** World height of a character from the feet to the top of the head. */
+export const CHARACTER_HEIGHT = 100 * CHARACTER_FRAME.unitsToWorld;
 
 /** Texture texels per design unit for overworld frames (1:1 at the world zoom). */
 export const CHARACTER_TEXELS = CHARACTER_FRAME.unitsToWorld * TEXEL;

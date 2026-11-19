@@ -46,7 +46,7 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     this.homeY = y;
     this.patrol = patrol;
 
-    this.shadow = scene.add.image(x, y + 1, FX.shadow).setDisplaySize(20, 7).setAlpha(0.5).setDepth(3);
+    this.shadow = scene.add.image(x, y + 1, FX.shadow).setDisplaySize(16, 5.6).setAlpha(0.5).setDepth(3);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 

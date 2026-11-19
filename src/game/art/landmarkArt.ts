@@ -483,26 +483,27 @@ function inn(ctx: Ctx, w: number, h: number, modern = false): void {
     stoneWall(ctx, 4, wallTop, w - 8, base - wallTop, 0x8e8c84, rand, 3.6);
     hipRoof(ctx, { x: 0, y: 3, w, h: wallTop - 2, color: 0x4a5258, material: 'metal', hip: 10 }, rand);
   } else {
+    // Loft band under the eaves, then a full-height stone ground floor.
+    const loft = (base - wallTop) * 0.3;
     plaster(ctx, 6, wallTop, w - 12, base - wallTop, 0xeadbbd, rand);
-    timberFrame(ctx, 6, wallTop, w - 12, (base - wallTop) * 0.52, 0x5b3a24, [0, 18, 36, 56, 78, w - 12]);
-    stoneWall(ctx, 6, wallTop + (base - wallTop) * 0.52, w - 12, (base - wallTop) * 0.48, 0x9a8f7c, rand, 3.4);
+    timberFrame(ctx, 6, wallTop, w - 12, loft, 0x5b3a24, [0, 18, 36, 56, 78, w - 12]);
+    stoneWall(ctx, 6, wallTop + loft, w - 12, base - wallTop - loft, 0x9a8f7c, rand, 3.4);
     eaveShadow(ctx, 6, wallTop, w - 12);
     hipRoof(ctx, { x: 0, y: 4, w, h: wallTop - 2, color: 0x8f4433, material: 'tile', hip: 18 }, rand);
     chimney(ctx, 24, 0, 6, 14, rand);
+    for (const x of [16, 44, w - 58, w - 28]) windowAt(ctx, x, wallTop + 3, 9, 8, { frame: 0xf0e6d0, glow: 0xffc061, flowers: true }, rand);
   }
-  const upper = wallTop + 4, lower = wallTop + (base - wallTop) * 0.56;
-  if (!modern) {
-    for (const x of [16, 44, w - 58, w - 28]) windowAt(ctx, x, upper, 9, 8, { frame: 0xf0e6d0, glow: 0xffc061, flowers: true }, rand);
-  }
-  windowAt(ctx, 12, lower, 12, 11, { frame: modern ? 0x2a2f33 : 0x4b3322, glow: 0xffb24a }, rand);
-  windowAt(ctx, w - 24, lower, 12, 11, { frame: modern ? 0x2a2f33 : 0x4b3322, glow: 0xffb24a }, rand);
-  doorAt(ctx, w / 2 - 6, lower - 2, 12, base - lower + 2, 0x6b3f25, { arch: !modern });
+  // Door and windows sized to the people walking in (door ~1.15x their height).
+  const doorTop = base - 32, lower = base - 27;
+  windowAt(ctx, 12, lower, 12, 13, { frame: modern ? 0x2a2f33 : 0x4b3322, glow: 0xffb24a }, rand);
+  windowAt(ctx, w - 24, lower, 12, 13, { frame: modern ? 0x2a2f33 : 0x4b3322, glow: 0xffb24a }, rand);
+  doorAt(ctx, w / 2 - 7, doorTop, 14, base - doorTop, 0x6b3f25, { arch: !modern });
   // Hanging tavern sign / neon on the Junction branch.
   if (modern) signboard(ctx, w / 2 - 14, wallTop + 3, 28, 6, 'INN 24/7', 0x15191c, 0xffa24a, true);
   else {
     ctx.strokeStyle = rgba(0x2a2420, 1); ctx.lineWidth = 0.7;
-    ctx.beginPath(); ctx.moveTo(w / 2 + 9, lower - 6); ctx.lineTo(w / 2 + 19, lower - 6); ctx.stroke();
-    signboard(ctx, w / 2 + 11, lower - 5, 10, 7, 'INN', 0x7a4a2a, 0xf6e2b8);
+    ctx.beginPath(); ctx.moveTo(w / 2 + 10, doorTop - 1); ctx.lineTo(w / 2 + 20, doorTop - 1); ctx.stroke();
+    signboard(ctx, w / 2 + 12, doorTop, 10, 7, 'INN', 0x7a4a2a, 0xf6e2b8);
   }
   barrel(ctx, 8, base + 1);
   groundShade(ctx, 4, base + 1, w - 8);
@@ -612,7 +613,7 @@ function guardPost(ctx: Ctx, w: number, h: number): void {
   // Hazard band and the booth window.
   for (let x = 6; x < w - 6; x += 4) { ctx.fillStyle = (x / 4) % 2 < 1 ? '#f0c23e' : '#1b1b1b'; ctx.fillRect(x, base - 4, 4, 2.4); }
   windowAt(ctx, 12, wallTop + 7, w - 36, 11, { frame: 0x1b2226, glow: 0xa6f0ff, mullion: false }, rand);
-  doorAt(ctx, w - 22, wallTop + 6, 10, base - wallTop - 10, 0x2f3a40, { glass: true, frame: 0x161b1e, step: false });
+  doorAt(ctx, w - 22, wallTop + 2, 11, base - wallTop - 2, 0x2f3a40, { glass: true, frame: 0x161b1e, step: false });
   signboard(ctx, 14, wallTop + 1, 26, 4.5, 'CHECKPOINT', 0x141819, 0xffa142, true);
   groundShade(ctx, 4, base + 1, w - 8);
 }

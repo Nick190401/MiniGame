@@ -9,8 +9,9 @@ import { worldTexture } from './worldTexture';
  * whole landmark buildings instead). Every tile is painted for its
  * neighbourhood: outer corners get posts or quoins, a roof's top row gets a
  * ridge and its lowest row a gutter, and facades under a roof sit in its
- * shadow. Textures are painted on first use, so maps without free-form
- * buildings pay nothing.
+ * shadow. A door under a facade tile is two tiles tall (a little taller
+ * than a character), its upper half painted into the tile above. Textures
+ * are painted on first use, so maps without free-form buildings pay nothing.
  */
 
 const S = 16;
@@ -23,6 +24,9 @@ const PLASTER_FACADE = new Set<number>([T.BUILDING_WALL, T.WALL_WINDOW, T.DOOR])
 const STONE_FACADE = new Set<number>([T.STONE_WALL, T.STONE_WINDOW, T.IRON_DOOR]);
 const TIMBER = 0x5c412e;
 const VARIANTS = 3;
+/** Door heights in world units: through two tiles, or squeezed under a roof row. */
+const TALL_DOOR = 30;
+const SHORT_DOOR = S - 2.4;
 
 const isRoof = (t: number | undefined) => t !== undefined && ROOF_COLOR.has(t);
 const isFacade = (t: number | undefined) => t !== undefined && (PLASTER_FACADE.has(t) || STONE_FACADE.has(t));
@@ -30,7 +34,16 @@ const isFacade = (t: number | undefined) => t !== undefined && (PLASTER_FACADE.h
 export const isBuildingTile = (t: number | undefined) => isRoof(t) || isFacade(t);
 export const isDoorTile = (t: number | undefined) => t === T.DOOR || t === T.IRON_DOOR;
 
-interface Edges { top: boolean; bottom: boolean; left: boolean; right: boolean }
+interface Edges {
+  top: boolean;
+  bottom: boolean;
+  left: boolean;
+  right: boolean;
+  /** Facade tile above a door: the door's upper half and lintel show here. */
+  doorBelow?: number;
+  /** Door tile under a facade tile: the door runs on through the top edge. */
+  tallDoor?: boolean;
+}
 
 /** Texture for the building tile at (row, col), or undefined for any other tile. */
 export function buildingTileTexture(scene: Phaser.Scene, grid: number[][], row: number, col: number): string | undefined {
@@ -38,15 +51,18 @@ export function buildingTileTexture(scene: Phaser.Scene, grid: number[][], row: 
   if (t === undefined || !isBuildingTile(t)) return undefined;
   const roof = isRoof(t);
   const same = roof ? isRoof : isFacade;
+  const above = grid[row - 1]?.[col], below = grid[row + 1]?.[col];
   const edges: Edges = {
     // Roof: ridge on its top row, gutter on its lowest. Facade: eave shadow, plinth.
-    top: roof ? !isRoof(grid[row - 1]?.[col]) : isRoof(grid[row - 1]?.[col]),
-    bottom: roof ? !isRoof(grid[row + 1]?.[col]) : !isFacade(grid[row + 1]?.[col]),
+    top: roof ? !isRoof(above) : isRoof(above),
+    bottom: roof ? !isRoof(below) : !isFacade(below),
     left: !same(grid[row]?.[col - 1]),
     right: !same(grid[row]?.[col + 1]),
+    doorBelow: !roof && !isDoorTile(t) && isDoorTile(below) ? below : undefined,
+    tallDoor: isDoorTile(t) && isFacade(above) && !isDoorTile(above),
   };
   const variant = (col * 7 + row * 3) % VARIANTS;
-  const bits = `${+edges.top}${+edges.bottom}${+edges.left}${+edges.right}`;
+  const bits = `${+edges.top}${+edges.bottom}${+edges.left}${+edges.right}${edges.doorBelow ?? 0}${+!!edges.tallDoor}`;
   const key = `hd-building-${t}-${bits}-${variant}`;
   return worldTexture(scene, key, S, S, (ctx) => paintTile(ctx, t, edges, 97 + t * 131 + variant * 17));
 }
@@ -61,8 +77,14 @@ function paintTile(ctx: Ctx, t: number, edges: Edges, seed: number): void {
   else paintPlaster(ctx, edges, seed);
   if (t === T.WALL_WINDOW) paintCasement(ctx, seed);
   if (t === T.STONE_WINDOW) paintArchedWindow(ctx);
-  if (t === T.DOOR) paintWoodDoor(ctx, seed);
-  if (t === T.IRON_DOOR) paintIronDoor(ctx);
+  if (isDoorTile(t)) paintDoor(ctx, t, edges.tallDoor ? TALL_DOOR : SHORT_DOOR);
+  if (edges.doorBelow !== undefined) {
+    // The same door, shifted one tile down: only its upper part lands here.
+    ctx.save();
+    ctx.translate(0, S);
+    paintDoor(ctx, edges.doorBelow, TALL_DOOR);
+    ctx.restore();
+  }
   if (edges.top) {
     ctx.fillStyle = linear(ctx, 0, 0, 0, 5, [[0, 0x120a06, 0.6], [1, 0x120a06, 0]]);
     ctx.fillRect(0, 0, S, 5);
@@ -168,7 +190,7 @@ function plinth(ctx: Ctx, seed: number): void {
 }
 
 function paintCasement(ctx: Ctx, seed: number): void {
-  const x = 3.8, y = 2.8, w = 8.4, h = 8.2;
+  const x = 2.7, y = 2, w = 10.6, h = 11;
   ctx.fillStyle = 'rgba(40,28,18,0.35)';
   ctx.fillRect(x + 0.5, y + 0.7, w + 0.4, h + 0.4);
   woodBoard(ctx, x - 0.7, y - 0.7, w + 1.4, h + 1.4, 0x6a4a33, seed + 11);
@@ -182,7 +204,7 @@ function paintCasement(ctx: Ctx, seed: number): void {
 }
 
 function paintArchedWindow(ctx: Ctx): void {
-  const x = 4.6, y = 2.6, w = 6.8, h = 8.8, r = w / 2;
+  const x = 3.6, y = 1.8, w = 8.8, h = 11, r = w / 2;
   const arch = (inset: number) => {
     ctx.beginPath();
     ctx.moveTo(x + inset, y + h - inset);
@@ -246,8 +268,18 @@ function glass(ctx: Ctx, x: number, y: number, w: number, h: number, roomLight: 
   ctx.restore();
 }
 
-function paintWoodDoor(ctx: Ctx, seed: number): void {
-  const x = 3.2, y = 3, w = 9.6, h = S - 3;
+/**
+ * A door whose threshold sits on this tile's bottom edge; taller doors run
+ * past the top edge. Painting depends only on the door type and height, so
+ * the halves in the door tile and the tile above line up.
+ */
+function paintDoor(ctx: Ctx, type: number, height: number): void {
+  if (type === T.IRON_DOOR) paintIronDoor(ctx, S - height, height);
+  else paintWoodDoor(ctx, 900 + type, S - height, height);
+}
+
+function paintWoodDoor(ctx: Ctx, seed: number, y: number, h: number): void {
+  const x = 2.2, w = 11.6;
   // Recess shadow, then vertical planks.
   ctx.fillStyle = rgba(0x1c120b);
   ctx.fillRect(x - 0.6, y - 0.6, w + 1.2, h + 0.6);
@@ -258,7 +290,7 @@ function paintWoodDoor(ctx: Ctx, seed: number): void {
   ctx.fillStyle = linear(ctx, x, y, x + 2, y + 2, [[0, 0x0e0905, 0.55], [1, 0x0e0905, 0]]);
   ctx.fillRect(x, y, w, h - 1);
   // Strap hinges with rivets and a ring pull.
-  for (const by of [y + 2.6, y + h - 4.6]) {
+  for (const by of [y + h * 0.18, y + h - 4.6]) {
     ctx.fillStyle = linear(ctx, 0, by, 0, by + 1, [[0, 0x55514c], [1, 0x23211f]]);
     ctx.fillRect(x + 0.4, by, w * 0.66, 1);
     ctx.fillStyle = rgba(0x8d8a84);
@@ -266,15 +298,16 @@ function paintWoodDoor(ctx: Ctx, seed: number): void {
   }
   ctx.strokeStyle = rgba(0xc9a35a);
   ctx.lineWidth = 0.35;
-  ctx.beginPath(); ctx.arc(x + w - 2, y + h * 0.55, 0.75, 0, Math.PI * 2); ctx.stroke();
+  // Ring pull at hand height (about a metre), or mid-door on a short door.
+  ctx.beginPath(); ctx.arc(x + w - 2, Math.max(y + 3, S - 14), 0.75, 0, Math.PI * 2); ctx.stroke();
   // Lintel and threshold.
   woodBoard(ctx, x - 1.2, y - 1.6, w + 2.4, 1.3, TIMBER, seed + 30);
   ctx.fillStyle = linear(ctx, 0, S - 1.1, 0, S, [[0, 0xa59f93], [1, 0x6c675e]]);
   ctx.fillRect(x - 1, S - 1.1, w + 2, 1.1);
 }
 
-function paintIronDoor(ctx: Ctx): void {
-  const x = 3.4, y = 3.2, w = 9.2, h = S - 3.2;
+function paintIronDoor(ctx: Ctx, y: number, h: number): void {
+  const x = 2.4, w = 11.2;
   ctx.fillStyle = rgba(0x1a1c1f);
   ctx.fillRect(x - 0.7, y - 0.7, w + 1.4, h + 0.7);
   ctx.fillStyle = linear(ctx, x, 0, x + w, 0, [[0, 0x5d646b], [0.45, 0x464c53], [1, 0x2c3036]]);
@@ -282,8 +315,9 @@ function paintIronDoor(ctx: Ctx): void {
   // Two leaves, a cross bar and rivet rows.
   ctx.fillStyle = 'rgba(10,12,14,0.6)';
   ctx.fillRect(x + w / 2 - 0.2, y, 0.4, h - 1);
-  ctx.fillStyle = linear(ctx, 0, y + h * 0.45, 0, y + h * 0.45 + 1.2, [[0, 0x737b83], [1, 0x30353a]]);
-  ctx.fillRect(x, y + h * 0.45, w, 1.2);
+  const barY = Math.max(y + h * 0.4, S - 15);
+  ctx.fillStyle = linear(ctx, 0, barY, 0, barY + 1.2, [[0, 0x737b83], [1, 0x30353a]]);
+  ctx.fillRect(x, barY, w, 1.2);
   ctx.fillStyle = rgba(0x9aa3aa);
   for (const ry of [y + 1, y + h - 2.2]) {
     for (let rx = x + 0.9; rx < x + w; rx += 1.85) { ctx.beginPath(); ctx.arc(rx, ry, 0.22, 0, Math.PI * 2); ctx.fill(); }

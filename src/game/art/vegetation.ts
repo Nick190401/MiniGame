@@ -34,8 +34,8 @@ function paintTallGrass(ctx: Ctx, w: number, h: number, seed: number, front: boo
     const x = 1.5 + rand() * (w - 3);
     const centre = 1 - Math.abs(x - w / 2) / (w / 2);
     const height = front
-      ? 5 + rand() * 5 + centre * 3
-      : 9 + rand() * 7 + centre * 5;
+      ? 4 + rand() * 3.8 + centre * 2.2
+      : 6.4 + rand() * 5 + centre * 3.6;
     const lean = (x - w / 2) * (0.18 + rand() * 0.25) + (rand() - 0.5) * 4;
     const y = groundY - (front ? rand() * 1.5 : rand() * 3);
     const base = GRASS_BASES[Math.floor(rand() * GRASS_BASES.length)];
@@ -313,17 +313,28 @@ export const VEGETATION = {
   variants: { tallGrass: 4, flowers: 5, broadleaf: 4, conifer: 2, bush: 3, rock: 3, lily: 2 },
 } as const;
 
-export const TREE_SIZE = { broadleaf: { w: 50, h: 62 }, conifer: { w: 36, h: 66 } } as const;
+/** Tree painters work in a fixed design space; the textures are grown from it. */
+const TREE_DESIGN = { broadleaf: { w: 50, h: 62 }, conifer: { w: 36, h: 66 } } as const;
+/** Grown so a tree stands about three characters tall, level with a cottage roof. */
+const TREE_GROWTH = 1.35;
+const grown = ({ w, h }: { w: number; h: number }) => ({ w: w * TREE_GROWTH, h: h * TREE_GROWTH, footInset: 2 * TREE_GROWTH });
+/** World size of a tree texture; `footInset` is the trunk base above the bottom edge. */
+export const TREE_SIZE = { broadleaf: grown(TREE_DESIGN.broadleaf), conifer: grown(TREE_DESIGN.conifer) } as const;
 
 export function createVegetationTextures(scene: Phaser.Scene): void {
   const v = VEGETATION.variants;
   for (let i = 0; i < v.tallGrass; i++) {
-    worldTexture(scene, VEGETATION.tallGrassBack(i), 22, 24, (ctx, w, h) => paintTallGrass(ctx, w, h, 300 + i * 17, false));
-    worldTexture(scene, VEGETATION.tallGrassFront(i), 22, 15, (ctx, w, h) => paintTallGrass(ctx, w, h, 900 + i * 23, true));
+    worldTexture(scene, VEGETATION.tallGrassBack(i), 22, 19, (ctx, w, h) => paintTallGrass(ctx, w, h, 300 + i * 17, false));
+    worldTexture(scene, VEGETATION.tallGrassFront(i), 22, 13, (ctx, w, h) => paintTallGrass(ctx, w, h, 900 + i * 23, true));
   }
-  for (let i = 0; i < v.flowers; i++) worldTexture(scene, VEGETATION.flowers(i), 16, 14, (ctx, w, h) => paintFlowers(ctx, w, h, 50 + i * 7, i));
-  for (let i = 0; i < v.broadleaf; i++) worldTexture(scene, VEGETATION.broadleaf(i), TREE_SIZE.broadleaf.w, TREE_SIZE.broadleaf.h, (ctx, w, h) => paintBroadleafTree(ctx, w, h, i));
-  for (let i = 0; i < v.conifer; i++) worldTexture(scene, VEGETATION.conifer(i), TREE_SIZE.conifer.w, TREE_SIZE.conifer.h, (ctx, w, h) => paintConifer(ctx, w, h, i));
+  for (let i = 0; i < v.flowers; i++) worldTexture(scene, VEGETATION.flowers(i), 14, 10, (ctx, w, h) => paintFlowers(ctx, w, h, 50 + i * 7, i));
+  const tree = (key: string, kind: keyof typeof TREE_DESIGN, paint: (ctx: Ctx, w: number, h: number) => void) =>
+    worldTexture(scene, key, TREE_SIZE[kind].w, TREE_SIZE[kind].h, (ctx) => {
+      ctx.scale(TREE_GROWTH, TREE_GROWTH);
+      paint(ctx, TREE_DESIGN[kind].w, TREE_DESIGN[kind].h);
+    });
+  for (let i = 0; i < v.broadleaf; i++) tree(VEGETATION.broadleaf(i), 'broadleaf', (ctx, w, h) => paintBroadleafTree(ctx, w, h, i));
+  for (let i = 0; i < v.conifer; i++) tree(VEGETATION.conifer(i), 'conifer', (ctx, w, h) => paintConifer(ctx, w, h, i));
   for (let i = 0; i < v.bush; i++) worldTexture(scene, VEGETATION.bush(i), 24, 18, (ctx, w, h) => paintBush(ctx, w, h, i));
   for (let i = 0; i < v.rock; i++) worldTexture(scene, VEGETATION.rock(i), 16, 12, (ctx, w, h) => paintRock(ctx, w, h, 70 + i));
   worldTexture(scene, VEGETATION.reeds, 14, 20, (ctx, w, h) => paintReeds(ctx, w, h, 5));

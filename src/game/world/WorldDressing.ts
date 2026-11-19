@@ -168,9 +168,9 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
   const plantTree = (x: number, footY: number, seed: number, row: number, scale = 1, collide = false) => {
     const kind = treeKey(row, seed);
     const tint = zoneTint(row);
-    shadow(x + 9 * scale, footY - 2, (kind.conifer ? 30 : 40) * scale, 12 * scale, 0.42, 0.55);
+    shadow(x + kind.size.w * 0.18 * scale, footY - 2, kind.size.w * 0.8 * scale, kind.size.w * 0.24 * scale, 0.42, 0.55);
     const tree = addWorldImage(scene, x, footY, kind.key)
-      .setOrigin(0.5, (kind.size.h - 2) / kind.size.h)
+      .setOrigin(0.5, (kind.size.h - kind.size.footInset) / kind.size.h)
       .setScale(WORLD_TEXTURE_SCALE * scale)
       .setFlipX(seed > 0.5)
       .setTint(tint)

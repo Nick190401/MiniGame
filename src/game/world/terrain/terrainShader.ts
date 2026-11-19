@@ -142,7 +142,7 @@ void main () {
 
   float paveRaw = straight0.b;
   float wPave = smoothstep(0.47, 0.53, paveRaw);
-  vec3 paving = texture2D(uPaving, p / 128.0).rgb;
+  vec3 paving = texture2D(uPaving, p / 64.0).rgb;
   // Weathering at a larger scale than the paver repeat hides the tiling.
   paving *= mix(0.84, 1.1, noise(p + 131.0, 340.0).r);
   paving = mix(paving, paving * vec3(0.86, 0.84, 0.8), smoothstep(0.55, 0.75, noise(p, 150.0).b) * 0.6);

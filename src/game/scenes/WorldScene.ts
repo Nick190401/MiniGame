@@ -28,11 +28,15 @@ import { WORLD_ZOOM, canvasZoom, logicalSize } from '../render/RenderScale';
 import type { TerrainLayer } from '../world/terrain/TerrainLayer';
 import { WorldLighting } from '../world/WorldLighting';
 import { FX } from '../art/fx';
+import { CHARACTER_HEIGHT } from '../art/characters';
 
 const TILE = 16;
 const NPC_DIALOG_COOLDOWN_MS = 1200;
 // The master record is painted at 192 px (four times the original 48 px art).
-const LOST_TRACK_SCALE = 0.25;
+const LOST_TRACK_SCALE = 0.14;
+/** Fragment tokens: 192 px texture shown ~13 world units wide; pickup stays 26 units. */
+const FRAGMENT_SCALE = 0.07;
+const FRAGMENT_PICKUP_SIZE = 26;
 
 interface NpcVisualConfig {
   portraitTexture: string;
@@ -406,7 +410,7 @@ export class WorldScene extends Phaser.Scene {
   private createWorldAtmosphere(): void {
     const viewW = this.scale.width;
 
-    this.playerShadow = this.add.image(this.player.x, this.player.y + 1, FX.shadow).setDisplaySize(20, 7).setAlpha(0.5);
+    this.playerShadow = this.add.image(this.player.x, this.player.y + 1, FX.shadow).setDisplaySize(16, 5.6).setAlpha(0.5);
     this.playerShadow.setDepth(4);
 
     // Drifting pollen and seed fluff catch the light above the meadows.
@@ -465,7 +469,7 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.playerShadow) {
       this.playerShadow.setPosition(this.player.x + 1, this.player.y + 1);
-      this.playerShadow.setDisplaySize(this.player.isMoving() ? 21.5 : 20, 7);
+      this.playerShadow.setDisplaySize(this.player.isMoving() ? 17.2 : 16, 5.6);
       this.playerShadow.setAlpha(this.player.y >= CAVE_START_ROW * TILE ? 0.62 : 0.5);
     }
 
@@ -758,11 +762,11 @@ export class WorldScene extends Phaser.Scene {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '8px', color: '#ffb27a',
     }).setOrigin(0.5);
 
-    const marker = this.add.container(0, -44, [halo, bg, glyph]);
+    const marker = this.add.container(0, -(CHARACTER_HEIGHT + 9), [halo, bg, glyph]);
     const container = this.add.container(x, y, [marker]);
     container.setDepth(10).setVisible(false);
 
-    this.tweens.add({ targets: marker, y: -47, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: marker, y: -(CHARACTER_HEIGHT + 12), duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     return container;
   }
@@ -1091,18 +1095,18 @@ export class WorldScene extends Phaser.Scene {
       const glow = this.add.graphics().setDepth(9);
       glow.setPosition(pos.x, pos.y);
       glow.fillStyle(0x6ea8d8, 0.12);
-      glow.fillCircle(0, 0, 15);
+      glow.fillCircle(0, 0, 10);
       glow.fillStyle(0xff7a2b, 0.14);
-      glow.fillCircle(0, 0, 9);
+      glow.fillCircle(0, 0, 6);
       this.tweens.add({ targets: glow, alpha: 0.34, duration: 920, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
       // Pulsing ring — draw centered at (0,0) so scale works from center
       const ring = this.add.graphics().setDepth(9);
       ring.setPosition(pos.x, pos.y);
-      ring.lineStyle(1, 0x6ea8d8, 0.42);
-      ring.strokeCircle(0, 0, 13);
-      ring.lineStyle(1, 0xff7a2b, 0.22);
-      ring.strokeCircle(0, 0, 9);
+      ring.lineStyle(0.8, 0x6ea8d8, 0.42);
+      ring.strokeCircle(0, 0, 8.5);
+      ring.lineStyle(0.8, 0xff7a2b, 0.22);
+      ring.strokeCircle(0, 0, 6);
       this.tweens.add({
         targets: ring, alpha: 0, scaleX: 1.8, scaleY: 1.8,
         duration: 1800, repeat: -1,
@@ -1112,15 +1116,18 @@ export class WorldScene extends Phaser.Scene {
       // Two orbiting signal pips make the object read as an active audio source.
       const orbit = this.add.container(pos.x, pos.y).setDepth(10);
       orbit.add([
-        this.add.image(-15, 0, FX.mote).setDisplaySize(3.4, 3.4).setTint(0xff9a4a).setBlendMode(Phaser.BlendModes.ADD),
-        this.add.image(15, 0, FX.mote).setDisplaySize(3, 3).setTint(0xffd890).setBlendMode(Phaser.BlendModes.ADD),
+        this.add.image(-10, 0, FX.mote).setDisplaySize(2.6, 2.6).setTint(0xff9a4a).setBlendMode(Phaser.BlendModes.ADD),
+        this.add.image(10, 0, FX.mote).setDisplaySize(2.3, 2.3).setTint(0xffd890).setBlendMode(Phaser.BlendModes.ADD),
       ]);
       this.tweens.add({ targets: orbit, angle: 360, duration: 2600, repeat: -1, ease: 'Linear' });
 
-      // Vinyl token — high depth so it remains visible above tall grass.
-      // 192 px texture at ~26 world units: same world size and pickup footprint.
-      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment-mr').setDepth(10).setScale(0.135);
-      this.tweens.add({ targets: frag, y: pos.y - 5, duration: 1250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      // Vinyl token — high depth so it remains visible above tall grass. It is
+      // drawn about half a character tall, while the pickup body keeps its
+      // original 26-unit footprint so collecting works exactly as before.
+      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment-mr').setDepth(10).setScale(FRAGMENT_SCALE);
+      const pickupSize = FRAGMENT_PICKUP_SIZE / FRAGMENT_SCALE;
+      (frag.body as Phaser.Physics.Arcade.Body).setSize(pickupSize, pickupSize, true);
+      this.tweens.add({ targets: frag, y: pos.y - 3, duration: 1250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
       // Store glow refs on the sprite for cleanup
       (frag as any)._glowFx = [glow, ring, orbit];
@@ -1970,14 +1977,14 @@ export class WorldScene extends Phaser.Scene {
     this.tweens.add({
       targets: item,
       x: this.player.x,
-      y: this.player.y - 20,
+      y: this.player.y - CHARACTER_HEIGHT * 0.6,
       scaleX: 1.18 * LOST_TRACK_SCALE,
       scaleY: 1.18 * LOST_TRACK_SCALE,
       angle: item.angle + 720,
       duration: 820,
       ease: 'Cubic.easeInOut',
       onComplete: () => {
-        this.spawnFinalMasterBurst(this.player.x, this.player.y - 18);
+        this.spawnFinalMasterBurst(this.player.x, this.player.y - CHARACTER_HEIGHT * 0.55);
         item.destroy();
       },
     });

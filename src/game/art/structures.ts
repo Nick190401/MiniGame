@@ -98,7 +98,8 @@ function paintBridgeDeck(ctx: Ctx, w: number, h: number): void {
   }
   // Timber deck: boards run across the river, joints offset per board.
   const deckTop = 9, deckBottom = h - 9;
-  const boardH = 5.2;
+  // Boards about 20 cm wide next to a 1.75 m traveller.
+  const boardH = 3.4;
   let i = 0;
   for (let y = deckTop; y < deckBottom; y += boardH, i++) {
     const tone = [0x8e6a44, 0x86633f, 0x977249, 0x7f5c3a][i % 4];
