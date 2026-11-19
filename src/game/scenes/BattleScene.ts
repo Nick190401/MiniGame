@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { logicalSize, useLogicalCamera } from '../render/RenderScale';
 import { EventBus, EVENTS, type BattleUiPayload } from '../EventBus';
 import { useGameStore } from '../../store/gameStore';
 import { ATTACKS, applyDamageVariance } from '../systems/AttackSystem';
@@ -98,8 +99,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create(): void {
-    const W = this.scale.width;   // 640
-    const H = this.scale.height;  // 480
+    useLogicalCamera(this);
+    const { width: W, height: H } = logicalSize(this);
     EventBus.emit(EVENTS.BATTLE_START, { enemyId: this.enemyData.id, isBoss: this.isBoss });
 
     // ── Background art ───────────────────────────────────────────────────
@@ -240,14 +241,6 @@ export class BattleScene extends Phaser.Scene {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '10px', color: `#${signalColor.toString(16).padStart(6, '0')}`,
     }).setOrigin(1, 0).setDepth(3).setVisible(false);
 
-
-    // Scanlines
-    const scanlines = this.add.graphics();
-    scanlines.fillStyle(0x000000, 0.035);
-    for (let y = 0; y < BATTLE_H; y += 4) {
-      scanlines.fillRect(0, y, W, 1);
-    }
-    scanlines.setDepth(4);
 
     // ── Ambient floating particles ───────────────────────────────────────
     for (let i = 0; i < 8; i++) {
@@ -710,7 +703,7 @@ export class BattleScene extends Phaser.Scene {
   // ── Attack menu ─────────────────────────────────────────────────────────────
 
   private buildAttackMenu(menuY: number, menuH: number): void {
-    const W = this.scale.width;
+    const W = logicalSize(this).width;
     const store = useGameStore.getState();
     const unlockedIds = store.unlockedAttacks.map(a => a.id);
 
@@ -946,7 +939,7 @@ export class BattleScene extends Phaser.Scene {
     const sprite = this.playerSprite;
     const displayWidth = sprite.displayWidth;
     const displayHeight = sprite.displayHeight;
-    const canvasScale = this.game.canvas.getBoundingClientRect().width / this.scale.width;
+    const canvasScale = this.game.canvas.getBoundingClientRect().width / logicalSize(this).width;
     const density = Math.max(2, canvasScale * (window.devicePixelRatio || 1));
     const width = Math.min(source.width, Math.ceil(displayWidth * density));
     const height = Math.min(source.height, Math.ceil(displayHeight * density));
@@ -1263,9 +1256,9 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // Phase change visual: big text overlay
-    const W = this.scale.width;
+    const W = logicalSize(this).width;
     const phaseAnnounce = this.add.text(W / 2, this.battleH * 0.4, phaseLabels[phaseIdx], {
-      fontFamily: '"Press Start 2P"',
+      fontFamily: 'Syne',
       fontSize: '16px',
       color: phaseColors[phaseIdx],
     }).setOrigin(0.5).setDepth(28).setAlpha(0).setScale(2).setVisible(false);
@@ -1429,7 +1422,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private playPlayerAttackPrelude(attack: Attack, onComplete: () => void): void {
-    const W = this.scale.width;
+    const W = logicalSize(this).width;
     const colorHex = `#${attack.color.toString(16).padStart(6, '0')}`;
     const trackIndex = ['bass-drop', 'echo-wave', 'hook-impact', 'reverb-strike'].indexOf(attack.id) + 1;
     EventBus.emit(EVENTS.UI_NOTICE, {
@@ -1512,7 +1505,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private runPlayerAttackAnimation(attack: Attack, onComplete: () => void): void {
-    const W = this.scale.width;
+    const W = logicalSize(this).width;
     const color = attack.color;
     const eX = this.enemySprite.x;
     const eY = this.enemySprite.y;
@@ -2408,7 +2401,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private playEnemyAttackPrelude(attack: { name: string; damage: number }, onComplete: () => void): void {
-    const W = this.scale.width;
+    const W = logicalSize(this).width;
     const hostileColor = this.isBoss ? 0xff3d57 : 0xe8b465;
     const hostileHex = `#${hostileColor.toString(16).padStart(6, '0')}`;
     EventBus.emit(EVENTS.UI_NOTICE, {
@@ -2749,7 +2742,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private playGlitchAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
-    const W = this.scale.width;
+    const W = logicalSize(this).width;
     const radioColors = [0xcc1111, 0xff6600, 0xffaa00, 0xffdd44, 0x8b1a1a];
 
     // Phase 1: Radio interference — crimson/amber glitch bars + static burst
@@ -2921,7 +2914,7 @@ export class BattleScene extends Phaser.Scene {
   private playVoidAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
     const voidPurple = 0x8d4ac7;
     const voidTeal = 0x6ea8d8;
-    const veil = this.add.rectangle(0, 0, this.scale.width, this.battleH, 0x050107, 0)
+    const veil = this.add.rectangle(0, 0, logicalSize(this).width, this.battleH, 0x050107, 0)
       .setOrigin(0)
       .setDepth(19)
       .setName('battle-void-veil');

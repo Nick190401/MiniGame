@@ -24,9 +24,15 @@ import { EventBus, EVENTS, type DialogPayload } from '../EventBus';
 import { useGameStore } from '../../store/gameStore';
 import { consumeMobileAction } from '../input/MobileInput';
 import type { FootstepSurface } from '../audio/AudioLibrary';
+import { WORLD_ZOOM, canvasZoom, logicalSize } from '../render/RenderScale';
+import type { TerrainLayer } from '../world/terrain/TerrainLayer';
+import { WorldLighting } from '../world/WorldLighting';
+import { FX } from '../art/fx';
 
 const TILE = 16;
 const NPC_DIALOG_COOLDOWN_MS = 1200;
+// The master record is painted at 192 px (four times the original 48 px art).
+const LOST_TRACK_SCALE = 0.25;
 
 interface NpcVisualConfig {
   portraitTexture: string;
@@ -38,16 +44,16 @@ interface NpcVisualConfig {
 
 const NPC_VISUALS: Record<'professor' | 'guard' | 'musician', NpcVisualConfig> = {
   professor: {
-    portraitTexture: 'npc-elder-muse-v4', portraitScale: 0.0463,
-    originX: 618 / 1254, originY: 1152 / 1254, accent: 0x6ea8d8,
+    portraitTexture: 'portrait-professor', portraitScale: 0.2,
+    originX: 0.5, originY: 1, accent: 0x6ea8d8,
   },
   guard: {
-    portraitTexture: 'npc-junction-guard-v3', portraitScale: 0.0536,
-    originX: 627 / 1254, originY: 1084 / 1254, accent: 0xff7a2b,
+    portraitTexture: 'portrait-guard', portraitScale: 0.2,
+    originX: 0.5, originY: 1, accent: 0xff7a2b,
   },
   musician: {
-    portraitTexture: 'npc-wandering-musician-v3', portraitScale: 0.0502,
-    originX: 622 / 1254, originY: 1114 / 1254, accent: 0xe8b465,
+    portraitTexture: 'portrait-musician', portraitScale: 0.2,
+    originX: 0.5, originY: 1, accent: 0xe8b465,
   },
 };
 
@@ -65,6 +71,8 @@ export class WorldScene extends Phaser.Scene {
   private lostTrackEffects: Phaser.GameObjects.GameObject[] = [];
   private runeGraphics: Phaser.GameObjects.GameObject[] = [];
   private caveSurfaceTiles: Phaser.GameObjects.Image[] = [];
+  private terrain?: TerrainLayer;
+  private lighting?: WorldLighting;
   private caveCorruptionObjects: Phaser.GameObjects.GameObject[] = [];
   private universePortals: Array<{ x: number; y: number }> = [];
   private nearbyUniversePortals = new Set<number>();
@@ -158,7 +166,7 @@ export class WorldScene extends Phaser.Scene {
   private shownOnce: Set<string> = new Set();
 
   // Modern world presentation
-  private playerShadow?: Phaser.GameObjects.Ellipse;
+  private playerShadow?: Phaser.GameObjects.Image;
   private zoneHud?: Phaser.GameObjects.Container;
   private zoneHudTitle?: Phaser.GameObjects.Text;
   private zoneHudMeta?: Phaser.GameObjects.Text;
@@ -178,6 +186,7 @@ export class WorldScene extends Phaser.Scene {
 
     // Build map
     const mapResult = MapBuilder.build(this);
+    this.terrain = mapResult.terrain;
     this.walls = mapResult.walls;
     this.universePortals = mapResult.universePortals;
     this.nearbyUniversePortals.clear();
@@ -193,9 +202,11 @@ export class WorldScene extends Phaser.Scene {
     this.player = new Player(this, this.spawnX, this.spawnY);
 
     this.createWorldAtmosphere();
+    this.lighting = new WorldLighting(this);
+    this.lighting.addLights(mapResult.lights);
 
     this.cameras.main.startFollow(this.player, true, 1, 1);
-    this.cameras.main.setZoom(2);
+    this.cameras.main.setZoom(WORLD_ZOOM);
     this.cameras.main.setRoundPixels(true);
     this.cameras.main.fadeIn(850, 5, 9, 8);
 
@@ -258,6 +269,7 @@ export class WorldScene extends Phaser.Scene {
   // ── Update ────────────────────────────────────────────────────────────────
 
   update(_time: number, delta: number): void {
+    this.updateLighting();
     // Anchor dialog box to the bottom of the camera viewport every frame
     if (this.dialogBox && this.cameras.main) {
       const wv = this.cameras.main.worldView;
@@ -379,29 +391,37 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  private updateLighting(): void {
+    if (!this.lighting || !this.player) return;
+    this.lighting.setPlayer(this.player.x, this.player.y);
+    // Darkness follows the camera so cutscene flights into the cave read correctly.
+    const row = this.cameras.main.worldView.centerY / TILE;
+    const depth = Phaser.Math.Clamp((row - 109) / 8, 0, 1);
+    const core = Phaser.Math.Clamp((row - (CORE_START_ROW - 2)) / 4, 0, 1);
+    this.lighting.setTargetDarkness(depth * (this.cavePurified ? 0.36 : 0.74) + core * (this.cavePurified ? 0 : 0.06));
+  }
+
   // ── NPC helpers ───────────────────────────────────────────────────────────
 
   private createWorldAtmosphere(): void {
     const viewW = this.scale.width;
-    const viewH = this.scale.height;
 
-    this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 1.5, 14, 5, 0x110906, 0.34);
+    this.playerShadow = this.add.image(this.player.x, this.player.y + 1, FX.shadow).setDisplaySize(20, 7).setAlpha(0.5);
     this.playerShadow.setDepth(4);
 
-    // Slow luminous pollen gives the open world depth without hiding the pixel art.
-    for (let index = 0; index < 34; index++) {
-      const mote = this.add.graphics().setDepth(3);
-      const color = index % 7 === 0 ? 0x6ea8d8 : index % 5 === 0 ? 0xe8b465 : 0xff7a2b;
-      mote.fillStyle(color, 0.26);
-      mote.fillRect(0, 0, index % 9 === 0 ? 2 : 1, index % 9 === 0 ? 2 : 1);
+    // Drifting pollen and seed fluff catch the light above the meadows.
+    for (let index = 0; index < 60; index++) {
+      const color = index % 7 === 0 ? 0xbfe8ff : index % 3 === 0 ? 0xfff0b8 : 0xf6f2dc;
+      const size = 1 + Math.random() * 1.6;
       const startX = 4 * TILE + Math.random() * (MAP_COLS - 8) * TILE;
-      const startY = 2 * TILE + Math.random() * (CAVE_START_ROW - 6) * TILE;
-      mote.setPosition(startX, startY);
+      const startY = 2 * TILE + Math.random() * (CAVE_START_ROW - 8) * TILE;
+      const mote = this.add.image(startX, startY, FX.mote).setDisplaySize(size, size)
+        .setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(30);
       this.tweens.add({
         targets: mote,
-        x: startX + Phaser.Math.Between(-24, 24),
-        y: startY - Phaser.Math.Between(18, 46),
-        alpha: { from: 0.08, to: 0.42 },
+        x: startX + Phaser.Math.Between(-30, 30),
+        y: startY - Phaser.Math.Between(18, 52),
+        alpha: { from: 0.05, to: 0.7 },
         duration: 3600 + Math.random() * 3400,
         delay: Math.random() * 2400,
         yoyo: true,
@@ -410,15 +430,13 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
-    const vignette = this.add.graphics().setDepth(44).setScrollFactor(0);
-    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0.34, 0.34, 0, 0);
-    vignette.fillRect(0, 0, viewW, 56);
-    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0, 0, 0.3, 0.3);
-    vignette.fillRect(0, viewH - 72, viewW, 72);
-    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0.2, 0, 0.2, 0);
-    vignette.fillRect(0, 0, 34, viewH);
-    vignette.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0, 0.2, 0, 0.2);
-    vignette.fillRect(viewW - 34, 0, 34, viewH);
+    // Soft cinematic grade: gentle vignette and a touch of contrast.
+    if (this.cameras.main.postFX) {
+      this.cameras.main.postFX.addVignette(0.5, 0.5, 0.92, 0.28);
+      const grade = this.cameras.main.postFX.addColorMatrix();
+      grade.contrast(0.06, true);
+      grade.saturate(0.08, true);
+    }
 
     this.zoneWash = this.add.graphics().setDepth(43).setScrollFactor(0);
 
@@ -446,29 +464,32 @@ export class WorldScene extends Phaser.Scene {
     this.player.setDepth(5 + this.player.y / 10000);
 
     if (this.playerShadow) {
-      this.playerShadow.setPosition(this.player.x, this.player.y + 1.5);
-      this.playerShadow.setScale(this.player.isMoving() ? 1.08 : 1);
-      this.playerShadow.setAlpha(this.player.y >= CAVE_START_ROW * TILE ? 0.48 : 0.34);
+      this.playerShadow.setPosition(this.player.x + 1, this.player.y + 1);
+      this.playerShadow.setDisplaySize(this.player.isMoving() ? 21.5 : 20, 7);
+      this.playerShadow.setAlpha(this.player.y >= CAVE_START_ROW * TILE ? 0.62 : 0.5);
     }
 
     this.footstepTimer += delta;
     if (this.player.isMoving() && this.footstepTimer >= 150) {
       this.footstepTimer = 0;
-      const dust = this.add.graphics().setDepth(4);
       const inCave = this.player.y >= (CAVE_START_ROW - 4) * TILE;
-      dust.fillStyle(inCave ? 0x6ea8d8 : 0xd2bd80, inCave ? 0.35 : 0.32);
-      dust.fillRect(-3, 0, 2, 1);
-      dust.fillRect(2, 1, 1, 1);
-      dust.setPosition(this.player.x, this.player.y + 1.5);
-      this.tweens.add({
-        targets: dust,
-        x: dust.x + Phaser.Math.Between(-4, 4),
-        y: dust.y + 3,
-        alpha: 0,
-        scaleX: 1.8,
-        duration: 360,
-        onComplete: () => dust.destroy(),
-      });
+      const onGrass = this.isPlayerInTallGrass();
+      if (!onGrass) {
+        // A small puff of dust kicked up by the step.
+        const dust = this.add.image(this.player.x + Phaser.Math.Between(-3, 3), this.player.y + 1, FX.glow)
+          .setDisplaySize(5, 3).setTint(inCave ? 0x8fa8b0 : 0xd8c69a).setAlpha(inCave ? 0.32 : 0.4).setDepth(4.5);
+        this.tweens.add({
+          targets: dust,
+          x: dust.x + Phaser.Math.Between(-5, 5),
+          y: dust.y - 2,
+          displayWidth: 12,
+          displayHeight: 6,
+          alpha: 0,
+          duration: 520,
+          ease: 'Quad.easeOut',
+          onComplete: () => dust.destroy(),
+        });
+      }
     }
 
     this.updateTallGrassPresentation(delta);
@@ -542,33 +563,35 @@ export class WorldScene extends Phaser.Scene {
       else bend = this.grassVisualStep % 2 === 0 ? -6 : 6;
 
       bend *= strength * (offset === 0 ? 1 : 0.62);
+      const baseScale = (tile.getData('baseScale') as number | undefined) ?? 1;
       this.tweens.killTweensOf(tile);
-      tile.setAngle(0).setScale(1);
+      tile.setAngle(0).setScale(baseScale);
       this.tweens.add({
         targets: tile,
         angle: bend,
-        scaleX: offset === 0 ? 1.08 : 1.04,
-        scaleY: entering && offset === 0 ? 0.82 : 0.9,
+        scaleX: baseScale * (offset === 0 ? 1.08 : 1.04),
+        scaleY: baseScale * (entering && offset === 0 ? 0.82 : 0.9),
         duration: 55,
         hold: 25,
         yoyo: true,
         ease: 'Quad.easeOut',
-        onComplete: () => tile.setAngle(0).setScale(1),
+        onComplete: () => tile.setAngle(0).setScale(baseScale),
       });
     });
   }
 
   private spawnGrassRustle(count: number): void {
-    const colors = [0xa78a76, 0x8e705b, 0x744e3b];
+    // Torn blade tips and seed husks fly up as the grass parts.
+    const colors = [0x8fb455, 0x6f9a44, 0xc4b46a];
     for (let index = 0; index < count; index++) {
       const side = index % 2 === 0 ? -1 : 1;
-      const leaf = this.add.graphics().setName('grass-rustle').setDepth(this.player.depth + 0.012);
-      leaf.fillStyle(colors[(this.grassVisualStep + index) % colors.length], 0.9);
-      leaf.fillRect(-1, -2, index % 3 === 0 ? 2 : 1, index % 3 === 0 ? 2 : 3);
-      leaf.setPosition(
+      const leaf = this.add.image(
         this.player.x + side * Phaser.Math.Between(3, 7),
         this.player.y - Phaser.Math.Between(2, 7),
-      );
+        FX.leaf,
+      ).setName('grass-rustle').setDepth(this.player.depth + 0.012)
+        .setTint(colors[(this.grassVisualStep + index) % colors.length])
+        .setDisplaySize(index % 3 === 0 ? 3 : 2.2, index % 3 === 0 ? 1.6 : 1.2);
       leaf.setAngle(side * Phaser.Math.Between(12, 28));
       this.tweens.add({
         targets: leaf,
@@ -719,25 +742,27 @@ export class WorldScene extends Phaser.Scene {
   // ── Spawning ──────────────────────────────────────────────────────────────
 
   private createInteractLabel(x: number, y: number): Phaser.GameObjects.Container {
+    // A small key cap floating over the NPC: soft glow, rounded cap, crisp "E".
+    const halo = this.add.image(0, 0, FX.glow).setDisplaySize(26, 18).setTint(0xff7a2b).setAlpha(0.35)
+      .setBlendMode(Phaser.BlendModes.ADD);
     const bg = this.add.graphics();
-    bg.fillStyle(0x0b0604, 0.94);
-    bg.fillRoundedRect(-9, -5, 18, 10, 2);
-    bg.lineStyle(1, 0xff7a2b, 1);
-    bg.strokeRoundedRect(-9, -5, 18, 10, 2);
+    bg.fillStyle(0x000000, 0.35);
+    bg.fillRoundedRect(-7, -5.2, 14, 12, 3.2);
+    bg.fillStyle(0x1c120d, 0.96);
+    bg.fillRoundedRect(-7, -6, 14, 12, 3.2);
+    bg.lineStyle(0.8, 0xff8a3d, 1);
+    bg.strokeRoundedRect(-7, -6, 14, 12, 3.2);
+    bg.fillStyle(0xffb27a, 0.18);
+    bg.fillRoundedRect(-6, -5.2, 12, 4, 2.4);
+    const glyph = this.add.text(0, -0.2, 'E', {
+      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '8px', color: '#ffb27a',
+    }).setOrigin(0.5);
 
-    // Draw the key glyph as geometry so it stays unambiguous under pixel scaling.
-    const glyph = this.add.graphics();
-    glyph.fillStyle(0xff7a2b, 1);
-    glyph.fillRect(-3, -4, 2, 8);
-    glyph.fillRect(-1, -4, 5, 2);
-    glyph.fillRect(-1, -1, 4, 2);
-    glyph.fillRect(-1, 2, 5, 2);
-
-    const marker = this.add.container(0, -40, [bg, glyph]);
+    const marker = this.add.container(0, -44, [halo, bg, glyph]);
     const container = this.add.container(x, y, [marker]);
     container.setDepth(10).setVisible(false);
 
-    this.tweens.add({ targets: marker, y: -43, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: marker, y: -47, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     return container;
   }
@@ -911,7 +936,7 @@ export class WorldScene extends Phaser.Scene {
     this.time.delayedCall(1380, () => {
       if (!this.introActive) return;
       this.cameras.main.startFollow(this.player, true, 1, 1);
-      this.cameras.main.setZoom(2);
+      this.cameras.main.setZoom(WORLD_ZOOM);
       this.player.unfreeze();
       this.introActive = false;
       this.worldFrozen = false;
@@ -929,7 +954,7 @@ export class WorldScene extends Phaser.Scene {
     ease: string,
   ): void {
     this.cameras.main.pan(x, y, duration, ease, true);
-    this.cameras.main.zoomTo(zoom, duration, ease, true);
+    this.cameras.main.zoomTo(canvasZoom(zoom), duration, ease, true);
   }
 
   private introZoom(baseZoom: number): number {
@@ -945,8 +970,7 @@ export class WorldScene extends Phaser.Scene {
     // zero scroll factor can still be culled during the long flight to the
     // gate; the UI camera stays at the origin for the entire sequence.
     const ui = this.scene.get('UIScene') as Phaser.Scene;
-    const width = ui.scale.width;
-    const height = ui.scale.height;
+    const { width, height } = logicalSize(ui);
     const barHeight = Phaser.Math.Clamp(Math.round(height * 0.075), 26, 42);
     const bars = ui.add.graphics().setDepth(90).setAlpha(0);
     bars.fillStyle(0x050908, 0.96);
@@ -1086,15 +1110,16 @@ export class WorldScene extends Phaser.Scene {
       });
 
       // Two orbiting signal pips make the object read as an active audio source.
-      const orbit = this.add.graphics().setDepth(10).setPosition(pos.x, pos.y);
-      orbit.fillStyle(0xff7a2b, 0.9); orbit.fillRect(-16, -1, 2, 2);
-      orbit.fillStyle(0xe8b465, 0.85); orbit.fillRect(14, -1, 2, 2);
+      const orbit = this.add.container(pos.x, pos.y).setDepth(10);
+      orbit.add([
+        this.add.image(-15, 0, FX.mote).setDisplaySize(3.4, 3.4).setTint(0xff9a4a).setBlendMode(Phaser.BlendModes.ADD),
+        this.add.image(15, 0, FX.mote).setDisplaySize(3, 3).setTint(0xffd890).setBlendMode(Phaser.BlendModes.ADD),
+      ]);
       this.tweens.add({ targets: orbit, angle: 360, duration: 2600, repeat: -1, ease: 'Linear' });
 
       // Vinyl token — high depth so it remains visible above tall grass.
-      // 4x texture resolution, same world size and pickup footprint.
-      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment-mr').setDepth(10).setScale(0.27);
-      frag.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      // 192 px texture at ~26 world units: same world size and pickup footprint.
+      const frag = this.physics.add.sprite(pos.x, pos.y, 'item-fragment-mr').setDepth(10).setScale(0.135);
       this.tweens.add({ targets: frag, y: pos.y - 5, duration: 1250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
       // Store glow refs on the sprite for cleanup
@@ -1287,7 +1312,7 @@ export class WorldScene extends Phaser.Scene {
 
     // Keep the pickup wording aligned with the HUD's music-themed XP name.
     const pickup = this.add.text(cx, cy - 10, '+10 RESONANCE', {
-      fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#ff7a2b',
+      fontFamily: 'Syne', fontSize: '5px', color: '#ff7a2b',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(12).setOrigin(0.5).setScale(0.42).setVisible(false);
     EventBus.emit(EVENTS.ITEM_COLLECTED, 'sound-fragment');
@@ -1427,13 +1452,13 @@ export class WorldScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: this.cameras.main,
-      zoom: 2.4,
+      zoom: canvasZoom(2.4),
       duration: impactMs,
       ease: 'Sine.easeIn',
       onComplete: () => {
         this.boss?.setRevealAlpha(1);
         this.cameras.main.shake(360, 0.012);
-        this.tweens.add({ targets: this.cameras.main, zoom: 2.0, duration: 400, ease: 'Sine.easeOut' });
+        this.tweens.add({ targets: this.cameras.main, zoom: canvasZoom(2), duration: 400, ease: 'Sine.easeOut' });
       },
     });
 
@@ -1535,22 +1560,18 @@ export class WorldScene extends Phaser.Scene {
     const cx = this.PENTAGRAM_X;
     const cy = this.PENTAGRAM_Y;
     const worldWidth = MAP_COLS * TILE;
-    const caveHeight = (MAP_ROWS - CAVE_START_ROW) * TILE;
 
     this.cameras.main.flash(280, 215, 255, 116, false);
     this.cameras.main.shake(760, 0.006);
     this.tweens.add({
       targets: this.cameras.main,
-      zoom: 1.62,
+      zoom: canvasZoom(1.62),
       duration: 900,
       ease: 'Cubic.easeOut',
     });
 
-    const backplate = this.add.graphics().setDepth(-9).setAlpha(0);
-    backplate.fillGradientStyle(0x4c3022, 0x4c3022, 0x301d14, 0x301d14, 1, 1, 1, 1);
-    backplate.fillRect(0, CAVE_START_ROW * TILE, worldWidth, caveHeight);
-    this.purifiedCaveEffects.push(backplate);
-    this.tweens.add({ targets: backplate, alpha: 0.96, duration: 1900, ease: 'Sine.easeInOut' });
+    // The living frequency washes outward from the Core through the terrain itself.
+    this.terrain?.purify(cx, cy, 2400);
 
     // A broad wavefront visibly leaves the Core and travels back through the dungeon.
     const sweep = this.add.graphics().setDepth(12).setPosition(0, cy + 28);
@@ -1613,11 +1634,12 @@ export class WorldScene extends Phaser.Scene {
     this.caveCorruptionObjects.forEach((object, index) => {
       if (!object.active) return;
       this.tweens.killTweensOf(object);
+      const scaled = object as Phaser.GameObjects.GameObject & { scaleX?: number; scaleY?: number };
       this.tweens.add({
         targets: object,
         alpha: 0,
-        scaleX: 0.72,
-        scaleY: 0.72,
+        scaleX: (scaled.scaleX ?? 1) * 0.72,
+        scaleY: (scaled.scaleY ?? 1) * 0.72,
         duration: 520,
         delay: Math.min(1450, index * 14),
         ease: 'Cubic.easeIn',
@@ -1628,11 +1650,12 @@ export class WorldScene extends Phaser.Scene {
 
     this.runeGraphics.forEach((object, index) => {
       this.tweens.killTweensOf(object);
+      const scaled = object as Phaser.GameObjects.GameObject & { scaleX?: number; scaleY?: number };
       this.tweens.add({
         targets: object,
         alpha: 0,
-        scaleX: 1.7,
-        scaleY: 1.7,
+        scaleX: (scaled.scaleX ?? 1) * 1.7,
+        scaleY: (scaled.scaleY ?? 1) * 1.7,
         duration: 760,
         delay: index * 90,
         ease: 'Cubic.easeOut',
@@ -1648,7 +1671,7 @@ export class WorldScene extends Phaser.Scene {
       this.updateZonePresentation(true);
     });
     this.time.delayedCall(2650, () => {
-      this.tweens.add({ targets: this.cameras.main, zoom: 2, duration: 620, ease: 'Cubic.easeInOut' });
+      this.tweens.add({ targets: this.cameras.main, zoom: canvasZoom(2), duration: 620, ease: 'Cubic.easeInOut' });
       onComplete();
     });
   }
@@ -1666,10 +1689,7 @@ export class WorldScene extends Phaser.Scene {
     this.caveCorruptionObjects = [];
     this.runeGraphics = [];
 
-    const backplate = this.add.graphics().setDepth(-9);
-    backplate.fillGradientStyle(0x4c3022, 0x4c3022, 0x301d14, 0x301d14, 1, 1, 1, 1);
-    backplate.fillRect(0, CAVE_START_ROW * TILE, MAP_COLS * TILE, (MAP_ROWS - CAVE_START_ROW) * TILE);
-    this.purifiedCaveEffects.push(backplate);
+    this.terrain?.setPurified(this.PENTAGRAM_X, this.PENTAGRAM_Y);
     this.createPurifiedCaveAtmosphere(true);
     this.currentZoneIndex = -1;
     this.updateZonePresentation(true);
@@ -1853,17 +1873,17 @@ export class WorldScene extends Phaser.Scene {
     this.lostTrackItem = this.add.sprite(cx, cy - 6, 'item-lost-track')
       .setDepth(8)
       .setAlpha(cinematic ? 0 : 1)
-      .setScale(cinematic ? 0 : 0.78)
+      .setScale(cinematic ? 0 : 0.78 * LOST_TRACK_SCALE)
       .setAngle(cinematic ? -110 : 0);
     if (cinematic) {
       this.cameras.main.flash(460, 215, 255, 74, false);
       this.cameras.main.shake(520, 0.0045);
-      this.tweens.add({ targets: this.cameras.main, zoom: 2.34, duration: 520, yoyo: true, ease: 'Cubic.easeOut' });
+      this.tweens.add({ targets: this.cameras.main, zoom: canvasZoom(2.34), duration: 520, yoyo: true, ease: 'Cubic.easeOut' });
       this.tweens.add({
         targets: this.lostTrackItem,
         alpha: 1,
-        scaleX: 0.9,
-        scaleY: 0.9,
+        scaleX: 0.9 * LOST_TRACK_SCALE,
+        scaleY: 0.9 * LOST_TRACK_SCALE,
         angle: 0,
         duration: 1250,
         ease: 'Back.easeOut',
@@ -1944,15 +1964,15 @@ export class WorldScene extends Phaser.Scene {
 
     this.cameras.main.flash(520, 215, 255, 74, false);
     this.cameras.main.shake(720, 0.006);
-    this.tweens.add({ targets: this.cameras.main, zoom: 2.46, duration: 460, yoyo: true, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: this.cameras.main, zoom: canvasZoom(2.46), duration: 460, yoyo: true, ease: 'Cubic.easeOut' });
 
     // The record is physically reclaimed by the player instead of merely fading away.
     this.tweens.add({
       targets: item,
       x: this.player.x,
       y: this.player.y - 20,
-      scaleX: 1.18,
-      scaleY: 1.18,
+      scaleX: 1.18 * LOST_TRACK_SCALE,
+      scaleY: 1.18 * LOST_TRACK_SCALE,
       angle: item.angle + 720,
       duration: 820,
       ease: 'Cubic.easeInOut',
@@ -2170,7 +2190,7 @@ export class WorldScene extends Phaser.Scene {
   private onRespawn = (): void => {
     this.scene.resume();
     this.cameras.main.resetFX();
-    this.cameras.main.setZoom(2);
+    this.cameras.main.setZoom(WORLD_ZOOM);
     this.player.setPosition(this.spawnX, this.spawnY);
     this.player.unfreeze();
 
@@ -2203,8 +2223,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createDialogBox(): void {
-    const CAM_ZOOM = 2;
-    const viewW = this.scale.width / CAM_ZOOM;
+    const viewW = this.scale.width / WORLD_ZOOM;
     const boxW = viewW - 8;
     const boxH = 72;
 
@@ -2221,7 +2240,7 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 8; y < boxH; y += 8) bg.lineBetween(62, y, boxW - 8, y);
 
     const accent = this.add.graphics();
-    const portrait = this.add.image(32, 64, 'npc-elder-muse-v4').setVisible(false);
+    const portrait = this.add.image(32, 64, 'portrait-professor').setVisible(false);
     const systemMark = this.add.text(33, 36, '◎', {
       fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#ff7a2b',
     }).setOrigin(0.5).setAlpha(0.48);
@@ -2243,7 +2262,7 @@ export class WorldScene extends Phaser.Scene {
     }).setResolution(2);
 
     const arrow = this.add.text(boxW - 14, boxH - 14, '▼', {
-      fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#ff7a2b',
+      fontFamily: 'Syne', fontSize: '8px', color: '#ff7a2b',
     });
     this.tweens.add({ targets: arrow, alpha: 0, duration: 500, yoyo: true, repeat: -1 });
     arrow.setVisible(false);
@@ -2313,7 +2332,6 @@ export class WorldScene extends Phaser.Scene {
         .setScale(visual.portraitScale)
         .setVisible(true);
       systemMark.setVisible(false);
-      portrait.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     } else if (isGatekeeper) {
       const portraitTexture = this.textures.exists('boss-gatekeeper-battle-phase1')
         ? 'boss-gatekeeper-battle-phase1'
@@ -2659,11 +2677,11 @@ export class WorldScene extends Phaser.Scene {
       });
 
       const hpText = this.add.text(0, 0, `+${restoredAmount} HP`, {
-        fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#ff7a2b',
+        fontFamily: 'Syne', fontSize: '6px', color: '#ff7a2b',
         stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
       const resonanceText = this.add.text(0, 9, 'PARTIAL RESONANCE', {
-        fontFamily: '"Press Start 2P"', fontSize: '4px', color: accentCss,
+        fontFamily: 'Syne', fontSize: '4px', color: accentCss,
         stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
       const feedback = this.add.container(pX, pY - 28, [hpText, resonanceText])

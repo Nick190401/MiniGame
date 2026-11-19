@@ -2,6 +2,8 @@ import { useEffect, useState, type RefObject } from 'react';
 import { EventBus, EVENTS, type LoadingUiPayload } from '../game/EventBus';
 import { useCanvasBounds } from './useCanvasBounds';
 import { BrandLogo } from './BrandLogo';
+import { GameLogo } from './GameLogo';
+import { useKeyArt } from './useKeyArt';
 
 interface LoadingOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
@@ -17,6 +19,7 @@ const initialLoading: LoadingUiPayload = {
 export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
   const bounds = useCanvasBounds(canvasParentRef);
   const [loading, setLoading] = useState(initialLoading);
+  const keyArt = useKeyArt();
 
   useEffect(() => {
     const onLoading = (payload: LoadingUiPayload) => setLoading(payload);
@@ -30,8 +33,15 @@ export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
   const progress = Math.max(0, Math.min(100, loading.progress));
 
   return (
-    <section className="loading-overlay" style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }}>
+    <section
+      className="loading-overlay"
+      style={{
+        left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height,
+        backgroundImage: keyArt ? `url(${keyArt})` : undefined,
+      }}
+    >
       <div className="brand-stamp"><BrandLogo /></div>
+      <GameLogo compact />
       <div className="loading-overlay__prompt">
         <span className="loading-overlay__ring" aria-hidden="true" />
         <span className="loading-overlay__label">{loading.label}</span>

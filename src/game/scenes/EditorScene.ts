@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { WorldArtFactory } from '../utils/WorldArtFactory';
 import {
   BROOK_START_ROW,
   CAVE_START_ROW,
@@ -8,18 +7,37 @@ import {
   GATE_START_ROW,
   GROVE_START_ROW,
   JUNCTION_START_ROW,
+  isValidGrid,
   MapBuilder,
   MAP_COLS,
   MAP_ROWS,
   SIGNAL_START_ROW,
+  TERRAIN_REGIONS,
 } from '../utils/MapBuilder';
 import { EventBus, EVENTS } from '../EventBus';
-import { TILE_TYPE_MAP, TILE_TEXTURE } from '../data/tileTypes';
+import { TILE_TYPE_MAP } from '../data/tileTypes';
+import { TILE_ID as T } from '../data/tileIds';
+import { OVERWORLD_LANDMARKS } from '../maps/PokemonOverworld';
+import { createTerrainLayer, ensureTerrainTextures, type TerrainLayer } from '../world/terrain/TerrainLayer';
+import { placeLandmark } from '../world/WorldDressing';
+import { TEXEL } from '../render/RenderScale';
+import { hash2 } from '../art/paint';
+import { addWorldImage, standingDepth, WORLD_TEXTURE_SCALE } from '../art/worldTexture';
+import { createFxTextures } from '../art/fx';
+import { createVegetationTextures, TREE_SIZE, VEGETATION } from '../art/vegetation';
+import { createStructureTextures, STRUCTURES } from '../art/structures';
+import { CAVE_ART, createCaveTextures } from '../art/caveArt';
+import { createLandmarkTextures } from '../art/landmarkArt';
+import { buildingTileTexture, isBuildingTile, isDoorTile } from '../art/buildingTiles';
 
 const TILE = 16;
 const WORLD_W = MAP_COLS * TILE;
 const WORLD_H = MAP_ROWS * TILE;
 const MAX_UNDO = 50;
+/** Width of the gate masonry texture in world units (see structures.ts). */
+const GATE_WALL_WIDTH = 64;
+/** A cell's art also depends on its four neighbours (building edges, tree trunks). */
+const NEIGHBOURHOOD: ReadonlyArray<[number, number]> = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
 
 export type EditorTool = 'paint' | 'erase' | 'fill' | 'eyedropper' | 'select' | 'paste';
 
@@ -41,7 +59,12 @@ export const ZONE_DEFS = [
 
 export class EditorScene extends Phaser.Scene {
   private grid: number[][] = [];
-  private tileImages: Phaser.GameObjects.Image[] = [];
+  private terrain!: TerrainLayer;
+  /** In-game art drawn for each cell, indexed row * MAP_COLS + col. */
+  private cellArt: Phaser.GameObjects.Image[][] = [];
+  private dirtyCells = new Set<number>();
+  private terrainDirty = false;
+  private zoneMasks: Phaser.GameObjects.Rectangle[] = [];
 
   // Tool state (public so MapEditor can sync on EDITOR_READY)
   activeTool: EditorTool = 'paint';
@@ -93,7 +116,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   create(): void {
-    WorldArtFactory.createTileTextures(this);
+    // The editor shows the map with the game's own terrain shader and artwork.
+    ensureTerrainTextures(this);
+    createFxTextures(this);
+    createVegetationTextures(this);
+    createStructureTextures(this);
+    createCaveTextures(this);
+    createLandmarkTextures(this);
     this.grid = MapBuilder.buildGridOnly();
 
     // No setBounds — allows centerOn to work even when world < canvas
@@ -108,16 +137,15 @@ export class EditorScene extends Phaser.Scene {
     doInitialFit();
     this.scale.on('resize', doInitialFit);
 
-    for (let row = 0; row < MAP_ROWS; row++) {
-      for (let col = 0; col < MAP_COLS; col++) {
-        const img = this.add.image(
-          col * TILE + TILE / 2, row * TILE + TILE / 2,
-          this.textureKeyFor(this.grid[row][col])
-        );
-        img.setOrigin(0.5, 0.5);
-        this.tileImages.push(img);
-      }
-    }
+    this.terrain = createTerrainLayer(this, this.grid, TERRAIN_REGIONS, TILE);
+    OVERWORLD_LANDMARKS.forEach((landmark) => placeLandmark(this, landmark, TILE));
+    for (let row = 0; row < MAP_ROWS; row++)
+      for (let col = 0; col < MAP_COLS; col++)
+        this.cellArt.push(this.createCellArt(col, row));
+    // A hidden zone is blanked out with the editor background.
+    this.zoneMasks = ZONE_DEFS.map(z => this.add.rectangle(
+      0, z.rowStart * TILE, WORLD_W, (z.rowEnd - z.rowStart + 1) * TILE, 0x111118,
+    ).setOrigin(0, 0).setDepth(8).setVisible(false));
 
     this.passGraphics      = this.add.graphics().setDepth(9);
     this.gridGraphics      = this.add.graphics().setDepth(10);
@@ -135,6 +163,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   update(): void {
+    this.flushDirty();
     const cam = this.cameras.main;
     if (cam.scrollX !== this._lastScrollX || cam.scrollY !== this._lastScrollY || cam.zoom !== this._lastZoom) {
       this._lastScrollX = cam.scrollX;
@@ -329,12 +358,95 @@ export class EditorScene extends Phaser.Scene {
     return [col, row];
   }
 
-  private textureKeyFor(id: number): string {
-    return TILE_TEXTURE[id] ?? 'tile-grass';
+  /** Queues a cell (and the neighbours whose art depends on it) for redrawing. */
+  private refreshTile(col: number, row: number): void {
+    this.terrainDirty = true;
+    for (const [dc, dr] of NEIGHBOURHOOD) {
+      const c = col + dc, r = row + dr;
+      if (c >= 0 && c < MAP_COLS && r >= 0 && r < MAP_ROWS) this.dirtyCells.add(r * MAP_COLS + c);
+    }
   }
 
-  private refreshTile(col: number, row: number): void {
-    this.tileImages[row * MAP_COLS + col]?.setTexture(this.textureKeyFor(this.grid[row][col]));
+  /** Redraws queued cells once per frame, however many edits a stroke made. */
+  private flushDirty(): void {
+    this.dirtyCells.forEach((i) => {
+      this.cellArt[i].forEach(o => o.destroy());
+      this.cellArt[i] = this.createCellArt(i % MAP_COLS, Math.floor(i / MAP_COLS));
+    });
+    this.dirtyCells.clear();
+    if (this.terrainDirty) {
+      this.terrainDirty = false;
+      this.terrain.redraw(this.grid);
+    }
+  }
+
+  /**
+   * The game's artwork for one cell. Trees and the portal are drawn smaller
+   * than in the game so every tile stays visible and editable.
+   */
+  private createCellArt(col: number, row: number): Phaser.GameObjects.Image[] {
+    const t = this.grid[row][col];
+    const x = col * TILE + TILE / 2;
+    const bottom = (row + 1) * TILE;
+    const seed = hash2(row, col, 7);
+    const art = (key: string, y: number, originY: number, depth: number) =>
+      addWorldImage(this, x, y, key).setOrigin(0.5, originY).setDepth(depth).setFlipX(seed > 0.5);
+
+    switch (t) {
+      case T.TALL_GRASS: {
+        const variants = VEGETATION.variants.tallGrass;
+        const v = Math.floor(seed * variants);
+        return [
+          art(VEGETATION.tallGrassBack(v), bottom - 2, 1, 1),
+          art(VEGETATION.tallGrassFront((v + 1) % variants), bottom, 1, standingDepth(bottom)),
+        ];
+      }
+      case T.FLOWER: return [art(VEGETATION.flowers(Math.floor(seed * VEGETATION.variants.flowers)), bottom - 1, 1, 3)];
+      case T.SIGN: return [art(STRUCTURES.sign, bottom - 2, 1, standingDepth(bottom))];
+      case T.TREE: {
+        const conifer = seed < 0.25;
+        const size = conifer ? TREE_SIZE.conifer : TREE_SIZE.broadleaf;
+        const key = conifer
+          ? VEGETATION.conifer(Math.floor(seed * 8) % VEGETATION.variants.conifer)
+          : VEGETATION.broadleaf(Math.floor(seed * 89) % VEGETATION.variants.broadleaf);
+        // Like the game: a trunk tile below carries the tree's foot.
+        const foot = (this.grid[row + 1]?.[col] === T.TRUNK ? bottom + TILE : bottom) - 1;
+        return [art(key, foot, (size.h - 2) / size.h, standingDepth(foot)).setScale(WORLD_TEXTURE_SCALE * 0.42)];
+      }
+      case T.CRYSTAL: return [art(CAVE_ART.crystal, bottom - 2, 0.92, standingDepth(bottom))];
+      case T.PILLAR: return [art(CAVE_ART.pillar, bottom - 2, 0.94, standingDepth(bottom))];
+      case T.WALL_RUNE: return [art(CAVE_ART.rune, row * TILE + TILE / 2 + 2, 0.5, 1.2)];
+      case T.SKULL: return [art(CAVE_ART.bones, bottom - 4, 0.8, 1)];
+      case T.STALACTITE: return [art(CAVE_ART.stalagmite, bottom - 2, 0.94, standingDepth(bottom))];
+      case T.BOULDER: return [art(CAVE_ART.boulder, bottom - 2, 0.86, standingDepth(bottom))];
+      case T.PORTAL: return [
+        art(CAVE_ART.portalFrame, bottom, 1, standingDepth(bottom)).setScale(WORLD_TEXTURE_SCALE * 0.5),
+        art(CAVE_ART.portalEnergy, bottom - 26, 0.5, standingDepth(bottom) + 0.0001)
+          .setScale(WORLD_TEXTURE_SCALE * 0.5).setAlpha(0.85).setBlendMode(Phaser.BlendModes.ADD),
+      ];
+      case T.GATE: return [
+        addWorldImage(this, x, row * TILE + TILE / 2, col % 2 ? STRUCTURES.gatePanelRight : STRUCTURES.gatePanelLeft)
+          .setDisplaySize(TILE, TILE).setDepth(standingDepth(bottom)),
+      ];
+      case T.WALL: {
+        if (row !== GATE_START_ROW) return [];
+        // The gate row's masonry, cut to this cell.
+        const offset = (col * TILE) % GATE_WALL_WIDTH;
+        return [
+          addWorldImage(this, col * TILE - offset, GATE_START_ROW * TILE - 10, STRUCTURES.gateWall)
+            .setOrigin(0, 0).setCrop(offset * TEXEL, 0, TILE * TEXEL, 54 * TEXEL)
+            .setDepth(standingDepth(GATE_START_ROW * TILE + 32) - 0.001),
+        ];
+      }
+    }
+    if (isBuildingTile(t)) {
+      const sortY = isDoorTile(t) ? row * TILE + 2 : bottom;
+      return [
+        addWorldImage(this, col * TILE, row * TILE, buildingTileTexture(this, this.grid, row, col)!)
+          .setOrigin(0, 0).setDepth(standingDepth(sortY)),
+      ];
+    }
+    return [];
   }
 
   private paintBrush(col: number, row: number): void {
@@ -523,9 +635,8 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private refreshAll(): void {
-    for (let r = 0; r < MAP_ROWS; r++)
-      for (let c = 0; c < MAP_COLS; c++)
-        this.refreshTile(c, r);
+    for (let i = 0; i < MAP_ROWS * MAP_COLS; i++) this.dirtyCells.add(i);
+    this.terrainDirty = true;
     this.drawPassability();
   }
 
@@ -549,10 +660,7 @@ export class EditorScene extends Phaser.Scene {
 
   setZoneVisible(zoneIndex: number, visible: boolean): void {
     this.zoneVisible[zoneIndex] = visible;
-    const { rowStart, rowEnd } = ZONE_DEFS[zoneIndex];
-    for (let r = rowStart; r <= rowEnd; r++)
-      for (let c = 0; c < MAP_COLS; c++)
-        this.tileImages[r * MAP_COLS + c]?.setVisible(visible);
+    this.zoneMasks[zoneIndex]?.setVisible(!visible);
   }
 
   clearSelection(): void {
@@ -618,7 +726,9 @@ export class EditorScene extends Phaser.Scene {
 
   getGrid(): number[][] { return this.grid.map(r => [...r]); }
 
-  loadGrid(grid: number[][]): void {
+  /** Replaces the map with an imported one; throws (leaving the map untouched) if it is malformed. */
+  loadGrid(grid: unknown): void {
+    if (!isValidGrid(grid)) throw new Error(`A map must be ${MAP_ROWS} rows of ${MAP_COLS} known tile ids.`);
     this.snapshot();
     this.grid = grid.map(r => [...r]);
     this.refreshAll();

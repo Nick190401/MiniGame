@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { useLogicalCamera } from '../render/RenderScale';
 import { EventBus, EVENTS } from '../EventBus';
 
 /**
@@ -12,6 +13,7 @@ export class UIScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
+    useLogicalCamera(this);
     EventBus.on(EVENTS.LEVEL_UP, this.onLevelUp, this);
   }
 

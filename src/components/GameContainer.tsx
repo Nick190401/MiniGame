@@ -16,6 +16,7 @@ import { MAX_LEVEL, XP_THRESHOLDS, getMaxHpForLevel } from '../game/systems/XPSy
 import type { WorldScene } from '../game/scenes/WorldScene';
 import { EventBus, EVENTS } from '../game/EventBus';
 import { AudioManager } from '../game/audio/AudioManager';
+import { RENDER_SCALE } from '../game/render/RenderScale';
 
 interface GameContainerProps {
   visible: boolean;
@@ -30,7 +31,8 @@ const PORTRAIT_HEIGHT_RANGE = { min: 620, max: 1180 } as const;
 // Quantised so the URL bar sliding in and out does not thrash setGameSize.
 const PORTRAIT_HEIGHT_STEP = 16;
 
-function getResponsiveGameSize() {
+/** Logical board size; the canvas renders it at RENDER_SCALE density. */
+function getResponsiveLogicalSize() {
   if (!window.matchMedia('(max-width: 760px) and (orientation: portrait)').matches) {
     return DESKTOP_GAME_SIZE;
   }
@@ -41,6 +43,14 @@ function getResponsiveGameSize() {
   return {
     width: PORTRAIT_GAME_WIDTH,
     height: Math.min(PORTRAIT_HEIGHT_RANGE.max, Math.max(PORTRAIT_HEIGHT_RANGE.min, stepped)),
+  };
+}
+
+function getResponsiveGameSize() {
+  const logical = getResponsiveLogicalSize();
+  return {
+    width: Math.round(logical.width * RENDER_SCALE),
+    height: Math.round(logical.height * RENDER_SCALE),
   };
 }
 

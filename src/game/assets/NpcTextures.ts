@@ -1,40 +1,24 @@
+import { characterFrameKey, WALK_FRAMES } from './PlayerTextures';
+
 export type NpcId = 'professor' | 'guard' | 'musician';
 export type NpcDirection = 'down' | 'up' | 'left' | 'right';
 
-const createDirectionFrames = (
-  npc: NpcId,
-  direction: NpcDirection,
-): readonly string[] => Array.from(
-  { length: 4 },
-  (_, frame) => `npc-${npc}-${direction}-${frame}`,
-);
+const framesFor = (npc: NpcId, direction: NpcDirection): readonly string[] =>
+  Array.from({ length: WALK_FRAMES + 1 }, (_, frame) => characterFrameKey(npc, direction, frame));
 
+const directions = (npc: NpcId): Record<NpcDirection, readonly string[]> => ({
+  down: framesFor(npc, 'down'),
+  up: framesFor(npc, 'up'),
+  left: framesFor(npc, 'left'),
+  right: framesFor(npc, 'right'),
+});
+
+/** Index 0 is the standing pose, 1..WALK_FRAMES the walk cycle. Painted at load time. */
 export const NPC_TEXTURES: Record<NpcId, Record<NpcDirection, readonly string[]>> = {
-  professor: {
-    down: createDirectionFrames('professor', 'down'),
-    up: createDirectionFrames('professor', 'up'),
-    left: createDirectionFrames('professor', 'left'),
-    right: createDirectionFrames('professor', 'right'),
-  },
-  guard: {
-    down: createDirectionFrames('guard', 'down'),
-    up: createDirectionFrames('guard', 'up'),
-    left: createDirectionFrames('guard', 'left'),
-    right: createDirectionFrames('guard', 'right'),
-  },
-  musician: {
-    down: createDirectionFrames('musician', 'down'),
-    up: createDirectionFrames('musician', 'up'),
-    left: createDirectionFrames('musician', 'left'),
-    right: createDirectionFrames('musician', 'right'),
-  },
+  professor: directions('professor'),
+  guard: directions('guard'),
+  musician: directions('musician'),
 };
 
-export const NPC_TEXTURE_ASSETS = (Object.entries(NPC_TEXTURES) as Array<
-  [NpcId, Record<NpcDirection, readonly string[]>]
->).flatMap(([npc, directions]) => (
-  Object.values(directions).flat().map(key => ({
-    key,
-    url: `assets/npc/overworld/${npc}-v4/${key}.png`,
-  }))
-));
+/** NPC frames are generated, so the build ships no frame images. */
+export const NPC_TEXTURE_ASSETS: ReadonlyArray<{ key: string; url: string }> = [];

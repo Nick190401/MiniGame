@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { EventBus, EVENTS, type DialogPayload } from '../game/EventBus';
+import { renderCharacterPortrait, type CharacterId } from '../game/art/characters';
+import { paintBattleTexture } from '../game/art/battleArt';
 
 interface DialogueOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
@@ -12,16 +14,30 @@ interface OverlayBounds {
   height: number;
 }
 
+const GENERATED = 'generated:';
+
 const PORTRAITS: Partial<Record<NonNullable<DialogPayload['portrait']>, string>> = {
-  elder: '/assets/npc-elder-muse-v4.webp',
-  guard: '/assets/npc-junction-guard-v4.png',
-  musician: '/assets/npc-wandering-musician-v4.png',
-  gatekeeper: '/assets/boss-gatekeeper-phase1-v2.webp',
+  elder: `${GENERATED}professor`,
+  guard: `${GENERATED}guard`,
+  musician: `${GENERATED}musician`,
+  gatekeeper: `${GENERATED}gatekeeper`,
 };
 
 // Remove transparent margins while preserving the complete character and its proportions.
 const portraitCache = new Map<string, Promise<string>>();
 function preparePortrait(url: string): Promise<string> {
+  if (url.startsWith(GENERATED) && !portraitCache.has(url)) {
+    // Painted from the same rig as the overworld sprites.
+    const id = url.slice(GENERATED.length);
+    if (id === 'gatekeeper') {
+      // The boss render has wide margins; the bitmap path below trims them.
+      const canvas = paintBattleTexture('boss-gatekeeper-battle-phase1');
+      if (canvas) portraitCache.set(url, preparePortrait(canvas.toDataURL('image/png')));
+    } else {
+      const canvas = renderCharacterPortrait(id as CharacterId, { width: 256, height: 308, crop: 'bust', yaw: 0.2 });
+      portraitCache.set(url, Promise.resolve(canvas.toDataURL('image/png')));
+    }
+  }
   if (!portraitCache.has(url)) portraitCache.set(url, (async () => {
     const image = new Image();
     image.src = url;
@@ -140,7 +156,7 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
         {portraitUrl ? (
           <img
             className={`dialog-overlay__portrait-image is-${dialog.portrait}`}
-            src={portraits[portraitUrl] ?? portraitUrl}
+            src={portraits[portraitUrl] ?? (portraitUrl.startsWith(GENERATED) ? undefined : portraitUrl)}
             alt=""
           />
         ) : (

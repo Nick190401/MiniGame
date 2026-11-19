@@ -114,13 +114,23 @@ export function MapEditor() {
     if (!canvasParentRef.current || gameRef.current) return;
     const parent = canvasParentRef.current;
 
+    // Rendered at device resolution and shown at CSS size, so the painted
+    // terrain stays crisp on high-density screens.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const deviceSize = () => ({
+      width: Math.max(1, Math.round(parent.clientWidth * dpr)),
+      height: Math.max(1, Math.round(parent.clientHeight * dpr)),
+    });
     gameRef.current = new Phaser.Game({
+      type: Phaser.WEBGL,
       backgroundColor: '#111118',
-      pixelArt: true,
+      antialias: true,
       parent,
       scene: [EditorScene],
       scale: {
-        mode: Phaser.Scale.RESIZE,
+        mode: Phaser.Scale.NONE,
+        ...deviceSize(),
+        zoom: 1 / dpr,
         autoCenter: Phaser.Scale.NO_CENTER,
       },
       input: { mouse: { preventDefaultWheel: false } },
@@ -131,6 +141,12 @@ export function MapEditor() {
       canvasOffsetRef.current = { x: r.left, y: r.top };
     };
     updateOffset();
+    const resizeObserver = new ResizeObserver(() => {
+      const { width, height } = deviceSize();
+      gameRef.current?.scale.resize(width, height);
+      updateOffset();
+    });
+    resizeObserver.observe(parent);
 
     // ── EventBus listeners ─────────────────────────────────────────────
     const onReady = (scene: EditorScene) => {
@@ -189,6 +205,7 @@ export function MapEditor() {
       EventBus.off(EVENTS.EDITOR_BRUSH_SIZE, onBrushSize);
       EventBus.off(EVENTS.EDITOR_CLIPBOARD, onClipboard);
       window.removeEventListener('resize', updateOffset);
+      resizeObserver.disconnect();
       gameRef.current?.destroy(true);
       gameRef.current = null;
       sceneRef.current = null;
@@ -438,7 +455,7 @@ export function MapEditor() {
               width={MINIMAP_W}
               height={MINIMAP_H}
               onClick={handleMinimapClick}
-              style={{ display: 'block', cursor: 'crosshair', imageRendering: 'pixelated' }}
+              style={{ display: 'block', cursor: 'crosshair' }}
             />
             <div style={{ fontSize: 6, color: '#444466', textAlign: 'center', padding: '2px 0 0' }}>MINIMAP · click to jump</div>
           </div>
@@ -510,7 +527,7 @@ function Sep() {
 function PaletteEntry({ tile, selected, onClick }: { tile: TileType; selected: boolean; onClick: () => void }) {
   return (
     <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 6px', background: selected ? '#18271d' : 'transparent', border: `1px solid ${selected ? '#6f8429' : 'transparent'}`, cursor: 'pointer', marginBottom: 1 }}>
-      <div style={{ width: 14, height: 14, flexShrink: 0, background: tile.color, border: '1px solid rgba(255,255,255,0.15)', imageRendering: 'pixelated' }} />
+      <div style={{ width: 14, height: 14, flexShrink: 0, background: tile.color, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 3 }} />
       <span style={{ fontSize: 8, color: selected ? '#d7ff4a' : '#aab7ad', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tile.name}</span>
       <span style={{ fontSize: 7, flexShrink: 0, color: tile.passable ? '#44aa44' : '#aa4444' }}>{tile.passable ? '✓' : '✕'}</span>
     </div>

@@ -50,8 +50,4 @@ export const TILE_TYPES: TileType[] = [
 
 export const TILE_TYPE_MAP = new Map<number, TileType>(TILE_TYPES.map(t => [t.id, t]));
 
-export const TILE_TEXTURE: Record<number, string> = Object.fromEntries(
-  TILE_TYPES.map(t => [t.id, t.textureKey])
-);
-
 export const TILE_CATEGORIES = ['Terrain', 'Nature', 'Building', 'Cave', 'Decor', 'Special'] as const;

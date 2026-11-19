@@ -15,7 +15,6 @@ export default defineConfig({
       ...WORLD_IMAGE_ASSETS.map(asset => asset.url),
       ...WORLD_TILESET_ASSETS.map(asset => asset.url),
       '.htaccess',
-      'assets/tilesets/town_rpg_pack/town_rpg_pack/license.txt',
     ],
     optional: [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS].map(asset => asset.url),
   })],

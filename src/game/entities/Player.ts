@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import { MobileInput } from '../input/MobileInput';
-import { PLAYER_TEXTURES, type PlayerDirection } from '../assets/PlayerTextures';
+import { PLAYER_TEXTURES, WALK_FRAMES, type PlayerDirection } from '../assets/PlayerTextures';
+import { CHARACTER_FRAME, CHARACTER_TEXELS } from '../art/characters';
+import { TEXEL } from '../render/RenderScale';
 
 const SPEED = 120;
-// The generated world texture has enough detail for a slightly larger figure.
-// Keep nearest-neighbour sampling so the extra detail stays crisp and pixel-like.
-const WORLD_MODEL_SCALE = 0.06;
-const BODY_WIDTH = 9.45 / WORLD_MODEL_SCALE;
-const BODY_HEIGHT = 5.775 / WORLD_MODEL_SCALE;
+// One full stride (all walk frames) every ~560 ms at walking speed.
+const WALK_FRAME_MS = 70;
+const WORLD_MODEL_SCALE = 1 / TEXEL;
+// Collision footprint in world units, converted to texture space for Arcade.
+const BODY_WIDTH = 9.45 * TEXEL;
+const BODY_HEIGHT = 5.775 * TEXEL;
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -30,10 +33,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.setDepth(5 + y / 10000);
     this.setScale(WORLD_MODEL_SCALE);
-    this.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.setOrigin(CHARACTER_FRAME.footX / CHARACTER_FRAME.w, CHARACTER_FRAME.footY / CHARACTER_FRAME.h);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(BODY_WIDTH, BODY_HEIGHT);
+    // Keep the collision footprint anchored beneath the feet for every pose.
+    body.setOffset(CHARACTER_FRAME.footX * CHARACTER_TEXELS - BODY_WIDTH / 2, CHARACTER_FRAME.footY * CHARACTER_TEXELS - BODY_HEIGHT);
     this.applyVisualFrame('down', 0);
     body.setCollideWorldBounds(true);
 
@@ -70,12 +75,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     body.setVelocity(vx, vy);
     this.moving = vx !== 0 || vy !== 0;
 
-    // 4-frame walk cycle: 0 → 1 → 2 → 3 → 0 (stand → stride L → stand → stride R)
+    // Frame 0 is the standing pose; walking loops through frames 1..WALK_FRAMES.
     if (this.moving) {
+      if (this.currentFrame === 0) this.currentFrame = 1;
       this.frameTimer += delta;
-      if (this.frameTimer > 140) {
+      if (this.frameTimer > WALK_FRAME_MS) {
         this.frameTimer = 0;
-        this.currentFrame = (this.currentFrame + 1) % 4;
+        this.currentFrame = (this.currentFrame % WALK_FRAMES) + 1;
       }
       this.applyVisualFrame(this.lastDirection, this.currentFrame);
     } else {
@@ -119,12 +125,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private applyVisualFrame(direction: PlayerDirection, frame: number): void {
     this.setTexture(PLAYER_TEXTURES[direction][frame]);
-    const centerX = 156.5, baselineY = 291;
-    this.setOrigin(centerX / 313, baselineY / 313);
-
-    // Keep the collision footprint anchored beneath the feet for every pose.
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setOffset(centerX * 2 - BODY_WIDTH / 2, baselineY * 2 - BODY_HEIGHT);
   }
 
   getDirection(): PlayerDirection {

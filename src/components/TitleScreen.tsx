@@ -4,6 +4,8 @@ import { AudioManager } from '../game/audio/AudioManager';
 import { SFX } from '../game/audio/AudioLibrary';
 import { BrandLogo } from './BrandLogo';
 import { COMING_SOON } from '../config';
+import { useKeyArt } from './useKeyArt';
+import { GameLogo } from './GameLogo';
 
 const playUiClick = () => AudioManager.playSfx(SFX.uiClick.key);
 
@@ -12,6 +14,7 @@ export function TitleScreen() {
   const setPlayerName = useGameStore(s => s.setPlayerName);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
+  const keyArt = useKeyArt();
 
   const openModal = useCallback(() => {
     if (COMING_SOON) return;
@@ -50,10 +53,14 @@ export function TitleScreen() {
   }, [showModal, closeModal]);
 
   return (
-    <div className="title-screen">
+    <div
+      className={`title-screen${keyArt ? ' has-art' : ''}`}
+      style={keyArt ? { backgroundImage: `url(${keyArt})` } : undefined}
+    >
       {(COMING_SOON || !showModal) && (
         <>
           <div className="brand-stamp"><BrandLogo /></div>
+          <GameLogo />
           {COMING_SOON ? (
             <div className="title-screen__prompt title-screen__prompt--coming-soon">
               <span className="title-screen__prompt-glow" aria-hidden="true" />

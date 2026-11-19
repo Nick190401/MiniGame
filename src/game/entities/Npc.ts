@@ -1,13 +1,17 @@
 import Phaser from 'phaser';
 import { NPC_TEXTURES, type NpcDirection, type NpcId } from '../assets/NpcTextures';
+import { WALK_FRAMES } from '../assets/PlayerTextures';
+import { CHARACTER_FRAME, CHARACTER_TEXELS } from '../art/characters';
+import { TEXEL } from '../render/RenderScale';
+import { FX } from '../art/fx';
 
 const NPC_SPEED = 24;
-const NPC_SCALE = 0.12;
-const FRAME_SIZE = 313;
-const FOOT_BASELINE = 291;
-// Preserve the old collision footprint while enlarging only the artwork.
-const BODY_WIDTH = 12.18 / NPC_SCALE;
-const BODY_HEIGHT = 7.35 / NPC_SCALE;
+const NPC_SCALE = 1 / TEXEL;
+// Unhurried pace: a full stride takes ~800 ms.
+const WALK_FRAME_MS = 100;
+// Collision footprint in world units, converted to texture space for Arcade.
+const BODY_WIDTH = 12.18 * TEXEL;
+const BODY_HEIGHT = 7.35 * TEXEL;
 
 export interface NpcPatrolArea {
   radiusX: number;
@@ -20,7 +24,7 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
   private readonly homeX: number;
   private readonly homeY: number;
   private readonly patrol: NpcPatrolArea;
-  private readonly shadow: Phaser.GameObjects.Ellipse;
+  private readonly shadow: Phaser.GameObjects.Image;
   private direction: NpcDirection = 'down';
   private currentFrame = 0;
   private frameTimer = 0;
@@ -42,18 +46,17 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     this.homeY = y;
     this.patrol = patrol;
 
-    this.shadow = scene.add.ellipse(x, y + 1, 18, 5, 0x110906, 0.24).setDepth(3);
+    this.shadow = scene.add.image(x, y + 1, FX.shadow).setDisplaySize(20, 7).setAlpha(0.5).setDepth(3);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
     this.setDepth(5 + y / 10000);
-    this.setOrigin(0.5, FOOT_BASELINE / FRAME_SIZE);
+    this.setOrigin(CHARACTER_FRAME.footX / CHARACTER_FRAME.w, CHARACTER_FRAME.footY / CHARACTER_FRAME.h);
     this.setScale(NPC_SCALE);
-    this.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(BODY_WIDTH, BODY_HEIGHT);
-    body.setOffset((FRAME_SIZE - BODY_WIDTH) / 2, FOOT_BASELINE - BODY_HEIGHT);
+    body.setOffset(CHARACTER_FRAME.footX * CHARACTER_TEXELS - BODY_WIDTH / 2, CHARACTER_FRAME.footY * CHARACTER_TEXELS - BODY_HEIGHT);
     body.setCollideWorldBounds(true);
     // Keep patrol movement and wall collisions, but reject pushes from the player.
     this.setPushable(false);
@@ -217,10 +220,11 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
 
   private applyAnimation(delta: number): void {
     if (this.walking) {
+      if (this.currentFrame === 0) this.currentFrame = 1;
       this.frameTimer += delta;
-      if (this.frameTimer >= 170) {
+      if (this.frameTimer >= WALK_FRAME_MS) {
         this.frameTimer = 0;
-        this.currentFrame = (this.currentFrame + 1) % 4;
+        this.currentFrame = (this.currentFrame % WALK_FRAMES) + 1;
       }
     } else {
       this.frameTimer = 0;

@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { BOSS_DEFINITION } from './Enemy';
 import type { BossPhase } from '../../types/game.types';
+import { FX } from '../art/fx';
+
+/** The Gatekeeper towers ~100 world units over the Core. */
+const WORLD_HEIGHT = 101;
 
 export const BOSS_PHASES: BossPhase[] = [
   { hpThreshold: 1.00, attackMultiplier: 0.85, label: 'Phase I' },
@@ -12,7 +16,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   readonly bossData = BOSS_DEFINITION;
   private currentPhaseIndex = 0;
   private pulseTween?: Phaser.Tweens.Tween;
-  private auraGraphics!: Phaser.GameObjects.Graphics;
+  private aura!: Phaser.GameObjects.Image;
+  private revealAlpha = 1;
   private readonly usesBattleArt: boolean;
   private readonly baseScale: number;
 
@@ -20,17 +25,15 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     const usesBattleArt = scene.textures.exists('boss-gatekeeper-battle-phase1');
     super(scene, x, y, usesBattleArt ? 'boss-gatekeeper-battle-phase1' : 'boss-gatekeeper');
     this.usesBattleArt = usesBattleArt;
-    this.baseScale = usesBattleArt ? 0.066 : 2.5;
+    this.baseScale = WORLD_HEIGHT / this.height;
     scene.add.existing(this);
     scene.physics.add.existing(this, true);
 
     this.setDepth(4);
     this.setScale(this.baseScale);
-    if (usesBattleArt) this.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
 
-    // Aura background effect
-    this.auraGraphics = scene.add.graphics();
-    this.auraGraphics.setDepth(3);
+    // Soft aura glowing behind the silhouette.
+    this.aura = scene.add.image(x, y, FX.glow).setDepth(3).setBlendMode(Phaser.BlendModes.ADD);
     this.updateAura();
 
     // Pulse tween
@@ -56,8 +59,14 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   setRevealAlpha(alpha: number): void {
+    this.revealAlpha = alpha;
     this.setAlpha(alpha);
-    this.auraGraphics.setAlpha(alpha);
+    this.updateAura();
+  }
+
+  destroy(fromScene?: boolean): void {
+    this.aura?.destroy();
+    super.destroy(fromScene);
   }
 
   getCurrentPhase(): BossPhase {
@@ -112,18 +121,17 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   private updateAura(): void {
-    this.auraGraphics.clear();
-    const colors = [0x6ea8d8, 0xe8b465, 0xf0362c];
-    const color = colors[this.currentPhaseIndex];
-    const alpha = 0.2 + this.currentPhaseIndex * 0.1;
-
-    this.auraGraphics.fillStyle(color, alpha);
-    this.auraGraphics.fillCircle(this.x, this.y, 40 + this.currentPhaseIndex * 10);
+    if (!this.aura?.active) return;
+    const colors = [0x3ff0d8, 0xffa060, 0xff4a3a];
+    const size = (90 + this.currentPhaseIndex * 20) * 2;
+    this.aura.setTint(colors[this.currentPhaseIndex])
+      .setDisplaySize(size, size)
+      .setAlpha((0.32 + this.currentPhaseIndex * 0.1) * this.revealAlpha);
   }
 
   defeat(): void {
     this.pulseTween?.stop();
-    this.auraGraphics.destroy();
+    this.aura.destroy();
 
     this.scene.cameras.main.flash(500, 255, 255, 255);
 

@@ -8,7 +8,7 @@
 
 <br>
 
-<img src="./public/assets/player_model.PNG" width="260" alt="Sound Quest Player">
+<img src="./docs/images/player.png" width="260" alt="Sound Quest Player">
 
 <br><br>
 
@@ -19,7 +19,7 @@
 
 <br>
 
-*A browser-based pixel RPG where music, signals and silence collide.*
+*A browser-based, hand-painted RPG where music, signals and silence collide.*
 
 </div>
 
@@ -27,7 +27,7 @@
 
 ## 📡 About the Game
 
-**Sound Quest** is a music-inspired pixel RPG built with Phaser, React and TypeScript.
+**Sound Quest** is a music-inspired RPG built with Phaser, React and TypeScript, rendered in high resolution with painted, realistically lit artwork.
 
 You enter a world where sound has been corrupted.
 
@@ -41,7 +41,7 @@ Your goal is simple:
 
 ## 🌌 Enter the Signal
 
-The world of Sound Quest combines classic pixel-RPG exploration with a modern audiovisual style inspired by music equipment, signal processing and digital distortion.
+The world of Sound Quest combines classic top-down RPG exploration with a modern audiovisual style inspired by music equipment, signal processing and digital distortion.
 
 Travel through locations such as:
 
@@ -84,7 +84,7 @@ They're broken pieces of the signal.
 
 <div align="center">
 
-<img src="./public/assets/silence_model.PNG" width="330" alt="Silence Enemy">
+<img src="./docs/images/enemy-silence.png" width="330" alt="Silence Enemy">
 
 **The signal is fading.**
 
@@ -178,25 +178,25 @@ The player uses separate directional animation frames for smooth overworld movem
 <table>
 <tr>
 <td align="center">
-<img src="./public/assets/player/overworld/player-down-0.png" width="120">
+<img src="./docs/images/player-down.png" width="120" alt="Player facing down">
 <br>
 <sub>Down</sub>
 </td>
 
 <td align="center">
-<img src="./public/assets/player/overworld/player-left-0.png" width="120">
+<img src="./docs/images/player-left.png" width="120" alt="Player facing left">
 <br>
 <sub>Left</sub>
 </td>
 
 <td align="center">
-<img src="./public/assets/player/overworld/player-up-0.png" width="120">
+<img src="./docs/images/player-up.png" width="120" alt="Player facing up">
 <br>
 <sub>Up</sub>
 </td>
 
 <td align="center">
-<img src="./public/assets/player/overworld/player-right-0.png" width="120">
+<img src="./docs/images/player-right.png" width="120" alt="Player facing right">
 <br>
 <sub>Right</sub>
 </td>
@@ -216,19 +216,19 @@ The journey includes several characters that guide the player through the story.
 <table>
 <tr>
 <td align="center">
-<img src="./public/assets/npc-elder-muse-v2.png" width="180">
+<img src="./docs/images/npc-professor.png" width="150" alt="Elder Muse">
 <br>
 <strong>Elder Muse</strong>
 </td>
 
 <td align="center">
-<img src="./public/assets/npc-junction-guard-v2.png" width="180">
+<img src="./docs/images/npc-guard.png" width="150" alt="Quincy, the Junction Guard">
 <br>
 <strong>Quincy — Junction Guard</strong>
 </td>
 
 <td align="center">
-<img src="./public/assets/npc-wandering-musician-v2.png" width="180">
+<img src="./docs/images/npc-musician.png" width="150" alt="Kian Vero, the Wandering Musician">
 <br>
 <strong>Kian Vero — Wandering Musician</strong>
 </td>
@@ -313,6 +313,10 @@ Features include:
 * Zoom controls
 * World-coordinate conversion
 
+The editor draws the map with the game's own terrain shader and artwork, so
+what you paint is what you will walk through, including free-form houses built
+from wall, window, door and roof tiles.
+
 This makes the world easier to expand without manually placing every object in code.
 
 ---
@@ -367,12 +371,15 @@ MiniGame/
 │
 ├── src/
 │   ├── game/
+│   │   ├── art/
 │   │   ├── assets/
 │   │   ├── entities/
 │   │   ├── input/
+│   │   ├── render/
 │   │   ├── scenes/
 │   │   ├── systems/
-│   │   └── utils/
+│   │   ├── utils/
+│   │   └── world/
 │   │
 │   ├── store/
 │   ├── types/
@@ -497,17 +504,33 @@ to remain separated while still sharing state.
 
 Sound Quest combines:
 
-* Pixel-art RPG presentation
-* Dark backgrounds
-* Acid green signal accents
-* Cyan highlights
-* Orange distortion effects
-* CRT / signal aesthetics
+* High-resolution, painted presentation (no pixel art)
+* A GPU terrain shader for grass, roads, paving, water and cliffs with organic borders, animated water and drifting cloud shadows
+* Soft daylight from the upper left, cast shadows and an underground light system (darkness with glowing crystals, braziers and the player's own light)
+* Acid green signal accents, cyan highlights and orange distortion effects
 * Music-production imagery
 * Modern typography
-* Retro game mechanics
+* Classic RPG mechanics
 
 The result is a world somewhere between a classic RPG and a broken audio workstation.
+
+### How the art is made
+
+All artwork is generated in code when the game loads, so the build ships no
+bitmap images for the world, characters, enemies or arenas:
+
+| Area | Source |
+| --- | --- |
+| Terrain | `src/game/world/terrain` (splat maps from the tile grid + shader) |
+| Props, buildings, cave | `src/game/art/vegetation.ts`, `structures.ts`, `landmarkArt.ts`, `buildingTiles.ts`, `caveArt.ts` |
+| Characters | `src/game/art/characters` (one rig: overworld walk cycles, battle sprite, dialogue busts) |
+| Enemies and arenas | `src/game/art/battleArt.ts` |
+| Title key art | `src/game/art/keyArt.ts` |
+
+The canvas renders at a multiple of the logical 640 x 480 board
+(`src/game/render/RenderScale.ts`), so the game stays sharp on high-density
+screens while gameplay keeps its original coordinates. The images in this
+README (`docs/images`) are exported from the same code.
 
 ---
 
@@ -515,7 +538,7 @@ The result is a world somewhere between a classic RPG and a broken audio worksta
 
 <br>
 
-<img src="./public/assets/player_model.PNG" width="210" alt="Player">
+<img src="./docs/images/player.png" width="210" alt="Player">
 
 ## THE TRACK IS STILL OUT THERE.
 

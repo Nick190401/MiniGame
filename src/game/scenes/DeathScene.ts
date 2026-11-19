@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
+import { logicalSize, useLogicalCamera } from '../render/RenderScale';
 import { useGameStore } from '../../store/gameStore';
 import { EventBus, EVENTS } from '../EventBus';
-import { PLAYER_TEXTURES } from '../assets/PlayerTextures';
 
 /**
  * Full-screen broadcast-failure sequence shown over the paused world.
@@ -27,8 +27,8 @@ export class DeathScene extends Phaser.Scene {
       EventBus.off(EVENTS.DEATH_UI_ACTION, this.onDeathUiAction);
     });
 
-    const W = this.scale.width;
-    const H = this.scale.height;
+    useLogicalCamera(this);
+    const { width: W, height: H } = logicalSize(this);
     const store = useGameStore.getState();
     const playerName = (store.playerName || 'Sound Keeper').toUpperCase();
 
@@ -195,12 +195,11 @@ export class DeathScene extends Phaser.Scene {
     platform.strokeEllipse(0, 62, 70, 12);
     receiver.add(platform);
 
-    const playerGhost = this.add.sprite(0, 61, PLAYER_TEXTURES.down[0])
-      .setOrigin(0.5, 291 / 313)
-      .setScale(0.17)
+    const playerGhost = this.add.sprite(0, 63, 'player-preview')
+      .setOrigin(0.5, 1)
+      .setScale(95 / 560)
       .setTint(0x8c8179)
       .setAlpha(0.48);
-    playerGhost.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     receiver.add(playerGhost);
     this.tweens.add({ targets: playerGhost, alpha: 0.18, duration: 680, yoyo: true, repeat: -1, ease: 'Stepped' });
 
@@ -344,8 +343,7 @@ export class DeathScene extends Phaser.Scene {
     EventBus.emit(EVENTS.DEATH_UI_STATE, { ready: false, reconnecting: true });
     this.reconnectLabel?.setText('RECONNECTING...').setColor('#ff7a2b');
 
-    const W = this.scale.width;
-    const H = this.scale.height;
+    const { width: W, height: H } = logicalSize(this);
     const reconnectWave = this.add.graphics()
       .setName('death-reconnect-wave')
       .setDepth(60)

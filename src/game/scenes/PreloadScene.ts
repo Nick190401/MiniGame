@@ -1,11 +1,18 @@
 import Phaser from 'phaser';
+import { logicalSize, useLogicalCamera } from '../render/RenderScale';
 import { TextureFactory } from '../utils/TextureFactory';
-import { WorldArtFactory } from '../utils/WorldArtFactory';
 import { EventBus, EVENTS } from '../EventBus';
-import { PLAYER_TEXTURE_ASSETS, PLAYER_TEXTURES, createPlayerTextures } from '../assets/PlayerTextures';
-import { NPC_TEXTURE_ASSETS } from '../assets/NpcTextures';
+import { createBattleCharacterTextures, createCharacterTextures, renderCharacterPortrait } from '../art/characters';
 import { WORLD_IMAGE_ASSETS, WORLD_TILESET_ASSETS } from '../assets/WorldAssets';
 import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from '../audio/AudioLibrary';
+import { ensureTerrainTextures } from '../world/terrain/TerrainLayer';
+import { createFxTextures } from '../art/fx';
+import { createVegetationTextures } from '../art/vegetation';
+import { createStructureTextures } from '../art/structures';
+import { createLandmarkTextures } from '../art/landmarkArt';
+import { createCaveTextures } from '../art/caveArt';
+import { createBattleTextures } from '../art/battleArt';
+import { createItemTextures } from '../art/items';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -15,8 +22,6 @@ export class PreloadScene extends Phaser.Scene {
   preload(): void {
     // Standalone frames avoid iOS WebKit decoding the 4x4 sheet at a
     // density-adjusted size and exposing four characters in one frame.
-    PLAYER_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
-    NPC_TEXTURE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
     WORLD_IMAGE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
     WORLD_TILESET_ASSETS.forEach(({ key, url, frameConfig }) => this.load.spritesheet(key, url, frameConfig));
 
@@ -33,8 +38,12 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
-    createPlayerTextures(this);
-    const { width, height } = this.scale;
+    createCharacterTextures(this);
+    if (!this.textures.exists('player-preview')) {
+      this.textures.addCanvas('player-preview', renderCharacterPortrait('player', { width: 300, height: 560, crop: 'full' }));
+    }
+    useLogicalCamera(this);
+    const { width, height } = logicalSize(this);
     this.cameras.main.setBackgroundColor('#0a0605');
     EventBus.emit(EVENTS.LOADING_UI_STATE, {
       step: 0,
@@ -164,11 +173,11 @@ export class PreloadScene extends Phaser.Scene {
     platform.lineStyle(1, 0x6ea8d8, 0.5);
     platform.strokeEllipse(486, 335, 91, 18);
 
-    const playerPreview = this.add.sprite(486, 337, PLAYER_TEXTURES.down[0])
-      .setOrigin(0.5, 291 / 313)
-      .setScale(0.24)
+    // About 121 units tall, standing on the scanner platform.
+    const playerPreview = this.add.sprite(486, 340, 'player-preview')
+      .setOrigin(0.5, 1)
+      .setScale(134 / 560)
       .setAlpha(0);
-    playerPreview.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.tweens.add({ targets: playerPreview, alpha: 1, y: 331, duration: 520, ease: 'Cubic.easeOut' });
 
     text(438, 349, 'PLAYER SIGNAL', {
@@ -209,17 +218,33 @@ export class PreloadScene extends Phaser.Scene {
     });
 
     const steps = [
-      { label: 'MAPPING TERRAIN', fn: () => WorldArtFactory.createTileTextures(this) },
       {
-        label: 'CALIBRATING PLAYER SIGNAL',
+        label: 'MAPPING TERRAIN',
         fn: () => {
-          TextureFactory.createPlayerTextures(this);
-          WorldArtFactory.createCharacterTextures(this);
+          ensureTerrainTextures(this);
+          createFxTextures(this);
+          createVegetationTextures(this);
         },
       },
-      { label: 'LOCATING DISTORTIONS', fn: () => WorldArtFactory.createEnemyTextures(this) },
-      { label: 'UNLOCKING VOID GATE', fn: () => WorldArtFactory.createBossTextures(this) },
-      { label: 'LOCATING LOST TRACK', fn: () => WorldArtFactory.createItemTextures(this) },
+      {
+        label: 'RAISING THE VILLAGES',
+        fn: () => {
+          createStructureTextures(this);
+          createLandmarkTextures(this);
+        },
+      },
+      {
+        label: 'CALIBRATING PLAYER SIGNAL',
+        fn: () => createBattleCharacterTextures(this),
+      },
+      {
+        label: 'LOCATING DISTORTIONS',
+        fn: () => {
+          createBattleTextures(this);
+          createCaveTextures(this);
+        },
+      },
+      { label: 'LOCATING LOST TRACK', fn: () => createItemTextures(this) },
       { label: 'SYNCING INTERFACE', fn: () => TextureFactory.createUITextures(this) },
     ];
 

@@ -5,14 +5,22 @@ import { WorldScene } from './scenes/WorldScene';
 import { BattleScene } from './scenes/BattleScene';
 import { UIScene } from './scenes/UIScene';
 import { DeathScene } from './scenes/DeathScene';
+import { RENDER_SCALE, installHiDpiText } from './render/RenderScale';
+
+installHiDpiText();
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
+  // The terrain, water and lighting passes are GPU shaders.
+  type: Phaser.WEBGL,
   parent: 'game-container',
   backgroundColor: '#050908',
-  pixelArt: true,
-  roundPixels: true,
-  antialias: false,
+  pixelArt: false,
+  antialias: true,
+  roundPixels: false,
+  render: {
+    antialiasGL: true,
+    powerPreference: 'high-performance',
+  },
   physics: {
     default: 'arcade',
     arcade: {
@@ -24,8 +32,8 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: 640,
-    height: 480,
+    width: 640 * RENDER_SCALE,
+    height: 480 * RENDER_SCALE,
     min: {
       width: 320,
       height: 240,
