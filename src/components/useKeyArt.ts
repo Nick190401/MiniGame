@@ -2,14 +2,26 @@ import { useEffect, useState } from 'react';
 import { paintKeyArt } from '../game/art/keyArt';
 
 const PORTRAIT_QUERY = '(max-width: 760px) and (orientation: portrait)';
+const HEROES = ['professor', 'musician', 'guard', 'player'] as const;
 const cache = new Map<'landscape' | 'portrait', string>();
 
-function artFor(layout: 'landscape' | 'portrait'): string {
+let heroBacks: Promise<HTMLImageElement[]> | null = null;
+/** The heroes' painted back views; the art is painted without them if one fails to load. */
+function loadHeroes(): Promise<HTMLImageElement[]> {
+  heroBacks ??= Promise.all(HEROES.map(id => {
+    const image = new Image();
+    image.src = `assets/characters/${id}/up-0.webp`;
+    return image.decode().then(() => image);
+  })).catch(() => []);
+  return heroBacks;
+}
+
+function artFor(layout: 'landscape' | 'portrait', figures: HTMLImageElement[]): string {
   const cached = cache.get(layout);
   if (cached) return cached;
   const canvas = layout === 'portrait'
-    ? paintKeyArt({ width: 1080, height: 1920 })
-    : paintKeyArt({ width: 1920, height: 1080 });
+    ? paintKeyArt({ width: 1080, height: 1920, figures })
+    : paintKeyArt({ width: 1920, height: 1080, figures });
   const url = canvas.toDataURL('image/jpeg', 0.9);
   cache.set(layout, url);
   return url;
@@ -32,8 +44,8 @@ export function useKeyArt(): string | null {
       const layout = media.matches ? 'portrait' : 'landscape';
       const cached = cache.get(layout);
       if (cached) { setUrl(cached); return; }
-      // Yield first so the title chrome paints before the artwork is drawn.
-      window.setTimeout(() => { if (!cancelled) setUrl(artFor(layout)); }, 30);
+      // The title chrome paints first; the artwork follows once the heroes have loaded.
+      void loadHeroes().then(figures => { if (!cancelled) setUrl(artFor(layout, figures)); });
     };
     render();
     media.addEventListener('change', render);

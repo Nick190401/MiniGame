@@ -195,11 +195,11 @@ export class DeathScene extends Phaser.Scene {
     platform.strokeEllipse(0, 62, 70, 12);
     receiver.add(platform);
 
-    const playerGhost = this.add.sprite(0, 63, 'player-preview')
+    const playerGhost = this.add.sprite(0, 63, 'player-battle')
       .setOrigin(0.5, 1)
-      .setScale(95 / 560)
       .setTint(0x8c8179)
       .setAlpha(0.48);
+    playerGhost.setScale(95 / playerGhost.height);
     receiver.add(playerGhost);
     this.tweens.add({ targets: playerGhost, alpha: 0.18, duration: 680, yoyo: true, repeat: -1, ease: 'Stepped' });
 

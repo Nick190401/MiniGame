@@ -1,8 +1,6 @@
 import { blobPoints, linear, makeCanvas, radial, rgba, rng, smoothPath, type Ctx } from './paint';
 import { clouds, mist, ridge, sky, treeLine } from './landscape';
-import { drawFigure } from './characters/figure';
-import { makePose } from './characters/rig';
-import { OUTFITS, type CharacterId } from './characters/outfits';
+import { CHARACTER_FRAME } from '../assets/PlayerTextures';
 
 /*
  * Title key art: the four heroes on a ridge above Echo Village, watching the
@@ -128,16 +126,16 @@ function valley(ctx: Ctx, w: number, h: number, horizon: number): void {
   treeLine(ctx, w, floorTop + h * 0.16, h * 0.09, 0x142019, 0x34503a, 33, 'conifer', 1.1);
 }
 
-/** The heroes, seen from behind and rim-lit by the burning sky. */
-function heroes(ctx: Ctx, w: number, h: number, ground: number, scale: number, order: CharacterId[], spacing: number): void {
-  order.forEach((id, i) => {
-    const x = w / 2 + (i - (order.length - 1) / 2) * spacing;
+/** The heroes (their painted back views), rim-lit by the burning sky. */
+function heroes(ctx: Ctx, w: number, h: number, ground: number, figureHeight: number, figures: CanvasImageSource[], spacing: number): void {
+  const s = figureHeight / CHARACTER_FRAME.figure;
+  figures.forEach((image, i) => {
+    const x = w / 2 + (i - (figures.length - 1) / 2) * spacing;
     const pad = 40;
-    const cw = Math.ceil(80 * scale + pad * 2), ch = Math.ceil(124 * scale + pad * 2);
+    const cw = Math.ceil(CHARACTER_FRAME.w * s + pad * 2), ch = Math.ceil(CHARACTER_FRAME.h * s + pad * 2);
+    const footX = pad + CHARACTER_FRAME.footX * s, footY = pad + CHARACTER_FRAME.footY * s;
     const { canvas: fig, ctx: f } = makeCanvas(cw, ch);
-    f.translate(cw / 2, ch - pad);
-    f.scale(scale, scale);
-    drawFigure(f, OUTFITS[id], makePose('up', -1));
+    f.drawImage(image, pad, pad, CHARACTER_FRAME.w * s, CHARACTER_FRAME.h * s);
     // Backlit: pull the figure into shadow, keep a hint of its colours.
     f.setTransform(1, 0, 0, 1, 0, 0);
     f.globalCompositeOperation = 'source-atop';
@@ -154,7 +152,7 @@ function heroes(ctx: Ctx, w: number, h: number, ground: number, scale: number, o
     };
     const warm = rim(0xffa060), cool = rim(0x7fd8ff);
     ctx.save();
-    ctx.translate(x - cw / 2, ground - (ch - pad));
+    ctx.translate(x - footX, ground - footY);
     ctx.globalAlpha = 0.9;
     ctx.drawImage(warm, -2.4 * (h / 1080), -1.6 * (h / 1080));
     ctx.globalAlpha = 0.6;
@@ -200,10 +198,15 @@ function cliff(ctx: Ctx, w: number, h: number, top: number): void {
   }
 }
 
-export interface KeyArtOptions { width: number; height: number }
+export interface KeyArtOptions {
+  width: number;
+  height: number;
+  /** Back views of the heroes, left to right; omitted until they have loaded. */
+  figures?: CanvasImageSource[];
+}
 
 /** Paints the key art for the given pixel size (landscape or portrait). */
-export function paintKeyArt({ width, height }: KeyArtOptions): HTMLCanvasElement {
+export function paintKeyArt({ width, height, figures = [] }: KeyArtOptions): HTMLCanvasElement {
   const { canvas, ctx } = makeCanvas(width, height);
   const portrait = height > width * 1.05;
   const horizon = height * (portrait ? 0.5 : 0.55);
@@ -212,8 +215,7 @@ export function paintKeyArt({ width, height }: KeyArtOptions): HTMLCanvasElement
   valley(ctx, width, height, horizon);
   const ground = height * (portrait ? 0.86 : 0.9);
   cliff(ctx, width, height, ground);
-  const figureScale = height * (portrait ? 0.0024 : 0.0031);
-  heroes(ctx, width, height, ground + height * 0.006, figureScale, ['professor', 'musician', 'guard', 'player'], width * (portrait ? 0.2 : 0.085));
+  heroes(ctx, width, height, ground + height * 0.006, height * (portrait ? 0.24 : 0.31), figures, width * (portrait ? 0.2 : 0.085));
   // Embers drifting up from the valley.
   const rand = rng(61);
   ctx.save();

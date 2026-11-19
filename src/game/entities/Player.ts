@@ -5,8 +5,8 @@ import { CHARACTER_FRAME, CHARACTER_TEXELS } from '../art/characters';
 import { TEXEL } from '../render/RenderScale';
 
 const SPEED = 120;
-// One full stride (all walk frames) every ~560 ms at walking speed.
-const WALK_FRAME_MS = 70;
+// One full stride (all four walk frames) every ~560 ms at walking speed.
+const WALK_FRAME_MS = 140;
 const WORLD_MODEL_SCALE = 1 / TEXEL;
 // Collision footprint in world units, converted to texture space for Arcade.
 const BODY_WIDTH = 9.45 * TEXEL;

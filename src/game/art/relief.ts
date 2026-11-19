@@ -29,8 +29,6 @@ const SHARED = new Set([
 const DRAW = new Set(['fill', 'stroke', 'fillRect', 'strokeRect', 'fillText', 'strokeText', 'drawImage']);
 /** Pen settings that also shape the material map. */
 const SHARED_PROPS = new Set(['lineWidth', 'lineCap', 'lineJoin', 'miterLimit', 'font', 'textAlign', 'textBaseline', 'globalCompositeOperation']);
-/** Path calls also recorded into a Path2D, so a shape can be re-used (see inflateShape). */
-const PATH_CALLS = new Set(['closePath', 'moveTo', 'lineTo', 'quadraticCurveTo', 'bezierCurveTo', 'arc', 'arcTo', 'ellipse', 'rect', 'roundRect']);
 
 let active: Relief | null = null;
 
@@ -40,11 +38,6 @@ class Relief {
   readonly ctx: Ctx;
   heightOn = false;
   colorOn = true;
-  /** The path being built, for inflateShape. */
-  path = new Path2D();
-  /** Stacking counter: later shapes sit slightly in front of earlier ones. */
-  layer = 0;
-  private scratch: Ctx | null = null;
 
   constructor(readonly w: number, readonly h: number, readonly density: number) {
     this.albedo = makeCanvas(w * density, h * density).ctx;
@@ -59,8 +52,6 @@ class Relief {
         const name = String(prop);
         if (SHARED.has(name)) {
           return (...args: unknown[]) => {
-            if (name === 'beginPath') relief.path = new Path2D();
-            else if (PATH_CALLS.has(name)) (relief.path as unknown as Record<string, (...a: unknown[]) => unknown>)[name](...args);
             (relief.material as unknown as Record<string, (...a: unknown[]) => unknown>)[name](...args);
             return (value as (...a: unknown[]) => unknown).apply(target, args);
           };
@@ -80,37 +71,6 @@ class Relief {
         return true;
       },
     });
-  }
-
-  /**
-   * Writes the current path into the material map as a soft bump: flat at
-   * its outline, rising `amount` towards its inside, stacked in front of the
-   * shapes painted before it.
-   */
-  inflate(amount: number, blurUnits: number): void {
-    const m = this.material;
-    const pw = m.canvas.width, ph = m.canvas.height;
-    if (!this.scratch) this.scratch = makeCanvas(pw, ph).ctx;
-    const t = this.scratch;
-    const transform = m.getTransform();
-    t.setTransform(1, 0, 0, 1, 0, 0);
-    t.clearRect(0, 0, pw, ph);
-    t.setTransform(transform);
-    t.filter = `blur(${Math.max(0.5, blurUnits * this.density)}px)`;
-    t.fillStyle = '#ff0000';
-    t.fill(this.path);
-    t.filter = 'none';
-    const base = Math.min(0.85, 0.12 + this.layer * 0.004);
-    this.layer++;
-    m.save();
-    m.clip(this.path);
-    m.fillStyle = materialColor({ height: base });
-    m.fill(this.path);
-    m.globalCompositeOperation = 'lighter';
-    m.globalAlpha = amount;
-    m.setTransform(1, 0, 0, 1, 0, 0);
-    m.drawImage(t.canvas, 0, 0);
-    m.restore();
   }
 
   style(m: MaterialStyle): string | CanvasGradient {
@@ -194,14 +154,6 @@ export function heightGradient(
   const g = active.material.createLinearGradient(x0, y0, x1, y1);
   stops.forEach(([offset, height]) => g.addColorStop(offset, materialColor({ height, gloss, glow })));
   return g;
-}
-
-/**
- * Gives the shape just filled on the relief context a rounded volume (see
- * Relief.inflate); does nothing when not painting a relief.
- */
-export function inflateShape(amount: number, blurUnits: number): void {
-  active?.inflate(amount, blurUnits);
 }
 
 /** Shorthand for a flat material. */

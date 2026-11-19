@@ -516,20 +516,21 @@ The result is a world somewhere between a classic RPG and a broken audio worksta
 
 ### How the art is made
 
-All artwork is generated in code when the game loads, so the build ships no
-bitmap images for the world, characters, enemies or arenas:
+The overworld is generated in code when the game loads; the characters,
+enemies, the boss and the battle arenas are painted HD images based on the
+original designs:
 
 | Area | Source |
 | --- | --- |
 | Terrain | `src/game/world/terrain` (splat maps from the tile grid + shader) |
 | Trees, bushes, rocks, grass, flowers | `src/game/art/foliage.ts` (modelled as lit volumes) |
 | Buildings, structures, cave | `src/game/art/landmarkArt.ts`, `structures.ts`, `buildingTiles.ts`, `caveArt.ts` |
-| Characters | `src/game/art/characters` (one rig: overworld walk cycles, battle sprite, dialogue busts) |
-| Enemies and arenas | `src/game/art/battleArt.ts` |
+| Characters | `public/assets/characters/<id>`: walk cycles in four directions, a full-body illustration and a dialogue portrait, painted in HD from the original character designs |
+| Enemies, boss and arenas | `public/assets/battle` |
 | Title key art | `src/game/art/keyArt.ts` |
 
-Objects are lit rather than flat-shaded. Buildings, structures, characters and
-cave props are painted with a material map (height, gloss, glow) that
+Objects are lit rather than flat-shaded. Buildings, structures and cave props
+are painted with a material map (height, gloss, glow) that
 `src/game/art/relief.ts` lights per pixel, so eaves shade the walls, frames and
 sills cast small shadows, glass catches the sun and lit windows glow. Foliage
 and stones are built from lit volumes with self-shadowing and light passing
@@ -538,8 +539,8 @@ sun casts a projected shadow onto the ground (`src/game/art/castShadow.ts`).
 
 The canvas renders at a multiple of the logical 640 x 480 board
 (`src/game/render/RenderScale.ts`), so the game stays sharp on high-density
-screens while gameplay keeps its original coordinates. The images in this
-README (`docs/images`) are exported from the same code.
+screens while gameplay keeps its original coordinates. The character images
+in this README (`docs/images`) are the game's own frames and illustrations.
 
 ---
 

@@ -2351,8 +2351,9 @@ export class WorldScene extends Phaser.Scene {
       portrait.setTexture(portraitTexture)
         .setOrigin(0.5, 1)
         .setPosition(32, 62)
-        .setScale(portraitTexture === 'boss-gatekeeper-battle-phase1' ? 0.045 : 1.25)
         .setVisible(true);
+      // The painted boss fills the 40-unit portrait slot whatever its source size.
+      portrait.setScale(portraitTexture === 'boss-gatekeeper-battle-phase1' ? 40 / portrait.height : 1.25);
       portrait.texture.setFilter(portraitTexture === 'boss-gatekeeper-battle-phase1'
         ? Phaser.Textures.FilterMode.LINEAR
         : Phaser.Textures.FilterMode.NEAREST);

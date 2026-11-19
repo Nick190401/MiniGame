@@ -2,7 +2,9 @@ import Phaser from 'phaser';
 import { logicalSize, useLogicalCamera } from '../render/RenderScale';
 import { TextureFactory } from '../utils/TextureFactory';
 import { EventBus, EVENTS } from '../EventBus';
-import { createBattleCharacterTextures, createCharacterTextures, renderCharacterPortrait } from '../art/characters';
+import { createCharacterTextures } from '../art/characters';
+import { PLAYER_TEXTURE_ASSETS } from '../assets/PlayerTextures';
+import { NPC_TEXTURE_ASSETS } from '../assets/NpcTextures';
 import { WORLD_IMAGE_ASSETS, WORLD_TILESET_ASSETS } from '../assets/WorldAssets';
 import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from '../audio/AudioLibrary';
 import { ensureTerrainTextures } from '../world/terrain/TerrainLayer';
@@ -11,7 +13,6 @@ import { createVegetationTextures } from '../art/vegetation';
 import { createStructureTextures } from '../art/structures';
 import { createLandmarkTextures } from '../art/landmarkArt';
 import { createCaveTextures } from '../art/caveArt';
-import { createBattleTextures } from '../art/battleArt';
 import { createItemTextures } from '../art/items';
 
 export class PreloadScene extends Phaser.Scene {
@@ -23,6 +24,8 @@ export class PreloadScene extends Phaser.Scene {
     // Standalone frames avoid iOS WebKit decoding the 4x4 sheet at a
     // density-adjusted size and exposing four characters in one frame.
     WORLD_IMAGE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
+    // Painted character frames, the player's full-body art and NPC portraits.
+    [...PLAYER_TEXTURE_ASSETS, ...NPC_TEXTURE_ASSETS].forEach(({ key, url }) => this.load.image(key, url));
     WORLD_TILESET_ASSETS.forEach(({ key, url, frameConfig }) => this.load.spritesheet(key, url, frameConfig));
 
     // Music/SFX are optional: files may not exist yet (see AudioLibrary.ts).
@@ -38,9 +41,6 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
-    if (!this.textures.exists('player-preview')) {
-      this.textures.addCanvas('player-preview', renderCharacterPortrait('player', { width: 300, height: 560, crop: 'full' }));
-    }
     useLogicalCamera(this);
     const { width, height } = logicalSize(this);
     this.cameras.main.setBackgroundColor('#0a0605');
@@ -173,10 +173,10 @@ export class PreloadScene extends Phaser.Scene {
     platform.strokeEllipse(486, 335, 91, 18);
 
     // About 121 units tall, standing on the scanner platform.
-    const playerPreview = this.add.sprite(486, 340, 'player-preview')
+    const playerPreview = this.add.sprite(486, 340, 'player-battle')
       .setOrigin(0.5, 1)
-      .setScale(134 / 560)
       .setAlpha(0);
+    playerPreview.setScale(134 / playerPreview.height);
     this.tweens.add({ targets: playerPreview, alpha: 1, y: 331, duration: 520, ease: 'Cubic.easeOut' });
 
     text(438, 349, 'PLAYER SIGNAL', {
@@ -234,17 +234,11 @@ export class PreloadScene extends Phaser.Scene {
       },
       {
         label: 'CALIBRATING PLAYER SIGNAL',
-        fn: () => {
-          // Walk cycles are lit frame by frame: the heaviest step, so it runs
-          // here where the loading bar can show it rather than before first paint.
-          createCharacterTextures(this);
-          createBattleCharacterTextures(this);
-        },
+        fn: () => createCharacterTextures(this),
       },
       {
         label: 'LOCATING DISTORTIONS',
         fn: () => {
-          createBattleTextures(this);
           createCaveTextures(this);
         },
       },

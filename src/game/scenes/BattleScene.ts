@@ -120,14 +120,14 @@ export class BattleScene extends Phaser.Scene {
       ? {
         key: 'battle-bg-boss',
         cropTop: 0,
-        enemy: { x: 0.645, y: 0.385 },
-        player: { x: 0.24, y: 0.68 },
+        enemy: { x: 0.645, y: 0.37 },
+        player: { x: 0.26, y: 0.68 },
       }
       : {
         key: 'battle-bg-normal',
         cropTop: 0.064,
-        enemy: { x: 0.70, y: 0.505 },
-        player: { x: 0.33, y: 0.73 },
+        enemy: { x: 0.69, y: 0.485 },
+        player: { x: 0.335, y: 0.715 },
       };
 
     // Measured off the decoded texture rather than hard-coded, because the
