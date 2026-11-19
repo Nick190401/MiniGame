@@ -29,6 +29,9 @@ const ATTACK_ICONS: Record<string, string[]> = {
   'reverb-strike':['██████', '█    █', '█ ██ █', '█ ██ █', '█    █', '██████'],
 };
 
+/** The hero's three-quarter battle stance, facing the opponent. */
+const PLAYER_BATTLE_TEXTURE = 'player-battle-stance';
+
 export class BattleScene extends Phaser.Scene {
   // Battle data
   private enemyData!: EnemyData;
@@ -39,6 +42,10 @@ export class BattleScene extends Phaser.Scene {
   // UI references
   private enemySprite!: Phaser.GameObjects.Sprite;
   private playerSprite!: Phaser.GameObjects.Sprite;
+  /** Holds the hero for the idle motion, so attack tweens keep the sprite to themselves. */
+  private playerRig?: Phaser.GameObjects.Container;
+  private playerFeet = { x: 0, y: 0 };
+  private playerIdleWeight = 0;
   private enemyHpBar!: Phaser.GameObjects.Graphics;
   private playerHpBar!: Phaser.GameObjects.Graphics;
   private enemyHpText!: Phaser.GameObjects.Text;
@@ -350,9 +357,12 @@ export class BattleScene extends Phaser.Scene {
     // ── Player sprite — slides in onto its platform ──────────────────────
     // Largest of the two: its platform is the nearest thing in the artwork.
     const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.37, 10);
-    this.playerSprite = this.add.sprite(0, 0, 'player-battle').setDepth(5);
-    this.plantOnPlatform(this.playerSprite, 'player-battle', platformAnchors.player, playerTargetH);
+    this.playerSprite = this.add.sprite(0, 0, PLAYER_BATTLE_TEXTURE).setDepth(5);
+    this.plantOnPlatform(this.playerSprite, PLAYER_BATTLE_TEXTURE, platformAnchors.player, playerTargetH);
     this.preparePlayerBattleTexture();
+    this.playerRig = this.add.container(0, 0, [this.playerSprite]).setDepth(5);
+    this.playerFeet = { x: platformAnchors.player.x, y: platformAnchors.player.y };
+    this.playerIdleWeight = 0;
     const playerFinalX = this.playerSprite.x;
     this.playerSprite.x = -40;
 
@@ -927,7 +937,7 @@ export class BattleScene extends Phaser.Scene {
    * No retouching, sharpening, stroke expansion or change to the sprite geometry.
    */
   private preparePlayerBattleTexture(): void {
-    const source = this.textures.get('player-battle').getSourceImage() as HTMLImageElement;
+    const source = this.textures.get(PLAYER_BATTLE_TEXTURE).getSourceImage() as HTMLImageElement;
     const sprite = this.playerSprite;
     const displayWidth = sprite.displayWidth;
     const displayHeight = sprite.displayHeight;
@@ -967,6 +977,36 @@ export class BattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.textures.remove(key);
     });
+  }
+
+  update(time: number, delta: number): void {
+    this.updatePlayerIdle(time, delta);
+  }
+
+  /**
+   * Breathing and a slow shift of weight while the fight is on, so the hero
+   * never stands frozen. The rig scales and tilts about the feet, which stay
+   * planted; the motion fades out when the battle ends.
+   */
+  private updatePlayerIdle(time: number, delta: number): void {
+    const rig = this.playerRig;
+    if (!rig?.active) return;
+    const target = this.turnState === 'battle-end' ? 0 : 1;
+    // Eases in over about a second, independent of the frame rate.
+    this.playerIdleWeight += (target - this.playerIdleWeight) * (1 - Math.exp(-delta / 350));
+    const w = this.playerIdleWeight;
+    const breath = Math.sin((time / 2400) * Math.PI * 2);
+    const sway = Math.sin((time / 4100) * Math.PI * 2 + 0.7);
+    const sx = 1 - 0.006 * breath * w;
+    const sy = 1 + 0.018 * breath * w;
+    const theta = Phaser.Math.DegToRad(0.9 * sway * w);
+    const { x: fx, y: fy } = this.playerFeet;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    rig.setScale(sx, sy).setRotation(theta).setPosition(
+      fx - (cos * sx * fx - sin * sy * fy),
+      fy - (sin * sx * fx + cos * sy * fy),
+    );
   }
 
   private tryExecuteAttack(index: number): void {

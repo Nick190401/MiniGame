@@ -525,7 +525,7 @@ painted HD images based on the original designs:
 | Terrain | `src/game/world/terrain` (splat maps from the tile grid + shader) |
 | Buildings, trees, bushes, rocks, flowers, bridge, gate, signs, cave props | `public/assets/world`, listed in `src/game/assets/WorldArt.ts` |
 | Tall grass, gate wall, core circle and arch | `src/game/art` (painted in code) |
-| Characters | `public/assets/characters/<id>`: 8-frame walk cycles in four directions, a full-body illustration and a dialogue portrait |
+| Characters | `public/assets/characters/<id>`: 8-frame walk cycles and idle poses in four directions, a full-body illustration, a dialogue portrait and, for the hero, a battle stance |
 | Enemies, boss and arenas | `public/assets/battle` |
 | Title key art | `public/assets/title` |
 

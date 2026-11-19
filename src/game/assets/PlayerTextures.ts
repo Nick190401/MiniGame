@@ -40,6 +40,8 @@ export function characterFrameAssets(id: string): Array<{ key: string; url: stri
 
 export const PLAYER_TEXTURE_ASSETS: ReadonlyArray<{ key: string; url: string }> = [
   ...characterFrameAssets('player'),
-  // Full-body illustration: battle sprite, loading screen and death screen.
+  // Full-body illustration: loading and death screens.
   { key: 'player-battle', url: 'assets/characters/player/full.webp' },
+  // Three-quarter battle stance, turned toward the opponent.
+  { key: 'player-battle-stance', url: 'assets/characters/player/battle.webp' },
 ];
