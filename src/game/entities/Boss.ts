@@ -65,7 +65,9 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   destroy(fromScene?: boolean): void {
-    this.aura?.destroy();
+    // On scene shutdown the display list destroys the aura itself; removing it
+    // here would shift the list while Phaser iterates it.
+    if (!fromScene) this.aura?.destroy();
     super.destroy(fromScene);
   }
 

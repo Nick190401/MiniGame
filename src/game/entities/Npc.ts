@@ -169,7 +169,8 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
 
   destroy(fromScene?: boolean): void {
     this.scriptedTween?.stop();
-    this.shadow.destroy();
+    // On scene shutdown the display list destroys the shadow itself.
+    if (!fromScene) this.shadow.destroy();
     super.destroy(fromScene);
   }
 
