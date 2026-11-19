@@ -81,10 +81,10 @@ export class DeathScene extends Phaser.Scene {
     brand.fillRect(48, 23, 8, 8);
     header.add(brand);
     header.add(text(40, 39, 'SQ', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#110906',
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '11px', color: '#110906',
     }).setOrigin(0.5));
     header.add(text(69, 25, 'SOUND QUEST', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#f8ece2', letterSpacing: 2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '11px', color: '#f8ece2', letterSpacing: 2,
     }));
     header.add(text(69, 43, 'SYSTEM // BROADCAST FAILURE', {
       fontFamily: 'DM Mono', fontSize: '6px', color: '#82776f', letterSpacing: 1,
@@ -114,10 +114,10 @@ export class DeathScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '7px', color: '#afa7a2', letterSpacing: 2,
     }).setAlpha(0);
     const signalTitle = text(48, 132, 'SIGNAL', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '49px', color: '#f8ece2', letterSpacing: -2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '49px', color: '#f8ece2', letterSpacing: -1,
     }).setAlpha(0);
     const lostTitle = text(48, 177, 'LOST', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '67px', color: '#e8b465', letterSpacing: -3,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '67px', color: '#e8b465', letterSpacing: -1,
     }).setAlpha(0);
     [
       { target: eyebrow, x: 52, delay: 260 },
@@ -148,8 +148,8 @@ export class DeathScene extends Phaser.Scene {
       text(68, 323, 'CALLSIGN', { fontFamily: 'DM Mono', fontSize: '5px', color: '#756b64', letterSpacing: 1 }),
       text(202, 323, 'LEVEL', { fontFamily: 'DM Mono', fontSize: '5px', color: '#756b64', letterSpacing: 1 }),
       text(68, 352, 'RECOVERY POINT', { fontFamily: 'DM Mono', fontSize: '5px', color: '#756b64', letterSpacing: 1 }),
-      text(68, 333, playerName, { fontFamily: 'Syne', fontStyle: 'bold', fontSize: '9px', color: '#f8ece2' }),
-      text(202, 333, String(store.level).padStart(2, '0'), { fontFamily: 'Syne', fontStyle: 'bold', fontSize: '10px', color: '#ff7a2b' }),
+      text(68, 333, playerName, { fontFamily: 'Sora', fontStyle: 'bold', fontSize: '9px', color: '#f8ece2' }),
+      text(202, 333, String(store.level).padStart(2, '0'), { fontFamily: 'Sora', fontStyle: 'bold', fontSize: '10px', color: '#ff7a2b' }),
       text(168, 349, 'ECHO VILLAGE // FULL HP', { fontFamily: 'DM Mono', fontSize: '6px', color: '#6ea8d8', letterSpacing: 1 }),
     ];
     metaLabels.forEach((label, index) => {
@@ -265,7 +265,7 @@ export class DeathScene extends Phaser.Scene {
     };
     drawButton(false);
     this.reconnectLabel = text(17, 12, 'RECONNECT SIGNAL', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#f8ece2', letterSpacing: 1,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '11px', color: '#f8ece2', letterSpacing: 1,
     });
     const keyBg = this.add.graphics();
     keyBg.fillStyle(0x0a0605, 0.9);

@@ -454,7 +454,7 @@ export class WorldScene extends Phaser.Scene {
     panel.strokeRect(0, 0, 148, 39);
     this.zoneHudAccent = this.add.graphics();
     this.zoneHudTitle = this.add.text(12, 7, '', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '9px', color: '#f8ece2',
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '9px', color: '#f8ece2',
     });
     this.zoneHudMeta = this.add.text(12, 23, '', {
       fontFamily: 'DM Mono', fontSize: '5px', color: '#82776f', letterSpacing: 1,
@@ -765,7 +765,7 @@ export class WorldScene extends Phaser.Scene {
     bg.lineStyle(0.7, 0xffffff, 0.3);
     bg.strokeRoundedRect(-7, -6.5, 14, 13, 3.6);
     const glyph = this.add.text(0, -0.1, touch ? 'A' : 'E', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '8px', color: '#ffa36b',
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '8px', color: '#ffa36b',
     }).setOrigin(0.5).setResolution(4);
 
     const marker = this.add.container(0, -(CHARACTER_HEIGHT + 9), [halo, bg, glyph]);
@@ -993,7 +993,7 @@ export class WorldScene extends Phaser.Scene {
     const screenPerUnit = Math.max(0.1, ui.scale.displaySize.width / width);
     const screenPx = (px: number) => `${Math.round((px / screenPerUnit) * 10) / 10}px`;
     const chapter = ui.add.text(18, barHeight / 2, 'Prologue', {
-      fontFamily: 'Syne',
+      fontFamily: 'Sora',
       fontSize: screenPx(15),
       fontStyle: 'bold',
       color: '#f7efe8',
@@ -1327,7 +1327,7 @@ export class WorldScene extends Phaser.Scene {
 
     // Keep the pickup wording aligned with the HUD's music-themed XP name.
     const pickup = this.add.text(cx, cy - 10, '+10 RESONANCE', {
-      fontFamily: 'Syne', fontSize: '5px', color: '#ff7a2b',
+      fontFamily: 'Sora', fontSize: '5px', color: '#ff7a2b',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(12).setOrigin(0.5).setScale(0.42).setVisible(false);
     EventBus.emit(EVENTS.ITEM_COLLECTED, 'sound-fragment');
@@ -1803,7 +1803,7 @@ export class WorldScene extends Phaser.Scene {
     panel.fillStyle(0xff7a2b, 0.9); panel.fillRect(centerX - width / 2, centerY - 22, 46, 2);
     panel.fillStyle(0x6ea8d8, 0.9); panel.fillRect(centerX + width / 2 - 82, centerY + 20, 82, 2);
     const title = ui.add.text(centerX, centerY - 11, 'SIGNAL RESTORED', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '14px', color: '#ff7a2b', letterSpacing: 2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '14px', color: '#ff7a2b', letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0);
     const meta = ui.add.text(centerX, centerY + 9, 'VOID CAVE // PURIFICATION COMPLETE', {
       fontFamily: 'DM Mono', fontSize: '6px', color: '#8fbdde', letterSpacing: 1,
@@ -1941,7 +1941,7 @@ export class WorldScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '6px', color: '#6ea8d8', letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0);
     const title = ui.add.text(centerX, centerY + 2, 'THE LOST TRACK', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '19px', color: '#f8ece2', letterSpacing: 3,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '19px', color: '#f8ece2', letterSpacing: 3,
     }).setOrigin(0.5).setScrollFactor(0);
     const sub = ui.add.text(centerX, centerY + 21, 'ORIGINAL FREQUENCY RESTORED', {
       fontFamily: 'DM Mono', fontSize: '6px', color: '#ff7a2b', letterSpacing: 1,
@@ -2100,7 +2100,7 @@ export class WorldScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '7px', color: '#6ea8d8', letterSpacing: 3,
     }).setOrigin(0.5).setScrollFactor(0);
     const title = ui.add.text(width / 2, height / 2 - 12, 'MASTER ACQUIRED', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#f8ece2', letterSpacing: 2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '20px', color: '#f8ece2', letterSpacing: 2,
     }).setOrigin(0.5).setScrollFactor(0);
     const meta = ui.add.text(width / 2, height / 2 + 16, 'THE LOST TRACK // SIGNAL 100%', {
       fontFamily: 'DM Mono', fontSize: '8px', color: '#ff7a2b', letterSpacing: 2,
@@ -2257,11 +2257,11 @@ export class WorldScene extends Phaser.Scene {
     const accent = this.add.graphics();
     const portrait = this.add.image(32, 64, 'portrait-professor').setVisible(false);
     const systemMark = this.add.text(33, 36, '◎', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '20px', color: '#ff7a2b',
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '20px', color: '#ff7a2b',
     }).setOrigin(0.5).setAlpha(0.48);
 
     const speaker = this.add.text(69, 9, 'FIELD TRANSMISSION', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '7px', color: '#ff7a2b', letterSpacing: 1,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '7px', color: '#ff7a2b', letterSpacing: 1,
     }).setResolution(2);
 
     const channel = this.add.text(boxW - 11, 10, 'ARCHIVE SIGNAL', {
@@ -2277,7 +2277,7 @@ export class WorldScene extends Phaser.Scene {
     }).setResolution(2);
 
     const arrow = this.add.text(boxW - 14, boxH - 14, '▼', {
-      fontFamily: 'Syne', fontSize: '8px', color: '#ff7a2b',
+      fontFamily: 'Sora', fontSize: '8px', color: '#ff7a2b',
     });
     this.tweens.add({ targets: arrow, alpha: 0, duration: 500, yoyo: true, repeat: -1 });
     arrow.setVisible(false);
@@ -2693,11 +2693,11 @@ export class WorldScene extends Phaser.Scene {
       });
 
       const hpText = this.add.text(0, 0, `+${restoredAmount} HP`, {
-        fontFamily: 'Syne', fontSize: '6px', color: '#ff7a2b',
+        fontFamily: 'Sora', fontSize: '6px', color: '#ff7a2b',
         stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
       const resonanceText = this.add.text(0, 9, 'PARTIAL RESONANCE', {
-        fontFamily: 'Syne', fontSize: '4px', color: accentCss,
+        fontFamily: 'Sora', fontSize: '4px', color: accentCss,
         stroke: '#110906', strokeThickness: 2,
       }).setOrigin(0.5);
       const feedback = this.add.container(pX, pY - 28, [hpText, resonanceText])

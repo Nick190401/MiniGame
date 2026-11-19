@@ -245,7 +245,7 @@ export class BattleScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '7px', color: '#a89f99', letterSpacing: 1,
     }).setOrigin(1, 0).setDepth(3).setVisible(false);
     this.add.text(W - 18, 27, this.enemyData.id.toUpperCase().replace(/-/g, ' '), {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '10px', color: `#${signalColor.toString(16).padStart(6, '0')}`,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '10px', color: `#${signalColor.toString(16).padStart(6, '0')}`,
     }).setOrigin(1, 0).setDepth(3).setVisible(false);
 
 
@@ -505,7 +505,7 @@ export class BattleScene extends Phaser.Scene {
     }).setDepth(10).setResolution(2);
 
     this.enemyNameText = this.add.text(infoBoxX + 12, infoBoxY + 24, this.enemyData.name.toUpperCase(), {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '15px',
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '15px',
       color: this.isBoss ? '#ff8a66' : '#f8ece2', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
@@ -557,7 +557,7 @@ export class BattleScene extends Phaser.Scene {
     }).setDepth(10).setResolution(2);
 
     this.add.text(phpBoxX + 12, phpBoxY + 24, pName.toUpperCase(), {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '14px', color: '#f8ece2', letterSpacing: 1,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '14px', color: '#f8ece2', letterSpacing: 1,
     }).setDepth(10).setResolution(2);
 
     this.add.text(phpBoxX + phpBoxW - 12, phpBoxY + 10, `LEVEL ${String(store.level).padStart(2, '0')}`, {
@@ -799,7 +799,7 @@ export class BattleScene extends Phaser.Scene {
     }).setResolution(2);
 
     const nameText = this.add.text(14, 24, unlocked ? attack.name.toUpperCase() : 'UNAVAILABLE', {
-      fontFamily: 'Syne', fontStyle: 'bold',
+      fontFamily: 'Sora', fontStyle: 'bold',
       fontSize: '13px',
       color: unlocked ? colorHex : '#473831',
       letterSpacing: 0.6,
@@ -1290,7 +1290,7 @@ export class BattleScene extends Phaser.Scene {
     // Phase change visual: big text overlay
     const W = logicalSize(this).width;
     const phaseAnnounce = this.add.text(W / 2, this.battleH * 0.4, phaseLabels[phaseIdx], {
-      fontFamily: 'Syne',
+      fontFamily: 'Sora',
       fontSize: '16px',
       color: phaseColors[phaseIdx],
     }).setOrigin(0.5).setDepth(28).setAlpha(0).setScale(2).setVisible(false);
@@ -1482,7 +1482,7 @@ export class BattleScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '6px', color: '#b6aea9', letterSpacing: 2,
     }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setVisible(false).setName('battle-player-kicker');
     const title = this.add.text(W / 2, this.battleH * 0.31 + 27, attack.name.toUpperCase(), {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '22px', color: colorHex, letterSpacing: 2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '22px', color: colorHex, letterSpacing: 2,
     }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setScale(0.84).setVisible(false).setName('battle-player-title');
 
     const waveform = this.add.graphics().setDepth(28).setPosition(W / 2, this.battleH * 0.31 + 62);
@@ -2464,7 +2464,7 @@ export class BattleScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '6px', color: '#ffb09a', letterSpacing: 2,
     }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setVisible(false).setName('battle-enemy-kicker');
     const title = this.add.text(W / 2, this.battleH * 0.31 + 28, attack.name.toUpperCase(), {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '21px', color: hostileHex, letterSpacing: 2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '21px', color: hostileHex, letterSpacing: 2,
     }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setScale(1.18, 0.75).setVisible(false).setName('battle-enemy-title');
     const warningLeft = this.add.text(18, this.battleH * 0.31 + 29, '!!', {
       fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '13px', color: hostileHex,

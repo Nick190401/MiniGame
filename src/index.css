@@ -2,11 +2,13 @@
 
 /* Sound Quest interface -------------------------------------------------------
    One quiet system for every screen: warm near-black surfaces that sit on the
-   painted world, Syne for names and titles, DM Sans for reading, ember for the
-   one thing to press, and meters that always show their numbers. */
+   painted world, Sora for names and titles (Syne only for the logo wordmark),
+   DM Sans for reading, ember for the one thing to press, and meters that
+   always show their numbers. */
 
 :root {
-  --font-display: 'Syne', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-logo: 'Syne', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'DM Mono', ui-monospace, 'Cascadia Mono', monospace;
 
@@ -348,7 +350,7 @@ a:focus-visible {
   flex-direction: column;
   align-items: center;
   color: #fff4e8;
-  font-family: var(--font-display);
+  font-family: var(--font-logo);
   font-weight: 800;
   line-height: 0.84;
   letter-spacing: -0.035em;
@@ -581,7 +583,9 @@ a:focus-visible {
 }
 
 .hud__name {
-  overflow: hidden;
+  /* Sideways only: accented capitals (Ä, Ö, É) rise above the line box. */
+  overflow-x: clip;
+  overflow-y: visible;
   color: var(--text);
   font: 700 16px/1.2 var(--font-display);
   text-overflow: ellipsis;
@@ -762,7 +766,7 @@ a:focus-visible {
 
 .notice-layer.is-hero .notice__title {
   font: 800 clamp(32px, 7cqmin, 58px)/1.05 var(--font-display);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
 }
 
@@ -975,7 +979,9 @@ a:focus-visible {
 }
 
 .battle-card__name {
-  overflow: hidden;
+  /* Sideways only: accented capitals (Ä, Ö, É) rise above the line box. */
+  overflow-x: clip;
+  overflow-y: visible;
   color: var(--text);
   font: 700 18px/1.2 var(--font-display);
   text-overflow: ellipsis;
@@ -1122,7 +1128,9 @@ a:focus-visible {
 }
 
 .battle-move__name {
-  overflow: hidden;
+  /* Sideways only: accented capitals (Ä, Ö, É) rise above the line box. */
+  overflow-x: clip;
+  overflow-y: visible;
   font: 700 17px/1.2 var(--font-display);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1283,7 +1291,7 @@ a:focus-visible {
 .death-screen__title {
   color: var(--text);
   font: 800 clamp(38px, 9cqmin, 68px)/1 var(--font-display);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.015em;
   text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
 }
 
@@ -1549,7 +1557,7 @@ a:focus-visible {
   margin-top: 8px;
   color: var(--text);
   font: 800 clamp(30px, 4vw, 44px)/1.05 var(--font-display);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.015em;
 }
 
 .reward-text {

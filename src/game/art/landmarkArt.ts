@@ -377,7 +377,7 @@ function signboard(ctx: Ctx, x: number, y: number, w: number, h: number, text: s
   ctx.strokeStyle = rgba(shade(bg, -0.45), 1);
   ctx.lineWidth = 0.35;
   roundRect(ctx, x, y, w, h, 1); ctx.stroke();
-  ctx.font = `700 ${h * 0.62}px Syne, "Segoe UI", Arial, sans-serif`;
+  ctx.font = `700 ${h * 0.62}px Sora, "Segoe UI", Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (glow) {

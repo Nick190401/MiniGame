@@ -89,10 +89,10 @@ export class PreloadScene extends Phaser.Scene {
     brand.fillStyle(0xff7a2b, 1);
     brand.fillRect(38, 37, 31, 31);
     text(53.5, 52.5, 'SQ', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '11px', color: '#110906',
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '11px', color: '#110906',
     }).setOrigin(0.5);
     text(82, 38, 'SOUND QUEST', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '12px', color: '#f6f4f3', letterSpacing: 2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '12px', color: '#f6f4f3', letterSpacing: 2,
     });
     text(82, 56, 'WORLD LINK // BOOT SEQUENCE', {
       fontFamily: 'DM Mono', fontSize: '7px', color: '#82766e', letterSpacing: 1,
@@ -115,10 +115,10 @@ export class PreloadScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '8px', color: '#9c928b', letterSpacing: 2,
     });
     text(36, 143, 'SIGNAL', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '53px', color: '#f6f4f3', letterSpacing: -2,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '53px', color: '#f6f4f3', letterSpacing: -1,
     });
     text(36, 192, 'LOCK', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '63px', color: '#ff7a2b', letterSpacing: -3,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '63px', color: '#ff7a2b', letterSpacing: -1,
     });
     text(41, 264, 'Calibrating your frequency\nfor the world beyond.', {
       fontFamily: 'DM Mono', fontSize: '10px', color: '#a9a19b', lineSpacing: 7,
@@ -186,7 +186,7 @@ export class PreloadScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '6px', color: '#83776f', letterSpacing: 1,
     });
     text(438, 360, 'IDENTITY SYNC', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '9px', color: '#ff7a2b', letterSpacing: 1,
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '9px', color: '#ff7a2b', letterSpacing: 1,
     });
 
     const module = this.add.graphics();
@@ -199,7 +199,7 @@ export class PreloadScene extends Phaser.Scene {
       fontFamily: 'DM Mono', fontSize: '8px', color: '#a9a099', letterSpacing: 1,
     });
     const progressText = text(width - 52, 384, '00%', {
-      fontFamily: 'Syne', fontStyle: 'bold', fontSize: '17px', color: '#ff7a2b',
+      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '17px', color: '#ff7a2b',
     }).setOrigin(1, 0);
 
     const segmentGap = 5;
