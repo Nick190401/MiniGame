@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { AudioManager } from '../game/audio/AudioManager';
 import { SFX } from '../game/audio/AudioLibrary';
@@ -8,6 +8,18 @@ import { useKeyArt } from './useKeyArt';
 import { GameLogo } from './GameLogo';
 
 const playUiClick = () => AudioManager.playSfx(SFX.uiClick.key);
+
+/** Embers drifting up from the Gatekeeper's fire; fixed values keep renders stable. */
+const EMBERS = Array.from({ length: 22 }, (_, i) => {
+  const r = (n: number) => ((Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1;
+  return {
+    '--x': `${(r(1) * 100).toFixed(1)}%`,
+    '--s': `${(2 + r(2) * 3.5).toFixed(1)}px`,
+    '--t': `${(7 + r(3) * 8).toFixed(1)}s`,
+    '--d': `${(-r(4) * 15).toFixed(1)}s`,
+    '--drift': `${((r(5) - 0.5) * 120).toFixed(0)}px`,
+  } as CSSProperties;
+});
 
 export function TitleScreen() {
   const setGamePhase = useGameStore(s => s.setGamePhase);
@@ -53,10 +65,11 @@ export function TitleScreen() {
   }, [showModal, closeModal]);
 
   return (
-    <div
-      className={`title-screen${keyArt ? ' has-art' : ''}`}
-      style={keyArt ? { backgroundImage: `url(${keyArt})` } : undefined}
-    >
+    <div className={`title-screen${keyArt ? ' has-art' : ''}`}>
+      <div className="title-screen__art" style={keyArt ? { backgroundImage: `url(${keyArt})` } : undefined} aria-hidden="true" />
+      <div className="title-screen__embers" aria-hidden="true">
+        {EMBERS.map((style, index) => <i key={index} style={style} />)}
+      </div>
       {(COMING_SOON || !showModal) && (
         <>
           <div className="brand-stamp"><BrandLogo /></div>
