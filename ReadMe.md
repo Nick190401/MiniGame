@@ -522,10 +522,19 @@ bitmap images for the world, characters, enemies or arenas:
 | Area | Source |
 | --- | --- |
 | Terrain | `src/game/world/terrain` (splat maps from the tile grid + shader) |
-| Props, buildings, cave | `src/game/art/vegetation.ts`, `structures.ts`, `landmarkArt.ts`, `buildingTiles.ts`, `caveArt.ts` |
+| Trees, bushes, rocks, grass, flowers | `src/game/art/foliage.ts` (modelled as lit volumes) |
+| Buildings, structures, cave | `src/game/art/landmarkArt.ts`, `structures.ts`, `buildingTiles.ts`, `caveArt.ts` |
 | Characters | `src/game/art/characters` (one rig: overworld walk cycles, battle sprite, dialogue busts) |
 | Enemies and arenas | `src/game/art/battleArt.ts` |
 | Title key art | `src/game/art/keyArt.ts` |
+
+Objects are lit rather than flat-shaded. Buildings, structures, characters and
+cave props are painted with a material map (height, gloss, glow) that
+`src/game/art/relief.ts` lights per pixel, so eaves shade the walls, frames and
+sills cast small shadows, glass catches the sun and lit windows glow. Foliage
+and stones are built from lit volumes with self-shadowing and light passing
+through thin leaves (`src/game/art/litSprite.ts`). Everything standing in the
+sun casts a projected shadow onto the ground (`src/game/art/castShadow.ts`).
 
 The canvas renders at a multiple of the logical 640 x 480 board
 (`src/game/render/RenderScale.ts`), so the game stays sharp on high-density

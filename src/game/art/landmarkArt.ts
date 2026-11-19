@@ -3,6 +3,8 @@ import { blobPoints, linear, mix, radial, rgba, rng, roundRect, shade, smoothPat
 import { addWorldImage, standingDepth, worldTexture } from './worldTexture';
 import { FX } from './fx';
 import { woodBoard } from './structures';
+import { TEXEL } from '../render/RenderScale';
+import { heightAdd, heightGradient, heightOnly, heightRadial, heightRamp, mat, paintRelief, withHeight } from './relief';
 
 /*
  * Buildings are painted in a three-quarter view: the roof seen from above,
@@ -12,14 +14,29 @@ import { woodBoard } from './structures';
 
 type Rand = () => number;
 
+/**
+ * Material heights (share of the relief scale, see relief.ts): the façade
+ * plane, recessed glass and doors, frames and beams standing proud of it,
+ * protruding sills, and roofs rising to the eaves that overhang the walls.
+ */
+const H = {
+  wall: 0.3, recess: 0.22, frame: 0.36, beam: 0.355, sill: 0.45,
+  roofRidge: 0.6, roofEave: 0.86, flatRoof: 0.72, parapet: 0.8, prop: 0.46,
+} as const;
+
 // ── Materials ─────────────────────────────────────────────────────────────
 
 function plaster(ctx: Ctx, x: number, y: number, w: number, h: number, color: number, rand: Rand): void {
-  ctx.fillStyle = linear(ctx, x, y, x, y + h, [[0, shade(color, -0.12)], [0.25, color], [1, shade(color, -0.06)]]);
-  ctx.fillRect(x, y, w, h);
+  withHeight(mat(H.wall), () => {
+    ctx.fillStyle = linear(ctx, x, y, x, y + h, [[0, shade(color, -0.05)], [0.3, color], [1, shade(color, -0.08)]]);
+    ctx.fillRect(x, y, w, h);
+  });
   for (let i = 0; i < w * h * 0.08; i++) {
-    ctx.fillStyle = rgba(rand() < 0.5 ? shade(color, -0.12) : shade(color, 0.1), 0.25);
-    ctx.fillRect(x + rand() * w, y + rand() * h, 0.5 + rand() * 1.2, 0.4 + rand() * 0.8);
+    const raised = rand() < 0.5;
+    const rx = x + rand() * w, ry = y + rand() * h, rw = 0.5 + rand() * 1.2, rh = 0.4 + rand() * 0.8;
+    ctx.fillStyle = rgba(raised ? shade(color, 0.06) : shade(color, -0.1), 0.25);
+    ctx.fillRect(rx, ry, rw, rh);
+    heightOnly(mat(H.wall + (raised ? 0.006 : -0.006)), () => ctx.fillRect(rx, ry, rw, rh));
   }
   // Rain streaks below the eaves.
   for (let i = 0; i < w / 6; i++) {
@@ -29,44 +46,69 @@ function plaster(ctx: Ctx, x: number, y: number, w: number, h: number, color: nu
   }
 }
 
-function stoneWall(ctx: Ctx, x: number, y: number, w: number, h: number, base: number, rand: Rand, course = 4.2): void {
-  ctx.fillStyle = rgba(shade(base, -0.45), 1);
-  ctx.fillRect(x, y, w, h);
+function stoneWall(ctx: Ctx, x: number, y: number, w: number, h: number, base: number, rand: Rand, course = 4.2, lift = 0): void {
+  withHeight(mat(H.wall - 0.05 + lift), () => {
+    ctx.fillStyle = rgba(shade(base, -0.5), 1);
+    ctx.fillRect(x, y, w, h);
+  });
   for (let cy = y; cy < y + h; cy += course) {
     let cx = x - rand() * 4;
     while (cx < x + w) {
       const sw = 4 + rand() * 5;
-      const tone = mix(shade(base, -0.15), shade(base, 0.15), rand());
-      ctx.fillStyle = linear(ctx, cx, cy, cx, cy + course, [[0, shade(tone, 0.1)], [1, shade(tone, -0.15)]]);
-      roundRect(ctx, cx + 0.35, cy + 0.35, sw - 0.7, course - 0.7, 1);
-      ctx.fill();
+      const tone = mix(shade(base, -0.2), shade(base, 0.14), rand());
+      ctx.fillStyle = linear(ctx, cx, cy, cx, cy + course, [[0, shade(tone, 0.04)], [1, shade(tone, -0.06)]]);
+      withHeight(mat(H.wall + lift), () => { roundRect(ctx, cx + 0.35, cy + 0.35, sw - 0.7, course - 0.7, 1); ctx.fill(); });
+      heightOnly(mat(H.wall + 0.035 + lift), () => { roundRect(ctx, cx + 0.95, cy + 0.9, sw - 1.9, course - 1.8, 0.8); ctx.fill(); });
+      // Weathered surface: lichen, pits and lighter grains.
+      for (let k = 0; k < sw * 0.8; k++) {
+        ctx.fillStyle = rgba(rand() < 0.3 ? 0x6f7a4a : rand() < 0.5 ? shade(tone, -0.25) : shade(tone, 0.18), 0.35);
+        ctx.beginPath(); ctx.ellipse(cx + 0.6 + rand() * (sw - 1.2), cy + 0.6 + rand() * (course - 1.2), 0.25 + rand() * 0.4, 0.2 + rand() * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+      }
       cx += sw;
     }
   }
 }
 
 function brickWall(ctx: Ctx, x: number, y: number, w: number, h: number, base: number, rand: Rand): void {
-  ctx.fillStyle = rgba(0xb7aa98, 1);
-  ctx.fillRect(x, y, w, h);
+  withHeight(mat(H.wall - 0.035), () => {
+    ctx.fillStyle = rgba(0xa79a88, 1);
+    ctx.fillRect(x, y, w, h);
+  });
   const bh = 2.2, bw = 5;
   let row = 0;
   for (let cy = y; cy < y + h; cy += bh, row++) {
     for (let cx = x - (row % 2) * bw / 2; cx < x + w; cx += bw) {
-      ctx.fillStyle = rgba(mix(shade(base, -0.12), shade(base, 0.12), rand()), 1);
-      ctx.fillRect(cx + 0.25, cy + 0.25, bw - 0.5, bh - 0.5);
+      // Most bricks near the base colour, some over-fired or sooty.
+      const pick = rand();
+      const tone = pick < 0.12 ? shade(base, -0.32) : pick > 0.92 ? mix(base, 0xc98a5a, 0.4) : mix(shade(base, -0.12), shade(base, 0.12), rand());
+      ctx.fillStyle = linear(ctx, cx, cy, cx + bw * 0.3, cy + bh, [[0, shade(tone, 0.05)], [1, shade(tone, -0.08)]]);
+      withHeight(mat(H.wall), () => ctx.fillRect(cx + 0.25, cy + 0.25, bw - 0.5, bh - 0.5));
+      heightOnly(mat(H.wall + 0.018), () => ctx.fillRect(cx + 0.6, cy + 0.55, bw - 1.2, bh - 1.1));
+      if (rand() < 0.5) {
+        ctx.fillStyle = rgba(rand() < 0.5 ? 0x2a1a12 : 0xe0b48c, 0.22);
+        ctx.fillRect(cx + 0.5 + rand() * (bw - 1.5), cy + 0.5 + rand() * (bh - 1), 0.5 + rand() * 0.8, 0.3);
+      }
     }
   }
 }
 
-function planks(ctx: Ctx, x: number, y: number, w: number, h: number, base: number, seed: number, vertical = true): void {
+function planks(ctx: Ctx, x: number, y: number, w: number, h: number, base: number, seed: number, vertical = true, lift: number = H.wall): void {
   const size = vertical ? 4 : 3.2;
   let i = 0;
   for (let p = 0; p < (vertical ? w : h); p += size, i++) {
     const tone = mix(shade(base, -0.08), shade(base, 0.08), ((i * 37) % 13) / 13);
-    if (vertical) woodBoard(ctx, x + p, y, Math.min(size, w - p), h, tone, seed + i, true);
-    else woodBoard(ctx, x, y + p, w, Math.min(size, h - p), tone, seed + i);
+    const bw = Math.min(size, (vertical ? w : h) - p);
+    const board = vertical
+      ? heightGradient(x + p, 0, x + p + bw, 0, [[0, lift - 0.008], [0.5, lift + 0.012], [1, lift - 0.008]])
+      : heightGradient(0, y + p, 0, y + p + bw, [[0, lift - 0.008], [0.5, lift + 0.012], [1, lift - 0.008]]);
+    withHeight(board, () => {
+      if (vertical) woodBoard(ctx, x + p, y, bw, h, tone, seed + i, true);
+      else woodBoard(ctx, x, y + p, w, bw, tone, seed + i);
+    });
     ctx.fillStyle = 'rgba(25,15,8,0.55)';
-    if (vertical) ctx.fillRect(x + p, y, 0.35, h); else ctx.fillRect(x, y + p, w, 0.35);
+    withHeight(mat(lift - 0.03), () => {
+      if (vertical) ctx.fillRect(x + p, y, 0.35, h); else ctx.fillRect(x, y + p, w, 0.35);
+    });
   }
 }
 
@@ -74,26 +116,31 @@ function panels(ctx: Ctx, x: number, y: number, w: number, h: number, base: numb
   for (let px = x; px < x + w; px += size) {
     for (let py = y; py < y + h; py += size * 0.75) {
       const tone = mix(shade(base, -0.05), shade(base, 0.06), rand());
-      ctx.fillStyle = linear(ctx, px, py, px + size, py + size, [[0, shade(tone, 0.05)], [1, shade(tone, -0.07)]]);
-      ctx.fillRect(px, py, Math.min(size, x + w - px), Math.min(size * 0.75, y + h - py));
+      ctx.fillStyle = linear(ctx, px, py, px + size, py + size, [[0, shade(tone, 0.03)], [1, shade(tone, -0.05)]]);
+      withHeight(mat(H.wall, 0.25), () => ctx.fillRect(px, py, Math.min(size, x + w - px), Math.min(size * 0.75, y + h - py)));
       ctx.fillStyle = 'rgba(20,24,26,0.35)';
-      ctx.fillRect(px, py, 0.4, Math.min(size * 0.75, y + h - py));
-      ctx.fillRect(px, py, Math.min(size, x + w - px), 0.4);
+      withHeight(mat(H.wall - 0.025), () => {
+        ctx.fillRect(px, py, 0.4, Math.min(size * 0.75, y + h - py));
+        ctx.fillRect(px, py, Math.min(size, x + w - px), 0.4);
+      });
     }
   }
 }
 
 function timberFrame(ctx: Ctx, x: number, y: number, w: number, h: number, beam: number, posts: number[]): void {
-  const draw = (bx: number, by: number, bw: number, bh: number) => woodBoard(ctx, bx, by, bw, bh, beam, Math.round(bx * 7 + by), bw < bh);
+  const draw = (bx: number, by: number, bw: number, bh: number) =>
+    withHeight(mat(H.beam), () => woodBoard(ctx, bx, by, bw, bh, beam, Math.round(bx * 7 + by), bw < bh));
   draw(x, y, w, 2.2);
   draw(x, y + h - 2.4, w, 2.4);
   posts.forEach(px => draw(x + px - 1.1, y, 2.2, h));
   ctx.strokeStyle = rgba(shade(beam, -0.1), 1);
   ctx.lineWidth = 1.6;
-  for (let i = 0; i + 1 < posts.length; i++) {
-    if (i % 2) continue;
-    ctx.beginPath(); ctx.moveTo(x + posts[i] + 1, y + h - 2.4); ctx.lineTo(x + posts[i + 1] - 1, y + 2.2); ctx.stroke();
-  }
+  withHeight(mat(H.beam), () => {
+    for (let i = 0; i + 1 < posts.length; i++) {
+      if (i % 2) continue;
+      ctx.beginPath(); ctx.moveTo(x + posts[i] + 1, y + h - 2.4); ctx.lineTo(x + posts[i + 1] - 1, y + 2.2); ctx.stroke();
+    }
+  });
 }
 
 // ── Roofs ─────────────────────────────────────────────────────────────────
@@ -101,12 +148,24 @@ function timberFrame(ctx: Ctx, x: number, y: number, w: number, h: number, beam:
 type RoofMaterial = 'tile' | 'slate' | 'shingle' | 'metal' | 'thatch';
 
 function roofCourses(ctx: Ctx, x: number, y: number, w: number, h: number, color: number, material: RoofMaterial, rand: Rand): void {
-  ctx.fillStyle = linear(ctx, x, y, x, y + h, [[0, shade(color, 0.14)], [1, shade(color, -0.18)]]);
-  ctx.fillRect(x, y, w, h);
+  const level = (yy: number) => H.roofRidge + (H.roofEave - H.roofRidge) * Math.max(0, Math.min(1, (yy - y) / h));
+  withHeight(heightGradient(0, y, 0, y + h, [[0, H.roofRidge], [1, H.roofEave]]), () => {
+    ctx.fillStyle = linear(ctx, x, y, x, y + h, [[0, shade(color, 0.06)], [1, shade(color, -0.1)]]);
+    ctx.fillRect(x, y, w, h);
+  });
+  // Moss, lichen and soot weather every roof a little differently.
+  const weather = () => {
+    for (let i = 0; i < w * h * 0.03; i++) {
+      const tone = rand() < 0.55 ? (material === 'slate' ? 0xb8b9a0 : 0x5d6a2c) : 0x1c1814;
+      ctx.fillStyle = rgba(tone, 0.12 + rand() * 0.14);
+      ctx.beginPath(); ctx.ellipse(x + rand() * w, y + h * (0.25 + rand() * 0.75), 0.4 + rand() * 1.4, 0.3 + rand() * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  };
   if (material === 'metal') {
     for (let sx = x; sx < x + w; sx += 3.2) {
-      ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(sx, y, 0.5, h);
-      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(sx + 0.5, y, 0.5, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(sx, y, 0.5, h);
+      ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(sx + 0.5, y, 0.5, h);
+      heightAdd(mat(0.02), () => ctx.fillRect(sx, y, 0.6, h));
     }
     return;
   }
@@ -116,28 +175,37 @@ function roofCourses(ctx: Ctx, x: number, y: number, w: number, h: number, color
       ctx.strokeStyle = rgba(rand() < 0.5 ? shade(color, 0.2) : shade(color, -0.25), 0.55);
       ctx.lineWidth = 0.3;
       ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + (rand() - 0.5) * 0.8, sy + 2 + rand() * 2); ctx.stroke();
+      if (i % 3 === 0) heightAdd(mat(0.012), () => ctx.stroke());
     }
+    weather();
     return;
   }
   const courseH = material === 'tile' ? 3 : 2.6;
   let row = 0;
   for (let cy = y; cy < y + h; cy += courseH, row++) {
     const unit = material === 'tile' ? 3.2 : material === 'slate' ? 4.2 : 3.6;
+    // Each course starts tucked under the one above and ends in a lit lip.
+    heightOnly(heightGradient(0, cy, 0, cy + courseH, [[0, level(cy) - 0.02], [1, level(cy + courseH) + 0.025]]), () => ctx.fillRect(x, cy, w, courseH));
     for (let cx = x - (row % 2) * unit / 2; cx < x + w; cx += unit) {
-      const tone = mix(shade(color, -0.1), shade(color, 0.12), rand());
-      ctx.fillStyle = linear(ctx, 0, cy, 0, cy + courseH, [[0, shade(tone, 0.12)], [0.7, tone], [1, shade(tone, -0.35)]]);
+      const tone = mix(shade(color, -0.12), shade(color, 0.1), rand());
+      ctx.fillStyle = linear(ctx, 0, cy, 0, cy + courseH, [[0, shade(tone, 0.05)], [0.75, tone], [1, shade(tone, -0.25)]]);
       if (material === 'tile') {
         ctx.beginPath();
         ctx.moveTo(cx, cy); ctx.lineTo(cx + unit, cy); ctx.lineTo(cx + unit, cy + courseH - 0.6);
         ctx.quadraticCurveTo(cx + unit / 2, cy + courseH + 0.5, cx, cy + courseH - 0.6);
         ctx.closePath(); ctx.fill();
+        // Barrel-shaped clay tiles.
+        heightAdd(heightRamp(cx, 0, cx + unit, 0, [[0, 0], [0.5, 0.022], [1, 0]]), () => ctx.fill());
       } else {
         ctx.fillRect(cx + 0.2, cy, unit - 0.4, courseH - 0.25);
+        // Slates and shingles never lie perfectly flat.
+        heightAdd(mat(rand() * 0.012), () => ctx.fillRect(cx + 0.2, cy, unit - 0.4, courseH - 0.25));
       }
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
     ctx.fillRect(x, cy + courseH - 0.35, w, 0.35);
   }
+  weather();
 }
 
 interface RoofSpec {
@@ -161,41 +229,41 @@ function hipRoof(ctx: Ctx, spec: RoofSpec, rand: Rand): void {
   roofCourses(ctx, x, y, w, h, color, material, rand);
   ctx.restore();
   if (hip > 0) {
-    // West hip catches the sun, east hip falls into shade.
-    ctx.save();
-    ctx.beginPath(); ctx.moveTo(x + hip, y); ctx.lineTo(x, y + h); ctx.lineTo(x + hip * 0.2, y + h); ctx.lineTo(x + hip * 1.25, y + ridgeH); ctx.closePath();
-    ctx.fillStyle = rgba(0xfff4dc, 0.16); ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.beginPath(); ctx.moveTo(x + w - hip, y); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - hip * 0.2, y + h); ctx.lineTo(x + w - hip * 1.25, y + ridgeH); ctx.closePath();
-    ctx.fillStyle = rgba(0x0a0806, 0.28); ctx.fill();
-    ctx.restore();
+    // West hip faces the sun, east hip turns away from it.
+    const westHip = () => { ctx.beginPath(); ctx.moveTo(x + hip, y); ctx.lineTo(x, y + h); ctx.lineTo(x + hip * 0.2, y + h); ctx.lineTo(x + hip * 1.25, y + ridgeH); ctx.closePath(); };
+    const eastHip = () => { ctx.beginPath(); ctx.moveTo(x + w - hip, y); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - hip * 0.2, y + h); ctx.lineTo(x + w - hip * 1.25, y + ridgeH); ctx.closePath(); };
+    heightOnly(heightGradient(x, 0, x + hip * 1.25, 0, [[0, H.roofRidge + 0.02], [1, H.roofEave - 0.02]]), () => { westHip(); ctx.fill(); });
+    heightOnly(heightGradient(x + w - hip * 1.25, 0, x + w, 0, [[0, H.roofEave - 0.02], [1, H.roofRidge + 0.02]]), () => { eastHip(); ctx.fill(); });
+    ctx.save(); westHip(); ctx.fillStyle = rgba(0xfff4dc, 0.05); ctx.fill(); ctx.restore();
+    ctx.save(); eastHip(); ctx.fillStyle = rgba(0x0a0806, 0.1); ctx.fill(); ctx.restore();
   }
   // Ridge cap.
-  ctx.fillStyle = linear(ctx, 0, y - 0.6, 0, y + ridgeH, [[0, shade(color, 0.3)], [1, shade(color, -0.25)]]);
-  roundRect(ctx, x + hip - 1, y - 0.6, w - hip * 2 + 2, ridgeH, 0.8);
-  ctx.fill();
+  ctx.fillStyle = linear(ctx, 0, y - 0.6, 0, y + ridgeH, [[0, shade(color, 0.18)], [1, shade(color, -0.2)]]);
+  withHeight(heightGradient(0, y - 0.6, 0, y + ridgeH, [[0, H.roofRidge + 0.05], [0.5, H.roofRidge + 0.08], [1, H.roofRidge + 0.03]]), () => {
+    roundRect(ctx, x + hip - 1, y - 0.6, w - hip * 2 + 2, ridgeH, 0.8);
+    ctx.fill();
+  });
   // Fascia board along the eave.
   ctx.fillStyle = linear(ctx, 0, y + h - 1.6, 0, y + h + 0.6, [[0, shade(color, -0.45)], [1, 0x1b120c]]);
-  ctx.fillRect(x - 0.5, y + h - 1.4, w + 1, 1.9);
+  withHeight(mat(H.roofEave + 0.02), () => ctx.fillRect(x - 0.5, y + h - 1.4, w + 1, 1.9));
 }
 
 function eaveShadow(ctx: Ctx, x: number, y: number, w: number, depth = 5): void {
-  ctx.fillStyle = linear(ctx, 0, y, 0, y + depth, [[0, 0x140e0a, 0.55], [1, 0x140e0a, 0]]);
+  ctx.fillStyle = linear(ctx, 0, y, 0, y + depth, [[0, 0x140e0a, 0.25], [1, 0x140e0a, 0]]);
   ctx.fillRect(x, y, w, depth);
 }
 
 function flatRoof(ctx: Ctx, x: number, y: number, w: number, h: number, color: number, rand: Rand): void {
-  ctx.fillStyle = linear(ctx, x, y, x + w, y + h, [[0, shade(color, 0.1)], [1, shade(color, -0.12)]]);
-  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = linear(ctx, x, y, x + w, y + h, [[0, shade(color, 0.05)], [1, shade(color, -0.07)]]);
+  withHeight(mat(H.flatRoof), () => ctx.fillRect(x, y, w, h));
   for (let i = 0; i < w * h * 0.25; i++) {
     ctx.fillStyle = rgba(rand() < 0.5 ? shade(color, -0.2) : shade(color, 0.16), 0.35);
     ctx.fillRect(x + rand() * w, y + rand() * h, 0.6, 0.6);
   }
   // Parapet.
-  ctx.strokeStyle = rgba(shade(color, 0.28), 1);
+  ctx.strokeStyle = rgba(shade(color, 0.22), 1);
   ctx.lineWidth = 1.6;
-  ctx.strokeRect(x + 0.8, y + 0.8, w - 1.6, h - 1.6);
+  withHeight(mat(H.parapet), () => ctx.strokeRect(x + 0.8, y + 0.8, w - 1.6, h - 1.6));
   ctx.strokeStyle = 'rgba(0,0,0,0.3)';
   ctx.lineWidth = 0.5;
   ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
@@ -213,16 +281,20 @@ interface WindowStyle {
 }
 
 function windowAt(ctx: Ctx, x: number, y: number, w: number, h: number, style: WindowStyle, rand: Rand): void {
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(x + 0.6, y + 0.8, w, h);
   ctx.fillStyle = rgba(style.frame, 1);
-  if (style.arch) { roundRect(ctx, x - 0.8, y - 0.8, w + 1.6, h + 1.6, [w / 2, w / 2, 0.6, 0.6]); ctx.fill(); }
-  else ctx.fillRect(x - 0.8, y - 0.8, w + 1.6, h + 1.6);
+  withHeight(mat(H.frame, 0.2), () => {
+    if (style.arch) { roundRect(ctx, x - 0.8, y - 0.8, w + 1.6, h + 1.6, [w / 2, w / 2, 0.6, 0.6]); ctx.fill(); }
+    else ctx.fillRect(x - 0.8, y - 0.8, w + 1.6, h + 1.6);
+  });
   // Glass: sky reflection on top, warm interior below.
   const glass = linear(ctx, x, y, x + w * 0.4, y + h, [[0, 0xbfd8e0], [0.45, 0x5d7c88], [1, style.glow ?? 0x2f3e45]]);
   ctx.fillStyle = glass;
-  if (style.arch) { roundRect(ctx, x, y, w, h, [w / 2 - 0.6, w / 2 - 0.6, 0, 0]); ctx.fill(); }
-  else ctx.fillRect(x, y, w, h);
+  withHeight(mat(H.recess, 0.9, style.glow ? 0.3 : 0), () => {
+    if (style.arch) { roundRect(ctx, x, y, w, h, [w / 2 - 0.6, w / 2 - 0.6, 0, 0]); ctx.fill(); }
+    else ctx.fillRect(x, y, w, h);
+  });
   if (style.glow) {
     ctx.fillStyle = radial(ctx, x + w / 2, y + h * 0.7, 0, w, [[0, style.glow, 0.55], [1, style.glow, 0]]);
     ctx.fillRect(x, y, w, h);
@@ -231,23 +303,25 @@ function windowAt(ctx: Ctx, x: number, y: number, w: number, h: number, style: W
   ctx.beginPath(); ctx.moveTo(x + 0.6, y + h * 0.55); ctx.lineTo(x + w * 0.45, y + 0.4); ctx.lineTo(x + w * 0.6, y + 0.4); ctx.lineTo(x + 0.6, y + h * 0.75); ctx.closePath(); ctx.fill();
   if (style.mullion !== false) {
     ctx.fillStyle = rgba(style.frame, 1);
-    ctx.fillRect(x + w / 2 - 0.35, y, 0.7, h);
-    ctx.fillRect(x, y + h * 0.48, w, 0.6);
+    withHeight(mat(H.recess + 0.05, 0.2), () => {
+      ctx.fillRect(x + w / 2 - 0.35, y, 0.7, h);
+      ctx.fillRect(x, y + h * 0.48, w, 0.6);
+    });
   }
   // Sill.
   ctx.fillStyle = linear(ctx, 0, y + h + 0.4, 0, y + h + 1.8, [[0, 0xe8e2d4], [1, 0x8d877a]]);
-  ctx.fillRect(x - 1.2, y + h + 0.5, w + 2.4, 1.3);
+  withHeight(mat(H.sill), () => ctx.fillRect(x - 1.2, y + h + 0.5, w + 2.4, 1.3));
   if (style.shutters !== undefined) {
     for (const sx of [x - 3.2, x + w + 0.8]) {
-      ctx.fillStyle = linear(ctx, sx, 0, sx + 2.4, 0, [[0, shade(style.shutters, 0.15)], [1, shade(style.shutters, -0.2)]]);
-      ctx.fillRect(sx, y - 0.5, 2.4, h + 1);
+      ctx.fillStyle = linear(ctx, sx, 0, sx + 2.4, 0, [[0, shade(style.shutters, 0.08)], [1, shade(style.shutters, -0.12)]]);
+      withHeight(mat(H.frame - 0.01), () => ctx.fillRect(sx, y - 0.5, 2.4, h + 1));
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       for (let ly = y + 1; ly < y + h; ly += 1.6) ctx.fillRect(sx + 0.3, ly, 1.8, 0.35);
     }
   }
   if (style.flowers) {
     ctx.fillStyle = linear(ctx, 0, y + h + 1.6, 0, y + h + 4, [[0, 0x8a5a36], [1, 0x4d3220]]);
-    ctx.fillRect(x - 0.8, y + h + 1.6, w + 1.6, 2.4);
+    withHeight(mat(H.sill + 0.03), () => ctx.fillRect(x - 0.8, y + h + 1.6, w + 1.6, 2.4));
     for (let i = 0; i < w * 1.4; i++) {
       ctx.fillStyle = rgba([0xe4553b, 0xf1c440, 0xf5f1e3, 0xd77fb3][Math.floor(rand() * 4)], 0.95);
       ctx.beginPath(); ctx.arc(x + rand() * w, y + h + 1.2 + rand() * 1.2, 0.55 + rand() * 0.35, 0, Math.PI * 2); ctx.fill();
@@ -260,35 +334,37 @@ function windowAt(ctx: Ctx, x: number, y: number, w: number, h: number, style: W
 function doorAt(ctx: Ctx, x: number, y: number, w: number, h: number, color: number, { arch = false, glass = false, frame = 0x3b2a1e, step = true } = {}): void {
   if (step) {
     ctx.fillStyle = linear(ctx, 0, y + h, 0, y + h + 2.6, [[0, 0xb8b2a2], [1, 0x6f6a60]]);
-    ctx.fillRect(x - 2, y + h - 0.2, w + 4, 2.6);
+    withHeight(mat(0.08), () => ctx.fillRect(x - 2, y + h - 0.2, w + 4, 2.6));
   }
   ctx.fillStyle = rgba(frame, 1);
-  if (arch) { roundRect(ctx, x - 1, y - 1, w + 2, h + 1, [w / 2 + 1, w / 2 + 1, 0, 0]); ctx.fill(); }
-  else ctx.fillRect(x - 1, y - 1, w + 2, h + 1);
+  withHeight(mat(H.frame), () => {
+    if (arch) { roundRect(ctx, x - 1, y - 1, w + 2, h + 1, [w / 2 + 1, w / 2 + 1, 0, 0]); ctx.fill(); }
+    else ctx.fillRect(x - 1, y - 1, w + 2, h + 1);
+  });
   ctx.save();
   if (arch) { roundRect(ctx, x, y, w, h, [w / 2, w / 2, 0, 0]); ctx.clip(); }
   if (glass) {
     ctx.fillStyle = linear(ctx, x, y, x + w, y + h, [[0, 0xa9cbd4], [0.5, 0x3d5a64], [1, 0x1d2a2f]]);
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    withHeight(mat(H.recess - 0.02, 0.9, 0.12), () => ctx.fillRect(x, y, w, h));
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
     ctx.fillRect(x + w * 0.15, y, w * 0.18, h);
   } else {
-    planks(ctx, x, y, w, h, color, Math.round(x * 3), true);
+    planks(ctx, x, y, w, h, color, Math.round(x * 3), true, H.recess);
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fillRect(x + 1, y + 1.5, w - 2, 0.6);
     ctx.fillRect(x + 1, y + h - 3, w - 2, 0.6);
   }
   ctx.restore();
   ctx.fillStyle = rgba(0xd8b860, 1);
-  ctx.beginPath(); ctx.arc(x + w - 1.6, y + h * 0.55, 0.55, 0, Math.PI * 2); ctx.fill();
+  withHeight(mat(H.frame, 0.8), () => { ctx.beginPath(); ctx.arc(x + w - 1.6, y + h * 0.55, 0.55, 0, Math.PI * 2); ctx.fill(); });
 }
 
 function chimney(ctx: Ctx, x: number, y: number, w: number, h: number, rand: Rand): void {
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(x + w, y + 2, 2.4, h - 2);
-  stoneWall(ctx, x, y, w, h, 0x8a6f5c, rand, 2.4);
+  stoneWall(ctx, x, y, w, h, 0x8a6f5c, rand, 2.4, 0.62);
   ctx.fillStyle = linear(ctx, 0, y - 1.4, 0, y + 1, [[0, 0x9c9a90], [1, 0x55534c]]);
-  ctx.fillRect(x - 0.8, y - 1.2, w + 1.6, 2);
+  withHeight(mat(1), () => ctx.fillRect(x - 0.8, y - 1.2, w + 1.6, 2));
   ctx.fillStyle = '#1a1410';
   ctx.fillRect(x + 0.8, y - 1, w - 1.6, 0.9);
 }
@@ -296,8 +372,8 @@ function chimney(ctx: Ctx, x: number, y: number, w: number, h: number, rand: Ran
 function signboard(ctx: Ctx, x: number, y: number, w: number, h: number, text: string, bg: number, fg: number, glow = false): void {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   roundRect(ctx, x + 0.5, y + 0.7, w, h, 1); ctx.fill();
-  ctx.fillStyle = linear(ctx, 0, y, 0, y + h, [[0, shade(bg, 0.15)], [1, shade(bg, -0.2)]]);
-  roundRect(ctx, x, y, w, h, 1); ctx.fill();
+  ctx.fillStyle = linear(ctx, 0, y, 0, y + h, [[0, shade(bg, 0.08)], [1, shade(bg, -0.12)]]);
+  withHeight(mat(H.frame + 0.05, 0.15), () => { roundRect(ctx, x, y, w, h, 1); ctx.fill(); });
   ctx.strokeStyle = rgba(shade(bg, -0.45), 1);
   ctx.lineWidth = 0.35;
   roundRect(ctx, x, y, w, h, 1); ctx.stroke();
@@ -309,7 +385,7 @@ function signboard(ctx: Ctx, x: number, y: number, w: number, h: number, text: s
     ctx.shadowBlur = 3;
   }
   ctx.fillStyle = rgba(fg, 1);
-  ctx.fillText(text, x + w / 2, y + h / 2 + 0.2, w - 2);
+  withHeight(glow ? mat(H.frame + 0.05, 0, 0.9) : null, () => ctx.fillText(text, x + w / 2, y + h / 2 + 0.2, w - 2));
   ctx.shadowBlur = 0;
 }
 
@@ -319,17 +395,17 @@ function lamp(ctx: Ctx, x: number, y: number, color = 0xffd890): void {
   ctx.fillStyle = radial(ctx, x, y + 0.9, 0, 4, [[0, color, 0.55], [1, color, 0]]);
   ctx.fillRect(x - 4, y - 3, 8, 8);
   ctx.fillStyle = rgba(0x2a2622, 1);
-  roundRect(ctx, x - 1.1, y - 0.4, 2.2, 2.6, 0.5); ctx.fill();
+  withHeight(mat(H.frame + 0.08, 0.4), () => { roundRect(ctx, x - 1.1, y - 0.4, 2.2, 2.6, 0.5); ctx.fill(); });
   ctx.fillStyle = rgba(color, 1);
-  ctx.fillRect(x - 0.6, y + 0.1, 1.2, 1.6);
+  withHeight(mat(H.frame + 0.08, 0, 1), () => ctx.fillRect(x - 0.6, y + 0.1, 1.2, 1.6));
 }
 
 function plantPot(ctx: Ctx, x: number, y: number, rand: Rand): void {
   softEllipse(ctx, x + 0.5, y + 0.5, 2.8, 1, 0x000000, 0.4);
   ctx.fillStyle = linear(ctx, x - 2, 0, x + 2, 0, [[0, 0xc26b45], [1, 0x7a3a22]]);
-  ctx.beginPath(); ctx.moveTo(x - 2, y - 3); ctx.lineTo(x + 2, y - 3); ctx.lineTo(x + 1.5, y); ctx.lineTo(x - 1.5, y); ctx.closePath(); ctx.fill();
+  withHeight(mat(H.prop), () => { ctx.beginPath(); ctx.moveTo(x - 2, y - 3); ctx.lineTo(x + 2, y - 3); ctx.lineTo(x + 1.5, y); ctx.lineTo(x - 1.5, y); ctx.closePath(); ctx.fill(); });
   ctx.fillStyle = rgba(0x3f6e2c, 1);
-  smoothPath(ctx, blobPoints(x, y - 5, 2.8, 2.4, 8, 0.25, rand)); ctx.fill();
+  withHeight(mat(H.prop + 0.05), () => { smoothPath(ctx, blobPoints(x, y - 5, 2.8, 2.4, 8, 0.25, rand)); ctx.fill(); });
   ctx.fillStyle = rgba(0x6f9e45, 0.8);
   ctx.beginPath(); ctx.arc(x - 0.8, y - 5.8, 1, 0, Math.PI * 2); ctx.fill();
 }
@@ -337,7 +413,7 @@ function plantPot(ctx: Ctx, x: number, y: number, rand: Rand): void {
 function crates(ctx: Ctx, x: number, y: number, rand: Rand): void {
   softEllipse(ctx, x + 4, y, 7, 1.6, 0x000000, 0.4);
   for (const [cx, cy, s] of [[x, y - 6, 6], [x + 6.2, y - 5, 5], [x + 2.4, y - 11, 5]] as Array<[number, number, number]>) {
-    woodBoard(ctx, cx, cy, s, s, 0x9a7448, Math.round(cx + cy + rand() * 10));
+    withHeight(mat(H.prop + 0.02), () => woodBoard(ctx, cx, cy, s, s, 0x9a7448, Math.round(cx + cy + rand() * 10)));
     ctx.strokeStyle = 'rgba(40,24,12,0.8)';
     ctx.lineWidth = 0.45;
     ctx.strokeRect(cx, cy, s, s);
@@ -348,7 +424,7 @@ function crates(ctx: Ctx, x: number, y: number, rand: Rand): void {
 function barrel(ctx: Ctx, x: number, y: number): void {
   softEllipse(ctx, x + 1, y, 3.4, 1.2, 0x000000, 0.45);
   ctx.fillStyle = linear(ctx, x - 3, 0, x + 3, 0, [[0, 0x9a6a40], [0.5, 0x7a4f2e], [1, 0x4a2f1a]]);
-  roundRect(ctx, x - 3, y - 7, 6, 7, 1.6); ctx.fill();
+  withHeight(heightGradient(x - 3, 0, x + 3, 0, [[0, H.prop - 0.03], [0.45, H.prop + 0.03], [1, H.prop - 0.04]]), () => { roundRect(ctx, x - 3, y - 7, 6, 7, 1.6); ctx.fill(); });
   ctx.fillStyle = rgba(0x3c3c38, 1);
   ctx.fillRect(x - 3, y - 5.8, 6, 0.6); ctx.fillRect(x - 3, y - 2, 6, 0.6);
   ctx.fillStyle = radial(ctx, x, y - 7, 0.3, 3, [[0, 0xb08050], [1, 0x6a4526]]);
@@ -427,7 +503,7 @@ function professorLab(ctx: Ctx, w: number, h: number): void {
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.beginPath(); ctx.ellipse(dx + 3, dy + 12, 15, 5, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = radial(ctx, dx, dy + 4, 1, 16, [[0, 0xe2e6e4], [0.6, 0xa8b0b2], [1, 0x5d6669]], dx - 6, dy - 2);
-  ctx.beginPath(); ctx.arc(dx, dy + 10, 14, Math.PI, 0); ctx.closePath(); ctx.fill();
+  withHeight(heightRadial(dx, dy + 10, 14, [[0, 1], [0.7, 0.92], [1, 0.8]], 0.5), () => { ctx.beginPath(); ctx.arc(dx, dy + 10, 14, Math.PI, 0); ctx.closePath(); ctx.fill(); });
   ctx.fillStyle = rgba(0x1a2226, 1);
   ctx.fillRect(dx - 2, dy - 3.5, 4, 13.5);
   ctx.strokeStyle = 'rgba(40,50,55,0.6)';
@@ -444,7 +520,7 @@ function professorLab(ctx: Ctx, w: number, h: number): void {
   for (let i = 0; i < 4; i++) windowAt(ctx, 16 + i * 17 + (i > 1 ? 34 : 0), wallTop + 9, 12, 16, { frame: 0x26303a, glow: 0x9ee6ff }, rand);
   doorAt(ctx, w / 2 - 8, wallTop + 12, 16, base - wallTop - 12, 0x2f3d44, { glass: true, frame: 0x1e262c });
   ctx.fillStyle = linear(ctx, 0, wallTop + 5, 0, wallTop + 9, [[0, 0x6e7a80], [1, 0x343c40]]);
-  ctx.fillRect(w / 2 - 14, wallTop + 6, 28, 3);
+  withHeight(mat(H.frame + 0.12, 0.4), () => ctx.fillRect(w / 2 - 14, wallTop + 6, 28, 3));
   signboard(ctx, w / 2 - 15, wallTop - 1, 30, 6, 'SOUND LAB', 0x1d262c, 0x9ff0ff, true);
   groundShade(ctx, 4, base + 1, w - 8);
 }
@@ -465,7 +541,7 @@ function clinic(ctx: Ctx, w: number, h: number, modern = false): void {
   // Healing wave emblem: a soft green cross with a waveform through it.
   const ex = w / 2, ey = wallTop + (modern ? 6 : 6);
   ctx.fillStyle = rgba(0xffffff, 1);
-  ctx.beginPath(); ctx.arc(ex, ey, 4.6, 0, Math.PI * 2); ctx.fill();
+  withHeight(heightRadial(ex, ey, 4.6, [[0, H.frame + 0.06], [1, H.frame + 0.02]], 0.3), () => { ctx.beginPath(); ctx.arc(ex, ey, 4.6, 0, Math.PI * 2); ctx.fill(); });
   ctx.fillStyle = rgba(0x3fbf8a, 1);
   ctx.fillRect(ex - 1.2, ey - 3.4, 2.4, 6.8); ctx.fillRect(ex - 3.4, ey - 1.2, 6.8, 2.4);
   const wy = wallTop + (modern ? 16 : 18);
@@ -538,7 +614,7 @@ function workshop(ctx: Ctx, w: number, h: number, modern = false): void {
   const sx = w - 18, sy = base - 16;
   for (const [ox, oy, size] of [[0, 8, 9], [1, 0, 7.5]] as Array<[number, number, number]>) {
     ctx.fillStyle = linear(ctx, sx + ox, 0, sx + ox + size, 0, [[0, 0x2e2c2a], [1, 0x141312]]);
-    roundRect(ctx, sx + ox, sy + oy, size, size, 0.8); ctx.fill();
+    withHeight(mat(H.prop, 0.3), () => { roundRect(ctx, sx + ox, sy + oy, size, size, 0.8); ctx.fill(); });
     ctx.fillStyle = radial(ctx, sx + ox + size / 2, sy + oy + size / 2, 0.3, size * 0.4, [[0, 0x6a6a66], [0.5, 0x2a2a28], [1, 0x101010]]);
     ctx.beginPath(); ctx.arc(sx + ox + size / 2, sy + oy + size / 2, size * 0.36, 0, Math.PI * 2); ctx.fill();
   }
@@ -575,14 +651,14 @@ function signalStation(ctx: Ctx, w: number, h: number): void {
   for (let i = 0; i < 4; i++) {
     const px = 14 + i * 16, py = 12;
     ctx.fillStyle = linear(ctx, px, py, px + 13, py + 10, [[0, 0x3c5a78], [1, 0x14243a]]);
-    ctx.fillRect(px, py, 13, 10);
+    withHeight(mat(H.flatRoof + 0.04, 0.8), () => ctx.fillRect(px, py, 13, 10));
     ctx.strokeStyle = 'rgba(160,200,230,0.35)'; ctx.lineWidth = 0.25;
     for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(px + k * 3.25, py); ctx.lineTo(px + k * 3.25, py + 10); ctx.stroke(); }
     ctx.beginPath(); ctx.moveTo(px, py + 5); ctx.lineTo(px + 13, py + 5); ctx.stroke();
   }
   const dx = w - 34, dy = 18;
   ctx.fillStyle = radial(ctx, dx, dy, 1, 10, [[0, 0xf2f4f2], [0.7, 0xb8c0c0], [1, 0x6a7272]], dx - 3, dy - 3);
-  ctx.beginPath(); ctx.ellipse(dx, dy, 10, 7, -0.4, 0, Math.PI * 2); ctx.fill();
+  withHeight(heightRadial(dx, dy, 10, [[0, H.flatRoof + 0.02], [1, H.flatRoof + 0.12]], 0.6), () => { ctx.beginPath(); ctx.ellipse(dx, dy, 10, 7, -0.4, 0, Math.PI * 2); ctx.fill(); });
   ctx.strokeStyle = rgba(0x3a4244, 1); ctx.lineWidth = 0.6;
   ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(dx + 6, dy - 7); ctx.stroke();
   // Mast.
@@ -593,7 +669,7 @@ function signalStation(ctx: Ctx, w: number, h: number): void {
   for (let y = 4; y < wallTop - 4; y += 4) { ctx.beginPath(); ctx.moveTo(mx - 2, y); ctx.lineTo(mx + 2, y + 4); ctx.moveTo(mx + 2, y); ctx.lineTo(mx - 2, y + 4); ctx.stroke(); }
   // Glass curtain wall with a lit lobby.
   ctx.fillStyle = linear(ctx, 0, wallTop + 8, 0, base, [[0, 0x9fc4cf], [0.4, 0x3e6370], [1, 0x162a31]]);
-  ctx.fillRect(w * 0.3, wallTop + 8, w * 0.4, base - wallTop - 8);
+  withHeight(mat(H.recess, 0.9, 0.25), () => ctx.fillRect(w * 0.3, wallTop + 8, w * 0.4, base - wallTop - 8));
   ctx.fillStyle = radial(ctx, w / 2, base - 8, 0, 30, [[0, 0xffe2a8, 0.5], [1, 0xffe2a8, 0]]);
   ctx.fillRect(w * 0.3, wallTop + 8, w * 0.4, base - wallTop - 8);
   for (let x = w * 0.3; x <= w * 0.7; x += w * 0.08) { ctx.fillStyle = rgba(0x1d2529, 1); ctx.fillRect(x - 0.4, wallTop + 8, 0.8, base - wallTop - 8); }
@@ -624,18 +700,18 @@ function archiveShrine(ctx: Ctx, w: number, h: number): void {
   // Stepped plinth.
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = linear(ctx, 0, base - 2 + i * 2, 0, base + i * 2, [[0, 0xa8a594], [1, 0x6e6c60]]);
-    ctx.fillRect(4 - i * 2, base - 2 + i * 2, w - 8 + i * 4, 2.2);
+    withHeight(mat(0.2 - i * 0.05), () => ctx.fillRect(4 - i * 2, base - 2 + i * 2, w - 8 + i * 4, 2.2));
   }
   stoneWall(ctx, 12, wallTop, w - 24, base - wallTop - 2, 0x8c8a7a, rand, 5);
   eaveShadow(ctx, 12, wallTop, w - 24, 6);
   // Columns.
   for (const x of [8, 24, w - 32, w - 16]) {
     ctx.fillStyle = linear(ctx, x, 0, x + 8, 0, [[0, 0xd8d4c2], [0.45, 0xa9a594], [1, 0x6c6a5e]]);
-    ctx.fillRect(x, wallTop + 2, 8, base - wallTop - 4);
+    withHeight(heightGradient(x, 0, x + 8, 0, [[0, 0.4], [0.45, 0.5], [1, 0.4]]), () => ctx.fillRect(x, wallTop + 2, 8, base - wallTop - 4));
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     for (let k = 1; k < 4; k++) ctx.fillRect(x + k * 2, wallTop + 2, 0.4, base - wallTop - 4);
     ctx.fillStyle = rgba(0xc8c4b2, 1);
-    ctx.fillRect(x - 1, wallTop, 10, 2.6);
+    withHeight(mat(0.54), () => ctx.fillRect(x - 1, wallTop, 10, 2.6));
   }
   // Pediment roof with moss.
   ctx.fillStyle = linear(ctx, 0, 10, 0, wallTop, [[0, 0x5e6e60], [1, 0x3c463c]]);
@@ -653,7 +729,7 @@ function archiveShrine(ctx: Ctx, w: number, h: number): void {
   ctx.fillStyle = rgba(0x1a1e1a, 1);
   ctx.beginPath(); ctx.arc(w / 2, wallTop - 14, 7, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = radial(ctx, w / 2, wallTop - 14, 0, 7, [[0, 0xffd889, 0.9], [1, 0xd08a3a, 0.1]]);
-  ctx.beginPath(); ctx.arc(w / 2, wallTop - 14, 5.5, 0, Math.PI * 2); ctx.fill();
+  withHeight(mat(H.recess + 0.3, 0.4, 0.7), () => { ctx.beginPath(); ctx.arc(w / 2, wallTop - 14, 5.5, 0, Math.PI * 2); ctx.fill(); });
   doorAt(ctx, w / 2 - 7, wallTop + 10, 14, base - wallTop - 12, 0x4a3a2a, { arch: true, frame: 0x6c6a5e, step: false });
   groundShade(ctx, 2, base + 4, w - 4);
 }
@@ -664,7 +740,7 @@ function rangerHut(ctx: Ctx, w: number, h: number): void {
   // Log walls.
   for (let y = wallTop; y < base; y += 4) {
     ctx.fillStyle = linear(ctx, 0, y, 0, y + 4, [[0, 0x8a6442], [0.5, 0x6a4a2e], [1, 0x3c2818]]);
-    roundRect(ctx, 5, y, w - 10, 3.8, 1.8); ctx.fill();
+    withHeight(heightGradient(0, y, 0, y + 3.8, [[0, 0.27], [0.45, 0.35], [1, 0.27]]), () => { roundRect(ctx, 5, y, w - 10, 3.8, 1.8); ctx.fill(); });
     for (const x of [5, w - 9]) { ctx.fillStyle = radial(ctx, x + 2, y + 1.9, 0.2, 2, [[0, 0xc89a68], [1, 0x6a4a2e]]); ctx.beginPath(); ctx.arc(x + 2, y + 1.9, 1.9, 0, Math.PI * 2); ctx.fill(); }
   }
   eaveShadow(ctx, 5, wallTop, w - 10);
@@ -688,7 +764,7 @@ function caveMouth(ctx: Ctx, w: number, h: number): void {
   const rock = (x: number, y: number, rx: number, ry: number, tone: number) => {
     const pts = blobPoints(x, y, rx, ry, 12, 0.18, rand);
     ctx.fillStyle = radial(ctx, x, y, 1, Math.max(rx, ry) * 1.1, [[0, shade(tone, 0.25)], [0.6, tone], [1, shade(tone, -0.45)]], x - rx * 0.4, y - ry * 0.45);
-    smoothPath(ctx, pts); ctx.fill();
+    withHeight(heightRadial(x, y, Math.max(rx, ry), [[0, 0.75], [0.7, 0.55], [1, 0.3]]), () => { smoothPath(ctx, pts); ctx.fill(); });
     ctx.save(); ctx.clip();
     ctx.fillStyle = rgba(0x4f6a34, 0.45);
     ctx.beginPath(); ctx.ellipse(x - rx * 0.2, y - ry * 0.55, rx * 0.6, ry * 0.25, -0.2, 0, Math.PI * 2); ctx.fill();
@@ -734,5 +810,7 @@ export const LANDMARK_ART: Record<string, LandmarkArtEntry> = {
 };
 
 export function createLandmarkTextures(scene: Phaser.Scene): void {
-  Object.entries(LANDMARK_ART).forEach(([key, art]) => worldTexture(scene, key, art.w, art.h, art.paint));
+  Object.entries(LANDMARK_ART).forEach(([key, art]) => worldTexture(scene, key, art.w, art.h, (ctx) => {
+    ctx.drawImage(paintRelief(art.w, art.h, TEXEL, art.paint), 0, 0, art.w, art.h);
+  }));
 }

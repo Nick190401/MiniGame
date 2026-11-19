@@ -38,7 +38,6 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
-    createCharacterTextures(this);
     if (!this.textures.exists('player-preview')) {
       this.textures.addCanvas('player-preview', renderCharacterPortrait('player', { width: 300, height: 560, crop: 'full' }));
     }
@@ -235,7 +234,12 @@ export class PreloadScene extends Phaser.Scene {
       },
       {
         label: 'CALIBRATING PLAYER SIGNAL',
-        fn: () => createBattleCharacterTextures(this),
+        fn: () => {
+          // Walk cycles are lit frame by frame: the heaviest step, so it runs
+          // here where the loading bar can show it rather than before first paint.
+          createCharacterTextures(this);
+          createBattleCharacterTextures(this);
+        },
       },
       {
         label: 'LOCATING DISTORTIONS',

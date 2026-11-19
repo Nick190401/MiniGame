@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { TEXEL } from '../../render/RenderScale';
 import { characterFrameKey, WALK_FRAMES, type PlayerDirection } from '../../assets/PlayerTextures';
-import { makeCanvas, radial, type Ctx } from '../paint';
+import { radial, type Ctx } from '../paint';
+import { paintRelief } from '../relief';
+import type { LightingOptions } from '../litSprite';
 import { drawFigure } from './figure';
 import { makePose, type Facing } from './rig';
 import { OUTFITS, type CharacterId } from './outfits';
@@ -24,6 +26,17 @@ export const CHARACTER_TEXELS = CHARACTER_FRAME.unitsToWorld * TEXEL;
 
 const DIRECTIONS: PlayerDirection[] = ['down', 'up', 'left', 'right'];
 
+/**
+ * Figures are lit like the rest of the world (see relief.ts): every body part
+ * is a soft volume, arms shade the torso, and the light falls from the same
+ * upper left as on buildings and trees. Units are design units.
+ */
+const FIGURE_LIGHT: LightingOptions = {
+  wrap: 0.45, aoRadius: 2.4, formRadius: 4, formWeight: 0.3, selfShadow: 0.5, shadowReach: 7,
+  shadowHardness: 0.3, maxSlope: 1.8, smooth: 0.25, backgroundDrop: -0.6,
+  sun: [1.1, 1.0, 0.86], sky: [0.38, 0.42, 0.5], ground: [0.24, 0.21, 0.16],
+};
+
 function paintFrame(ctx: Ctx, id: CharacterId, facing: Facing, phase: number, yaw = 0, stance = 0): void {
   ctx.save();
   if (facing === 'left') ctx.scale(-1, 1);
@@ -39,11 +52,11 @@ export function createCharacterTextures(scene: Phaser.Scene): void {
       for (let frame = 0; frame <= WALK_FRAMES; frame++) {
         const key = characterFrameKey(id, direction, frame);
         if (scene.textures.exists(key)) continue;
-        const { canvas, ctx } = makeCanvas(CHARACTER_FRAME.w * px, CHARACTER_FRAME.h * px);
-        ctx.scale(px, px);
-        ctx.translate(CHARACTER_FRAME.footX, CHARACTER_FRAME.footY);
         const phase = frame === 0 ? -1 : (frame - 1) / WALK_FRAMES;
-        paintFrame(ctx, id, direction, phase);
+        const canvas = paintRelief(CHARACTER_FRAME.w, CHARACTER_FRAME.h, px, (ctx) => {
+          ctx.translate(CHARACTER_FRAME.footX, CHARACTER_FRAME.footY);
+          paintFrame(ctx, id, direction, phase);
+        }, FIGURE_LIGHT);
         scene.textures.addCanvas(key, canvas);
       }
     });
@@ -67,22 +80,21 @@ export interface PortraitOptions {
 /** High-resolution standing render of a character for battle sprites and dialogue portraits. */
 export function renderCharacterPortrait(id: CharacterId, options: PortraitOptions): HTMLCanvasElement {
   const { width, height, crop, yaw = 0 } = options;
-  const { canvas, ctx } = makeCanvas(width, height);
   // Design-space window to fit: full body or head-and-shoulders.
   const win = crop === 'full'
     ? { x0: -30, x1: 30, y0: -108, y1: 3 }
     : { x0: -19, x1: 19, y0: -104, y1: -55 };
   const scale = Math.min(width / (win.x1 - win.x0), height / (win.y1 - win.y0));
-  if (options.halo !== undefined) {
-    ctx.fillStyle = radial(ctx, width / 2, height * 0.42, 0, width * 0.6, [[0, options.halo, 0.35], [1, options.halo, 0]]);
-    ctx.fillRect(0, 0, width, height);
-  }
-  const ox = (width - (win.x1 - win.x0) * scale) / 2 - win.x0 * scale;
-  const oy = (height - (win.y1 - win.y0) * scale) / 2 - win.y0 * scale;
-  ctx.translate(ox, oy);
-  ctx.scale(scale, scale);
-  paintFrame(ctx, id, 'down', -1, yaw, options.stance ?? 0);
-  return canvas;
+  // Painted in design units at `scale` pixels per unit, then lit.
+  const w = width / scale, h = height / scale;
+  return paintRelief(w, h, scale, (ctx) => {
+    if (options.halo !== undefined) {
+      ctx.fillStyle = radial(ctx, w / 2, h * 0.42, 0, w * 0.6, [[0, options.halo, 0.35], [1, options.halo, 0]]);
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.translate((w - (win.x1 - win.x0)) / 2 - win.x0, (h - (win.y1 - win.y0)) / 2 - win.y0);
+    paintFrame(ctx, id, 'down', -1, yaw, options.stance ?? 0);
+  }, FIGURE_LIGHT);
 }
 
 /** Battle sprite for the player (three-quarter view toward the enemy) and NPC busts. */

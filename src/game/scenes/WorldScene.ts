@@ -28,6 +28,7 @@ import { WORLD_ZOOM, canvasZoom, logicalSize } from '../render/RenderScale';
 import type { TerrainLayer } from '../world/terrain/TerrainLayer';
 import { WorldLighting } from '../world/WorldLighting';
 import { FX } from '../art/fx';
+import { SpriteShadow } from '../art/castShadow';
 import { CHARACTER_HEIGHT } from '../art/characters';
 
 const TILE = 16;
@@ -171,6 +172,7 @@ export class WorldScene extends Phaser.Scene {
 
   // Modern world presentation
   private playerShadow?: Phaser.GameObjects.Image;
+  private playerCastShadow?: SpriteShadow;
   private zoneHud?: Phaser.GameObjects.Container;
   private zoneHudTitle?: Phaser.GameObjects.Text;
   private zoneHudMeta?: Phaser.GameObjects.Text;
@@ -412,6 +414,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.playerShadow = this.add.image(this.player.x, this.player.y + 1, FX.shadow).setDisplaySize(16, 5.6).setAlpha(0.5);
     this.playerShadow.setDepth(4);
+    this.playerCastShadow = new SpriteShadow(this, this.player);
 
     // Drifting pollen and seed fluff catch the light above the meadows.
     for (let index = 0; index < 60; index++) {
@@ -472,6 +475,8 @@ export class WorldScene extends Phaser.Scene {
       this.playerShadow.setDisplaySize(this.player.isMoving() ? 17.2 : 16, 5.6);
       this.playerShadow.setAlpha(this.player.y >= CAVE_START_ROW * TILE ? 0.62 : 0.5);
     }
+    // No sun underground.
+    this.playerCastShadow?.sync(this.player.y < CAVE_START_ROW * TILE);
 
     this.footstepTimer += delta;
     if (this.player.isMoving() && this.footstepTimer >= 150) {

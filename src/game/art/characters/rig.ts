@@ -1,4 +1,5 @@
 import { linear, mix, radial, rgba, shade, type Ctx } from '../paint';
+import { inflateShape } from '../relief';
 
 /*
  * Character rig. Figures are drawn in design units: the feet stand on (0, 0),
@@ -54,6 +55,8 @@ export function paintPath(ctx: Ctx, color: number, x0: number, y0: number, x1: n
   g.addColorStop(1, rgba(shade(color, -dark)));
   ctx.fillStyle = g;
   ctx.fill();
+  // Every painted part also becomes a soft volume for the figure's lighting pass.
+  inflateShape(0.3, 1.3);
   if ((s.line ?? 0.55) > 0) {
     ctx.strokeStyle = rgba(shade(color, -(s.line ?? 0.55)), 0.9);
     ctx.lineWidth = s.lineWidth ?? 0.7;

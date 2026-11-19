@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { hash2, linear, mix, radial, rgba, rng, roundRect, shade, softEllipse, type Ctx } from './paint';
 import { worldTexture } from './worldTexture';
+import { TEXEL } from '../render/RenderScale';
+import { heightGradient, heightOnly, mat, paintRelief, withHeight } from './relief';
 
 export const STRUCTURES = {
   sign: 'hd-sign',
@@ -48,7 +50,7 @@ function paintSign(ctx: Ctx, w: number, h: number): void {
   const cx = w / 2;
   softEllipse(ctx, cx + 1, h - 1.2, 5, 1.4, 0x050805, 0.5);
   // Post.
-  woodBoard(ctx, cx - 1.3, 5, 2.6, h - 6, 0x6b4a32, 3, true);
+  withHeight(heightGradient(cx - 1.3, 0, cx + 1.3, 0, [[0, 0.36], [0.45, 0.42], [1, 0.35]]), () => woodBoard(ctx, cx - 1.3, 5, 2.6, h - 6, 0x6b4a32, 3, true));
   ctx.fillStyle = 'rgba(20,12,8,0.35)';
   ctx.fillRect(cx - 1.3, h - 3, 2.6, 2);
   // Board with bevelled edge and two planks.
@@ -57,7 +59,7 @@ function paintSign(ctx: Ctx, w: number, h: number): void {
   roundRect(ctx, bx + 0.5, by + 0.8, bw, bh, 1.2); ctx.fill();
   ctx.save();
   roundRect(ctx, bx, by, bw, bh, 1.2); ctx.clip();
-  woodBoard(ctx, bx, by, bw, bh / 2, 0x9a7048, 11);
+  withHeight(heightGradient(0, by, 0, by + bh / 2, [[0, 0.5], [0.5, 0.52], [1, 0.49]]), () => woodBoard(ctx, bx, by, bw, bh / 2, 0x9a7048, 11));
   woodBoard(ctx, bx, by + bh / 2, bw, bh / 2, 0x8d6540, 12);
   ctx.fillStyle = 'rgba(30,18,10,0.55)';
   ctx.fillRect(bx, by + bh / 2 - 0.15, bw, 0.3);
@@ -86,7 +88,7 @@ function paintBridgeDeck(ctx: Ctx, w: number, h: number): void {
   // Stone abutments on both banks.
   for (const [y0, y1] of [[0, 9], [h - 9, h]]) {
     ctx.fillStyle = linear(ctx, 0, y0, 0, y1, [[0, 0x9c9b8c], [1, 0x6c6c62]]);
-    ctx.fillRect(0, y0, w, y1 - y0);
+    withHeight(mat(0.32), () => ctx.fillRect(0, y0, w, y1 - y0));
     const rand = rng(y0 + 3);
     for (let x = -4; x < w; x += 9 + rand() * 4) {
       ctx.strokeStyle = 'rgba(40,40,36,0.55)';
@@ -103,9 +105,9 @@ function paintBridgeDeck(ctx: Ctx, w: number, h: number): void {
   let i = 0;
   for (let y = deckTop; y < deckBottom; y += boardH, i++) {
     const tone = [0x8e6a44, 0x86633f, 0x977249, 0x7f5c3a][i % 4];
-    woodBoard(ctx, 1.5, y + 0.25, w - 3, boardH - 0.5, tone, 100 + i);
+    withHeight(heightGradient(0, y + 0.25, 0, y + boardH - 0.25, [[0, 0.29], [0.5, 0.315], [1, 0.29]]), () => woodBoard(ctx, 1.5, y + 0.25, w - 3, boardH - 0.5, tone, 100 + i));
     ctx.fillStyle = 'rgba(16,30,30,0.75)';
-    ctx.fillRect(1.5, y + boardH - 0.25, w - 3, 0.5);
+    withHeight(mat(0.22), () => ctx.fillRect(1.5, y + boardH - 0.25, w - 3, 0.5));
     // Nail pairs over the stringers.
     for (const nx of [4, w / 2, w - 4]) {
       ctx.fillStyle = 'rgba(40,40,38,0.9)';
@@ -116,14 +118,16 @@ function paintBridgeDeck(ctx: Ctx, w: number, h: number): void {
   ctx.fillStyle = linear(ctx, 0, 0, w, 0, [[0, 0xffffff, 0], [0.35, 0xf3e2c0, 0.1], [0.65, 0xf3e2c0, 0.1], [1, 0xffffff, 0]]);
   ctx.fillRect(0, deckTop, w, deckBottom - deckTop);
   // Edge beams that carry the rails.
-  for (const x of [0, w - 3.5]) woodBoard(ctx, x, deckTop - 1, 3.5, deckBottom - deckTop + 2, 0x5d4129, 70 + x, true);
+  for (const x of [0, w - 3.5]) {
+    withHeight(heightGradient(x, 0, x + 3.5, 0, [[0, 0.34], [0.5, 0.38], [1, 0.34]]), () => woodBoard(ctx, x, deckTop - 1, 3.5, deckBottom - deckTop + 2, 0x5d4129, 70 + x, true));
+  }
 }
 
 function paintRail(ctx: Ctx, w: number, h: number): void {
   // A continuous top rail seen from above at a slight angle.
   ctx.fillStyle = 'rgba(8,18,18,0.3)';
   ctx.fillRect(w / 2 + 1.2, 0, 3.2, h);
-  woodBoard(ctx, w / 2 - 2, 0, 4, h, 0x8a6741, 7, true);
+  withHeight(heightGradient(w / 2 - 2, 0, w / 2 + 2, 0, [[0, 0.46], [0.45, 0.52], [1, 0.45]]), () => woodBoard(ctx, w / 2 - 2, 0, 4, h, 0x8a6741, 7, true));
   ctx.fillStyle = 'rgba(255,240,210,0.28)';
   ctx.fillRect(w / 2 - 2, 0, 0.8, h);
   ctx.fillStyle = 'rgba(30,18,10,0.45)';
@@ -132,17 +136,17 @@ function paintRail(ctx: Ctx, w: number, h: number): void {
 
 function paintPost(ctx: Ctx, w: number, h: number): void {
   softEllipse(ctx, w / 2 + 1, h - 1.6, 4.5, 1.6, 0x061010, 0.5);
-  woodBoard(ctx, w / 2 - 3, 4, 6, h - 5, 0x6f5034, 9, true);
+  withHeight(heightGradient(w / 2 - 3, 0, w / 2 + 3, 0, [[0, 0.48], [0.45, 0.56], [1, 0.47]]), () => woodBoard(ctx, w / 2 - 3, 4, 6, h - 5, 0x6f5034, 9, true));
   // Iron bands.
   for (const y of [8, h - 8]) {
     ctx.fillStyle = linear(ctx, 0, y, 0, y + 2.2, [[0, 0x6e746c], [1, 0x2c302c]]);
-    ctx.fillRect(w / 2 - 3.2, y, 6.4, 2.2);
+    withHeight(mat(0.58, 0.6), () => ctx.fillRect(w / 2 - 3.2, y, 6.4, 2.2));
     ctx.fillStyle = 'rgba(230,230,220,0.5)';
     ctx.fillRect(w / 2 - 2.4, y + 0.3, 1.2, 0.4);
   }
   // Capped top seen from above.
   ctx.fillStyle = radial(ctx, w / 2, 4.2, 0.4, 4, [[0, 0xc7a676], [1, 0x7a5a38]], w / 2 - 1.2, 3.2);
-  ctx.beginPath(); ctx.ellipse(w / 2, 4.2, 3.6, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+  withHeight(heightGradient(0, 2, 0, 6.4, [[0, 0.58], [1, 0.64]]), () => { ctx.beginPath(); ctx.ellipse(w / 2, 4.2, 3.6, 2.2, 0, 0, Math.PI * 2); ctx.fill(); });
   ctx.strokeStyle = 'rgba(40,26,14,0.7)';
   ctx.lineWidth = 0.35;
   ctx.stroke();
@@ -154,11 +158,11 @@ function paintGateWall(ctx: Ctx, w: number, h: number): void {
   const rand = rng(77);
   // Coping stones seen from above.
   ctx.fillStyle = linear(ctx, 0, 0, 0, capH, [[0, 0x8f9488], [1, 0x6a6f66]]);
-  ctx.fillRect(0, 0, w, capH);
+  withHeight(heightGradient(0, 0, 0, capH, [[0, 0.78], [1, 0.88]]), () => ctx.fillRect(0, 0, w, capH));
   for (let x = 0; x < w; x += 16) {
     const tone = mix(0x80857a, 0x9ea397, rand());
     ctx.fillStyle = linear(ctx, x, 0, x + 16, capH, [[0, shade(tone, 0.1)], [1, shade(tone, -0.18)]]);
-    roundRect(ctx, x + 0.5, 0.6, 15, capH - 1.6, 1.4); ctx.fill();
+    withHeight(heightGradient(0, 0.6, 0, capH - 1, [[0, 0.8], [1, 0.9]]), () => { roundRect(ctx, x + 0.5, 0.6, 15, capH - 1.6, 1.4); ctx.fill(); });
     ctx.fillStyle = 'rgba(255,255,245,0.16)';
     ctx.fillRect(x + 1.2, 1.2, 13, 0.7);
     // Moss on the cap.
@@ -168,8 +172,10 @@ function paintGateWall(ctx: Ctx, w: number, h: number): void {
     }
   }
   // Lip shadow under the coping.
-  ctx.fillStyle = linear(ctx, 0, capH - 1, 0, capH + 3, [[0, 0x101410, 0.7], [1, 0x101410, 0]]);
+  ctx.fillStyle = linear(ctx, 0, capH - 1, 0, capH + 3, [[0, 0x101410, 0.35], [1, 0x101410, 0]]);
   ctx.fillRect(0, capH - 1, w, 4);
+  // Mortar behind the coursed face.
+  withHeight(mat(0.46), () => { ctx.fillStyle = rgba(0x3a3d37, 1); ctx.fillRect(0, capH, w, h - capH - 4); });
   // Coursed ashlar face, darker because it faces away from the sun.
   const faceTop = capH, faceBottom = h - 4;
   const courseH = 7.5;
@@ -179,9 +185,9 @@ function paintGateWall(ctx: Ctx, w: number, h: number): void {
     while (x < w) {
       const bw = 13 + Math.floor(rand() * 3) * 2;
       const tone = mix(0x5b5f57, 0x787c72, rand());
-      ctx.fillStyle = linear(ctx, 0, y, 0, y + courseH, [[0, shade(tone, 0.08)], [1, shade(tone, -0.22)]]);
-      roundRect(ctx, x + 0.45, y + 0.45, bw - 0.9, courseH - 0.9, 1);
-      ctx.fill();
+      ctx.fillStyle = linear(ctx, 0, y, 0, y + courseH, [[0, shade(tone, 0.05)], [1, shade(tone, -0.12)]]);
+      withHeight(mat(0.5), () => { roundRect(ctx, x + 0.45, y + 0.45, bw - 0.9, courseH - 0.9, 1); ctx.fill(); });
+      heightOnly(mat(0.54), () => { roundRect(ctx, x + 1.2, y + 1.1, bw - 2.4, courseH - 2.2, 0.8); ctx.fill(); });
       ctx.fillStyle = 'rgba(255,255,240,0.1)';
       ctx.fillRect(x + 1, y + 0.8, bw - 2, 0.45);
       if (rand() < 0.25) {
@@ -207,29 +213,31 @@ function paintGateFrame(ctx: Ctx, w: number, h: number): void {
   // Two heavy pylons.
   for (const side of [-1, 1]) {
     const x = side < 0 ? 2 : w - 2 - pillarW;
-    ctx.fillStyle = linear(ctx, x, 0, x + pillarW, 0, [[0, side < 0 ? 0x8e9388 : 0x5d6159], [0.6, 0x6d7168], [1, 0x3e413b]]);
-    roundRect(ctx, x, archTop + 6, pillarW, baseY - archTop - 6, 1.6);
-    ctx.fill();
+    ctx.fillStyle = linear(ctx, x, 0, x + pillarW, 0, [[0, side < 0 ? 0x868b80 : 0x6a6e66], [0.6, 0x6d7168], [1, 0x50534c]]);
+    withHeight(heightGradient(x, 0, x + pillarW, 0, [[0, 0.62], [0.5, 0.74], [1, 0.62]]), () => {
+      roundRect(ctx, x, archTop + 6, pillarW, baseY - archTop - 6, 1.6);
+      ctx.fill();
+    });
     for (let y = archTop + 12; y < baseY - 4; y += 8) {
       ctx.fillStyle = 'rgba(20,22,18,0.4)';
       ctx.fillRect(x + 0.5, y, pillarW - 1, 0.5);
     }
     // Inset signal conduit.
     ctx.fillStyle = rgba(0x101a1c, 1);
-    roundRect(ctx, x + pillarW / 2 - 1.6, archTop + 14, 3.2, baseY - archTop - 22, 1.2); ctx.fill();
+    withHeight(mat(0.6), () => { roundRect(ctx, x + pillarW / 2 - 1.6, archTop + 14, 3.2, baseY - archTop - 22, 1.2); ctx.fill(); });
     ctx.fillStyle = radial(ctx, x + pillarW / 2, baseY - 18, 0, 8, [[0, 0x6ef0ff, 0.9], [1, 0x6ef0ff, 0]]);
-    ctx.fillRect(x + pillarW / 2 - 1, archTop + 15, 2, baseY - archTop - 24);
+    withHeight(mat(0.6, 0, 0.9), () => ctx.fillRect(x + pillarW / 2 - 1, archTop + 15, 2, baseY - archTop - 24));
     // Capstone.
-    ctx.fillStyle = linear(ctx, 0, archTop, 0, archTop + 8, [[0, 0xa9ad9f], [1, 0x6a6e64]]);
-    roundRect(ctx, x - 1.5, archTop + 2, pillarW + 3, 7, 1.4); ctx.fill();
+    ctx.fillStyle = linear(ctx, 0, archTop, 0, archTop + 8, [[0, 0xa2a698], [1, 0x787c72]]);
+    withHeight(heightGradient(0, archTop + 2, 0, archTop + 9, [[0, 0.8], [1, 0.86]]), () => { roundRect(ctx, x - 1.5, archTop + 2, pillarW + 3, 7, 1.4); ctx.fill(); });
   }
   // Lintel bridging the doorway with the gate's emblem.
-  ctx.fillStyle = linear(ctx, 0, archTop, 0, archTop + 12, [[0, 0x9a9e92], [0.5, 0x777b71], [1, 0x4b4e47]]);
-  roundRect(ctx, 6, archTop, w - 12, 12, 2); ctx.fill();
+  ctx.fillStyle = linear(ctx, 0, archTop, 0, archTop + 12, [[0, 0x92968a], [0.5, 0x7b7f75], [1, 0x5d6058]]);
+  withHeight(heightGradient(0, archTop, 0, archTop + 12, [[0, 0.84], [0.5, 0.9], [1, 0.86]]), () => { roundRect(ctx, 6, archTop, w - 12, 12, 2); ctx.fill(); });
   ctx.fillStyle = 'rgba(255,255,240,0.18)';
   ctx.fillRect(8, archTop + 1, w - 16, 0.8);
   ctx.fillStyle = rgba(0x111a1b, 1);
-  ctx.beginPath(); ctx.ellipse(cx, archTop + 6, 9, 4.2, 0, 0, Math.PI * 2); ctx.fill();
+  withHeight(mat(0.82, 0.5), () => { ctx.beginPath(); ctx.ellipse(cx, archTop + 6, 9, 4.2, 0, 0, Math.PI * 2); ctx.fill(); });
   ctx.strokeStyle = rgba(0x7ff3ff, 0.95);
   ctx.lineWidth = 0.7;
   ctx.beginPath();
@@ -239,16 +247,16 @@ function paintGateFrame(ctx: Ctx, w: number, h: number): void {
     const y = archTop + 6 + Math.sin(t * Math.PI * 4) * 2.2 * Math.sin(t * Math.PI);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
-  ctx.stroke();
+  withHeight(mat(0.82, 0, 1), () => ctx.stroke());
 }
 
 function paintGatePanel(ctx: Ctx, w: number, h: number, side: -1 | 1): void {
-  ctx.fillStyle = linear(ctx, 0, 0, w, h, [[0, 0x3d4648], [0.5, 0x2b3234], [1, 0x171c1d]]);
-  roundRect(ctx, 0.6, 0.6, w - 1.2, h - 1.2, 1.2); ctx.fill();
+  ctx.fillStyle = linear(ctx, 0, 0, w, h, [[0, 0x384144], [0.5, 0x2e3538], [1, 0x22282a]]);
+  withHeight(mat(0.55, 0.45), () => { roundRect(ctx, 0.6, 0.6, w - 1.2, h - 1.2, 1.2); ctx.fill(); });
   // Recessed panels.
   for (const y of [3, h / 2 + 1]) {
-    ctx.fillStyle = linear(ctx, 0, y, 0, y + h / 2 - 4, [[0, 0x1c2223], [1, 0x2f3739]]);
-    roundRect(ctx, 3, y, w - 6, h / 2 - 4, 1); ctx.fill();
+    ctx.fillStyle = linear(ctx, 0, y, 0, y + h / 2 - 4, [[0, 0x22282a], [1, 0x2c3436]]);
+    withHeight(mat(0.5, 0.35), () => { roundRect(ctx, 3, y, w - 6, h / 2 - 4, 1); ctx.fill(); });
     ctx.strokeStyle = 'rgba(150,170,170,0.25)';
     ctx.lineWidth = 0.35;
     roundRect(ctx, 3, y, w - 6, h / 2 - 4, 1); ctx.stroke();
@@ -264,7 +272,7 @@ function paintGatePanel(ctx: Ctx, w: number, h: number, side: -1 | 1): void {
     const y = h / 2 + Math.sin(phase * Math.PI * 3) * 3.5 * Math.sin((phase / 2) * Math.PI);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
-  ctx.stroke();
+  withHeight(mat(0.56, 0, 1), () => ctx.stroke());
   ctx.strokeStyle = rgba(0x8af6ff, 0.25);
   ctx.lineWidth = 2.6;
   ctx.stroke();
@@ -272,7 +280,7 @@ function paintGatePanel(ctx: Ctx, w: number, h: number, side: -1 | 1): void {
   for (let y = 2.5; y < h; y += 6) {
     for (const x of [1.8, w - 1.8]) {
       ctx.fillStyle = rgba(0x8a9592, 1);
-      ctx.beginPath(); ctx.arc(x, y, 0.5, 0, Math.PI * 2); ctx.fill();
+      withHeight(mat(0.6, 0.8), () => { ctx.beginPath(); ctx.arc(x, y, 0.5, 0, Math.PI * 2); ctx.fill(); });
     }
   }
   // Meeting edge highlight.
@@ -281,12 +289,14 @@ function paintGatePanel(ctx: Ctx, w: number, h: number, side: -1 | 1): void {
 }
 
 export function createStructureTextures(scene: Phaser.Scene): void {
-  worldTexture(scene, STRUCTURES.sign, 15, 18, paintSign);
-  worldTexture(scene, STRUCTURES.bridgeDeck, 128, 96, paintBridgeDeck);
-  worldTexture(scene, STRUCTURES.bridgeRail, 10, 16, paintRail);
-  worldTexture(scene, STRUCTURES.bridgePost, 12, 24, paintPost);
-  worldTexture(scene, STRUCTURES.gateWall, 64, 54, paintGateWall);
-  worldTexture(scene, STRUCTURES.gateFrame, GATE_FRAME_SIZE.w, GATE_FRAME_SIZE.h, paintGateFrame);
-  worldTexture(scene, STRUCTURES.gatePanelLeft, 32, 32, (ctx, w, h) => paintGatePanel(ctx, w, h, -1));
-  worldTexture(scene, STRUCTURES.gatePanelRight, 32, 32, (ctx, w, h) => paintGatePanel(ctx, w, h, 1));
+  const lit = (key: string, w: number, h: number, paint: (ctx: Ctx, w: number, h: number) => void) =>
+    worldTexture(scene, key, w, h, (ctx) => ctx.drawImage(paintRelief(w, h, TEXEL, paint), 0, 0, w, h));
+  lit(STRUCTURES.sign, 15, 18, paintSign);
+  lit(STRUCTURES.bridgeDeck, 128, 96, paintBridgeDeck);
+  lit(STRUCTURES.bridgeRail, 10, 16, paintRail);
+  lit(STRUCTURES.bridgePost, 12, 24, paintPost);
+  lit(STRUCTURES.gateWall, 64, 54, paintGateWall);
+  lit(STRUCTURES.gateFrame, GATE_FRAME_SIZE.w, GATE_FRAME_SIZE.h, paintGateFrame);
+  lit(STRUCTURES.gatePanelLeft, 32, 32, (ctx, w, h) => paintGatePanel(ctx, w, h, -1));
+  lit(STRUCTURES.gatePanelRight, 32, 32, (ctx, w, h) => paintGatePanel(ctx, w, h, 1));
 }

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { blobPoints, linear, mix, radial, rgba, rng, shade, smoothPath, softEllipse, type Ctx } from './paint';
 import { addWorldImage, standingDepth, worldTexture } from './worldTexture';
+import { TEXEL } from '../render/RenderScale';
+import { heightAdd, heightGradient, heightRadial, heightRamp, mat, paintRelief, withHeight } from './relief';
 import { FX } from './fx';
 
 export const CAVE_ART = {
@@ -67,28 +69,36 @@ function paintPillar(ctx: Ctx, w: number, h: number, p: StonePalette, purified: 
   softEllipse(ctx, w / 2 + 2, h - 2.5, w * 0.5, 3, 0x000000, 0.55);
   const top = 4, bottom = h - 3, cx = w / 2, half = w / 2 - 2;
   // Weathered standing stone with a rounded top and lit left flank.
-  ctx.fillStyle = linear(ctx, cx - half, 0, cx + half, 0, [[0, p.light], [0.35, p.mid], [1, p.dark]]);
-  ctx.beginPath();
-  ctx.moveTo(cx - half, bottom);
-  ctx.lineTo(cx - half + 0.8, top + 4);
-  ctx.quadraticCurveTo(cx - half + 1, top, cx, top);
-  ctx.quadraticCurveTo(cx + half - 1, top, cx + half - 0.6, top + 4);
-  ctx.lineTo(cx + half, bottom);
-  ctx.closePath();
-  ctx.fill();
+  ctx.fillStyle = linear(ctx, cx - half, 0, cx + half, 0, [[0, shade(p.mid, 0.12)], [0.5, p.mid], [1, shade(p.mid, -0.12)]]);
+  withHeight(heightGradient(cx - half, 0, cx + half, 0, [[0, 0.3], [0.5, 0.62], [1, 0.3]]), () => {
+    ctx.beginPath();
+    ctx.moveTo(cx - half, bottom);
+    ctx.lineTo(cx - half + 0.8, top + 4);
+    ctx.quadraticCurveTo(cx - half + 1, top, cx, top);
+    ctx.quadraticCurveTo(cx + half - 1, top, cx + half - 0.6, top + 4);
+    ctx.lineTo(cx + half, bottom);
+    ctx.closePath();
+    ctx.fill();
+  });
+  // Weathering: pits and lighter grains across the stone.
+  for (let i = 0; i < 26; i++) {
+    const gx = cx - half + 1 + rand() * (half * 2 - 2), gy = top + 2 + rand() * (bottom - top - 4);
+    ctx.fillStyle = rgba(rand() < 0.5 ? shade(p.mid, -0.3) : shade(p.mid, 0.25), 0.35);
+    ctx.beginPath(); ctx.ellipse(gx, gy, 0.3 + rand() * 0.6, 0.25 + rand() * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    heightAdd(mat(0.012), () => ctx.fill());
+  }
   // Top surface.
-  ctx.fillStyle = radial(ctx, cx - 1, top + 2.5, 0.5, half, [[0, shade(p.light, 0.15)], [1, p.mid]]);
-  ctx.beginPath(); ctx.ellipse(cx, top + 2.6, half - 0.8, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = radial(ctx, cx - 1, top + 2.5, 0.5, half, [[0, shade(p.light, 0.08)], [1, p.mid]]);
+  withHeight(heightRadial(cx, top + 2.6, half, [[0, 0.66], [1, 0.58]]), () => { ctx.beginPath(); ctx.ellipse(cx, top + 2.6, half - 0.8, 2.4, 0, 0, Math.PI * 2); ctx.fill(); });
   // Carved bands and the rune channel.
   for (const y of [top + 9, bottom - 6]) {
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(cx - half + 0.5, y, half * 2 - 1, 0.9);
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(cx - half + 0.5, y + 0.9, half * 2 - 1, 0.4);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    withHeight(heightGradient(cx - half, 0, cx + half, 0, [[0, 0.24], [0.5, 0.54], [1, 0.24]]), () => ctx.fillRect(cx - half + 0.5, y, half * 2 - 1, 0.9));
   }
   ctx.strokeStyle = rgba(p.accent, purified ? 0.85 : 0.7);
   ctx.lineWidth = 0.7;
-  ctx.beginPath(); ctx.moveTo(cx - 1, top + 12); ctx.lineTo(cx + 1.2, top + 15); ctx.lineTo(cx - 1, top + 18); ctx.lineTo(cx + 1, bottom - 8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - 1, top + 12); ctx.lineTo(cx + 1.2, top + 15); ctx.lineTo(cx - 1, top + 18); ctx.lineTo(cx + 1, bottom - 8);
+  withHeight(mat(0.56, 0, 1), () => ctx.stroke());
   ctx.strokeStyle = rgba(p.accent, 0.22);
   ctx.lineWidth = 2.4;
   ctx.stroke();
@@ -152,18 +162,22 @@ function paintBones(ctx: Ctx, w: number, h: number): void {
 function paintStalagmite(ctx: Ctx, w: number, h: number, p: StonePalette): void {
   softEllipse(ctx, w / 2 + 1.5, h - 2, w * 0.48, 2.4, 0x000000, 0.55);
   const cx = w / 2, base = h - 2.5;
-  ctx.fillStyle = linear(ctx, cx - w / 2, 0, cx + w / 2, 0, [[0, p.light], [0.4, p.mid], [1, p.dark]]);
-  ctx.beginPath();
-  ctx.moveTo(cx - w / 2 + 1, base);
-  ctx.quadraticCurveTo(cx - 2.4, h * 0.45, cx - 0.4, 2);
-  ctx.quadraticCurveTo(cx + 0.6, 1.4, cx + 0.8, 2.6);
-  ctx.quadraticCurveTo(cx + 2.8, h * 0.5, cx + w / 2 - 1, base);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 0.3;
+  ctx.fillStyle = linear(ctx, cx - w / 2, 0, cx + w / 2, 0, [[0, shade(p.mid, 0.12)], [0.5, p.mid], [1, shade(p.mid, -0.12)]]);
+  withHeight(heightGradient(cx - w / 2, 0, cx + w / 2, 0, [[0, 0.24], [0.5, 0.62], [1, 0.24]], 0.15), () => {
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2 + 1, base);
+    ctx.quadraticCurveTo(cx - 2.4, h * 0.45, cx - 0.4, 2);
+    ctx.quadraticCurveTo(cx + 0.6, 1.4, cx + 0.8, 2.6);
+    ctx.quadraticCurveTo(cx + 2.8, h * 0.5, cx + w / 2 - 1, base);
+    ctx.closePath();
+    ctx.fill();
+  });
+  // Growth rings of dripstone.
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 0.5;
   for (let y = 6; y < base - 2; y += 3.2) {
     ctx.beginPath(); ctx.moveTo(cx - (base - y) * 0.16, y); ctx.lineTo(cx + (base - y) * 0.12, y + 0.4); ctx.stroke();
+    heightAdd(heightRamp(0, y - 0.3, 0, y + 0.7, [[0, 0.02], [1, 0]]), () => ctx.stroke());
   }
 }
 
@@ -171,14 +185,14 @@ function paintBoulder(ctx: Ctx, w: number, h: number, p: StonePalette, purified:
   const rand = rng(purified ? 32 : 31);
   softEllipse(ctx, w / 2 + 2, h - 3, w * 0.5, 3.2, 0x000000, 0.6);
   const pts = blobPoints(w / 2, h * 0.55, w * 0.44, h * 0.4, 11, 0.16, rand);
-  ctx.fillStyle = radial(ctx, w / 2, h * 0.6, 1, w * 0.55, [[0, p.light], [0.55, p.mid], [1, p.dark]], w * 0.36, h * 0.32);
-  smoothPath(ctx, pts);
-  ctx.fill();
+  ctx.fillStyle = radial(ctx, w / 2, h * 0.6, 1, w * 0.55, [[0, shade(p.mid, 0.1)], [1, shade(p.mid, -0.1)]], w * 0.4, h * 0.4);
+  withHeight(heightRadial(w / 2, h * 0.55, w * 0.46, [[0, 0.62], [0.65, 0.48], [1, 0.22]]), () => { smoothPath(ctx, pts); ctx.fill(); });
   ctx.save();
   ctx.clip();
   ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 0.45;
-  ctx.beginPath(); ctx.moveTo(w * 0.3, h * 0.35); ctx.lineTo(w * 0.48, h * 0.55); ctx.lineTo(w * 0.42, h * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(w * 0.3, h * 0.35); ctx.lineTo(w * 0.48, h * 0.55); ctx.lineTo(w * 0.42, h * 0.8);
+  withHeight(mat(0.3), () => ctx.stroke());
   if (purified) {
     ctx.fillStyle = 'rgba(90,120,60,0.6)';
     ctx.beginPath(); ctx.ellipse(w * 0.4, h * 0.3, w * 0.28, h * 0.12, -0.3, 0, Math.PI * 2); ctx.fill();
@@ -319,17 +333,21 @@ function paintArch(ctx: Ctx, w: number, h: number): void {
 }
 
 export function createCaveTextures(scene: Phaser.Scene): void {
+  // Solid props are lit by a cold light from above the cave; glow effects stay unlit.
+  const caveLight = { sun: [0.95, 0.98, 1.05] as [number, number, number], sky: [0.22, 0.26, 0.32] as [number, number, number], ground: [0.1, 0.09, 0.08] as [number, number, number] };
+  const lit = (key: string, w: number, h: number, paint: (ctx: Ctx, w: number, h: number) => void) =>
+    worldTexture(scene, key, w, h, (ctx) => ctx.drawImage(paintRelief(w, h, TEXEL, paint, caveLight), 0, 0, w, h));
   worldTexture(scene, CAVE_ART.crystal, 18, 22, (c, w, h) => paintCrystal(c, w, h, false));
   worldTexture(scene, CAVE_ART.crystalPurified, 18, 22, (c, w, h) => paintCrystal(c, w, h, true));
-  worldTexture(scene, CAVE_ART.pillar, 16, 30, (c, w, h) => paintPillar(c, w, h, CORRUPT, false));
-  worldTexture(scene, CAVE_ART.pillarPurified, 16, 30, (c, w, h) => paintPillar(c, w, h, LIVING, true));
+  lit(CAVE_ART.pillar, 16, 30, (c, w, h) => paintPillar(c, w, h, CORRUPT, false));
+  lit(CAVE_ART.pillarPurified, 16, 30, (c, w, h) => paintPillar(c, w, h, LIVING, true));
   worldTexture(scene, CAVE_ART.rune, 16, 16, (c, w, h) => paintRune(c, w, h, false));
   worldTexture(scene, CAVE_ART.runePurified, 16, 16, (c, w, h) => paintRune(c, w, h, true));
   worldTexture(scene, CAVE_ART.bones, 14, 10, paintBones);
-  worldTexture(scene, CAVE_ART.stalagmite, 12, 22, (c, w, h) => paintStalagmite(c, w, h, CORRUPT));
-  worldTexture(scene, CAVE_ART.stalagmitePurified, 12, 22, (c, w, h) => paintStalagmite(c, w, h, LIVING));
-  worldTexture(scene, CAVE_ART.boulder, 20, 18, (c, w, h) => paintBoulder(c, w, h, CORRUPT, false));
-  worldTexture(scene, CAVE_ART.boulderPurified, 20, 18, (c, w, h) => paintBoulder(c, w, h, LIVING, true));
+  lit(CAVE_ART.stalagmite, 12, 22, (c, w, h) => paintStalagmite(c, w, h, CORRUPT));
+  lit(CAVE_ART.stalagmitePurified, 12, 22, (c, w, h) => paintStalagmite(c, w, h, LIVING));
+  lit(CAVE_ART.boulder, 20, 18, (c, w, h) => paintBoulder(c, w, h, CORRUPT, false));
+  lit(CAVE_ART.boulderPurified, 20, 18, (c, w, h) => paintBoulder(c, w, h, LIVING, true));
   worldTexture(scene, CAVE_ART.fissure, 26, 10, paintFissure);
   worldTexture(scene, CAVE_ART.portalFrame, 96, 96, paintPortalFrame);
   worldTexture(scene, CAVE_ART.portalEnergy, 48, 56, paintPortalEnergy);

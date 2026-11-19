@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { NPC_TEXTURES, type NpcDirection, type NpcId } from '../assets/NpcTextures';
 import { WALK_FRAMES } from '../assets/PlayerTextures';
 import { CHARACTER_FRAME, CHARACTER_TEXELS } from '../art/characters';
+import { SpriteShadow } from '../art/castShadow';
 import { TEXEL } from '../render/RenderScale';
 import { FX } from '../art/fx';
 
@@ -25,6 +26,7 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
   private readonly homeY: number;
   private readonly patrol: NpcPatrolArea;
   private readonly shadow: Phaser.GameObjects.Image;
+  private readonly castShadow: SpriteShadow;
   private direction: NpcDirection = 'down';
   private currentFrame = 0;
   private frameTimer = 0;
@@ -53,6 +55,7 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(5 + y / 10000);
     this.setOrigin(CHARACTER_FRAME.footX / CHARACTER_FRAME.w, CHARACTER_FRAME.footY / CHARACTER_FRAME.h);
     this.setScale(NPC_SCALE);
+    this.castShadow = new SpriteShadow(scene, this);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(BODY_WIDTH, BODY_HEIGHT);
@@ -169,8 +172,11 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
 
   destroy(fromScene?: boolean): void {
     this.scriptedTween?.stop();
-    // On scene shutdown the display list destroys the shadow itself.
-    if (!fromScene) this.shadow.destroy();
+    // On scene shutdown the display list destroys the shadows itself.
+    if (!fromScene) {
+      this.shadow.destroy();
+      this.castShadow.destroy();
+    }
     super.destroy(fromScene);
   }
 
@@ -239,5 +245,6 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     // Same foot-position depth band as the player and foreground grass.
     this.setDepth(5 + this.y / 10000);
     this.shadow.setPosition(this.x, this.y + 1);
+    this.castShadow.sync();
   }
 }

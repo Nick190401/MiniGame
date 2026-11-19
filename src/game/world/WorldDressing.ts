@@ -3,12 +3,13 @@ import { TILE_ID as T } from '../data/tileIds';
 import { OVERWORLD_LANDMARKS, type LandmarkStamp } from '../maps/PokemonOverworld';
 import { hash2 } from '../art/paint';
 import { addWorldImage, standingDepth, WORLD_TEXTURE_SCALE } from '../art/worldTexture';
-import { TREE_SIZE, VEGETATION } from '../art/vegetation';
+import { LEDGE_SIZE, TREE_SIZE, VEGETATION } from '../art/vegetation';
 import { FX } from '../art/fx';
 import { STRUCTURES } from '../art/structures';
 import { CAVE_ART, CAVE_BRAZIERS } from '../art/caveArt';
 import { LANDMARK_ART } from '../art/landmarkArt';
 import { buildingTileTexture, isBuildingTile, isDoorTile } from '../art/buildingTiles';
+import { addCastShadow, castShadow } from '../art/castShadow';
 import { WorldCulling } from './WorldCulling';
 import type { LightSource } from './WorldLighting';
 
@@ -53,9 +54,12 @@ export function placeLandmark(scene: Phaser.Scene, landmark: LandmarkStamp, tile
   const height = landmark.height * tile;
   const base = top + height;
   const objects: Phaser.GameObjects.Image[] = [];
-  if (art?.shadow !== false) {
-    objects.push(addWorldImage(scene, left + width * 0.56, base - 4, FX.shadow)
-      .setDisplaySize(width * 1.08, Math.max(18, height * 0.32)).setAlpha(0.42).setDepth(0.6));
+  if (art && art.shadow !== false && !art.ground) {
+    const footY = art.h - (art.sortInset ?? 4);
+    const cast = castShadow(scene, landmark.texture, art.w, art.h, art.w / 2, footY, landmark.flipX);
+    objects.push(addCastShadow(scene, cast, left + width / 2, top + footY * (height / art.h), width / art.w, 0.4));
+    objects.push(addWorldImage(scene, left + width / 2, base - 3, FX.shadow)
+      .setDisplaySize(width * 1.04, 12).setAlpha(0.38).setDepth(0.6));
   }
   const image = addWorldImage(scene, left, top, landmark.texture)
     .setOrigin(0, 0)
@@ -109,14 +113,18 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
         const flip = hash2(r + 31, c + 17, 3) > 0.5;
         const tint = zoneTint(r);
         const bottom = (r + 1) * TILE;
-        const back = addWorldImage(scene, cx(c) + (seed - 0.5) * 3, bottom - 2, VEGETATION.tallGrassBack(v))
-          .setOrigin(0.5, 1).setFlipX(flip).setTint(tint).setDepth(1);
+        // Offsets and sizes vary per tile so the field never reads as planted rows.
+        const jx = (hash2(r, c, 29) - 0.5) * 6, jy = (hash2(c, r, 23) - 0.5) * 5;
+        const size = 0.86 + hash2(c + 7, r, 31) * 0.28;
+        const back = addWorldImage(scene, cx(c) + (seed - 0.5) * 3 + jx, bottom - 2 + jy * 0.7, VEGETATION.tallGrassBack(v))
+          .setOrigin(0.5, 1).setScale(WORLD_TEXTURE_SCALE * size).setFlipX(flip).setTint(tint).setDepth(1);
         add(back);
-        const front = addWorldImage(scene, cx(c) + (seed - 0.5) * 2, bottom, VEGETATION.tallGrassFront((v + 1) % VEGETATION.variants.tallGrass))
-          .setOrigin(0.5, 1).setFlipX(!flip).setTint(tint)
+        const frontScale = WORLD_TEXTURE_SCALE * (0.9 + (size - 0.86) * 0.5);
+        const front = addWorldImage(scene, cx(c) + (seed - 0.5) * 2 + jx * 0.5, bottom, VEGETATION.tallGrassFront((v + 1) % VEGETATION.variants.tallGrass))
+          .setOrigin(0.5, 1).setScale(frontScale).setFlipX(!flip).setTint(tint)
           .setDepth(standingDepth(bottom) + 0.0001)
           .setName('tall-grass-front')
-          .setData('row', r).setData('col', c).setData('baseScale', WORLD_TEXTURE_SCALE);
+          .setData('row', r).setData('col', c).setData('baseScale', frontScale);
         add(front);
         result.tallGrassFrontTiles.push(front);
       } else if (t === T.FLOWER) {
@@ -124,7 +132,8 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
         add(addWorldImage(scene, cx(c), (r + 1) * TILE - 1, VEGETATION.flowers(v)).setOrigin(0.5, 1).setDepth(3).setFlipX(seed > 0.5));
       } else if (t === T.SIGN) {
         const foot = (r + 1) * TILE - 2;
-        shadow(cx(c) + 3, foot, 16, 6, 0.35);
+        shadow(cx(c) + 1, foot, 9, 3.5, 0.4);
+        add(addCastShadow(scene, castShadow(scene, STRUCTURES.sign, 15, 18, 7.5, 18), cx(c), foot, 1, 0.32));
         add(addWorldImage(scene, cx(c), foot, STRUCTURES.sign).setOrigin(0.5, 1).setDepth(standingDepth(foot)));
       } else if (isBuildingTile(t)) {
         // Free-form houses from the world editor, sorted by their own tile row
@@ -168,11 +177,14 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
   const plantTree = (x: number, footY: number, seed: number, row: number, scale = 1, collide = false) => {
     const kind = treeKey(row, seed);
     const tint = zoneTint(row);
-    shadow(x + kind.size.w * 0.18 * scale, footY - 2, kind.size.w * 0.8 * scale, kind.size.w * 0.24 * scale, 0.42, 0.55);
+    const flip = seed > 0.5;
+    shadow(x + 1.5 * scale, footY - 1, kind.size.w * 0.3 * scale, kind.size.w * 0.09 * scale, 0.45, 0.55);
+    const cast = castShadow(scene, kind.key, kind.size.w, kind.size.h, kind.size.w / 2, kind.size.h - kind.size.footInset, flip);
+    add(addCastShadow(scene, cast, x, footY, scale, 0.34));
     const tree = addWorldImage(scene, x, footY, kind.key)
       .setOrigin(0.5, (kind.size.h - kind.size.footInset) / kind.size.h)
       .setScale(WORLD_TEXTURE_SCALE * scale)
-      .setFlipX(seed > 0.5)
+      .setFlipX(flip)
       .setTint(tint)
       .setDepth(standingDepth(footY));
     add(tree);
@@ -210,6 +222,27 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
       plantTree(cx(c) + (seed - 0.5) * 4, foot, hash2(c, r, 73), r, 0.62 + seed * 0.16);
     }
   }
+  // Rock terraces: weathered ledge stones line every cliff tile above ground.
+  const ledgeStone = (x: number, foot: number, scale: number, v: number, flip: boolean, row: number) => {
+    const cast = castShadow(scene, VEGETATION.ledge(v), LEDGE_SIZE.w, LEDGE_SIZE.h, LEDGE_SIZE.w / 2, LEDGE_SIZE.h * 0.9, flip);
+    add(addCastShadow(scene, cast, x, foot, scale, 0.32));
+    add(addWorldImage(scene, x, foot, VEGETATION.ledge(v)).setOrigin(0.5, 0.9).setScale(WORLD_TEXTURE_SCALE * scale)
+      .setFlipX(flip).setTint(zoneTint(row)).setDepth(standingDepth(foot)));
+  };
+  for (let r = 1; r < 112; r++) {
+    if (r === zoneRows.gate || r === zoneRows.gate + 1) continue;
+    for (let c = 4; c < cols - 4; c++) {
+      if (at(r, c) !== T.WALL) continue;
+      const seed = hash2(r, c, 211);
+      ledgeStone(cx(c) + (seed - 0.5) * 5, (r + 1) * TILE - 1 + (hash2(c, r, 7) - 0.5) * 2, 0.92 + seed * 0.2,
+        Math.floor(seed * VEGETATION.variants.ledge), hash2(r, c, 9) > 0.5, r);
+      if (seed > 0.55) {
+        ledgeStone(cx(c) + (seed > 0.78 ? 6 : -6), (r + 1) * TILE - 3, 0.55 + seed * 0.15,
+          (Math.floor(seed * 7) + 1) % VEGETATION.variants.ledge, seed > 0.7, r);
+      }
+    }
+  }
+
   // A canopy line along the northern edge closes the village.
   for (let x = 70; x < cols * TILE - 64; x += 26) {
     const seed = hash2(x, 0, 51);
@@ -242,12 +275,15 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
       } else if (seed > 0.94 && clearRadius(r, c, 1) && farFrom(r, c, 3)) {
         const v = Math.floor(hash2(r, c, 6) * VEGETATION.variants.bush);
         const foot = (r + 1) * TILE - 3;
-        shadow(cx(c) + 4, foot, 26, 8, 0.32);
+        shadow(cx(c) + 1, foot, 20, 5, 0.38);
+        add(addCastShadow(scene, castShadow(scene, VEGETATION.bush(v), 24, 18, 12, 18 * 0.88), cx(c), foot, 1, 0.3));
         add(addWorldImage(scene, cx(c), foot, VEGETATION.bush(v)).setOrigin(0.5, 0.88).setTint(zoneTint(r)).setDepth(standingDepth(foot)));
         occupied.push([r, c]);
       } else if (seed > 0.905 && seed < 0.915 && clearRadius(r, c, 1)) {
         const v = Math.floor(hash2(r, c, 8) * VEGETATION.variants.rock);
-        add(addWorldImage(scene, cx(c), (r + 1) * TILE - 4, VEGETATION.rock(v)).setOrigin(0.5, 0.8).setDepth(2));
+        const rockFoot = (r + 1) * TILE - 4;
+        add(addCastShadow(scene, castShadow(scene, VEGETATION.rock(v), 16, 12, 8, 12 * 0.8), cx(c), rockFoot, 1, 0.3));
+        add(addWorldImage(scene, cx(c), rockFoot, VEGETATION.rock(v)).setOrigin(0.5, 0.8).setDepth(2));
       }
     }
   }
