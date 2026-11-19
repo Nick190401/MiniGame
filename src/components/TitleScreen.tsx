@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import { AudioManager } from '../game/audio/AudioManager';
 import { SFX } from '../game/audio/AudioLibrary';
 import { BrandLogo } from './BrandLogo';
-import { COMING_SOON } from '../config';
+import { COMING_SOON, WORLD_EDITOR_ENABLED } from '../config';
 import { useKeyArt } from './useKeyArt';
 import { GameLogo } from './GameLogo';
 
@@ -130,7 +130,9 @@ export function TitleScreen() {
               </button>
             </div>
 
-            <button type="button" className="name-dialog__editor" onClick={openEditor}>Open world editor</button>
+            {WORLD_EDITOR_ENABLED && (
+              <button type="button" className="name-dialog__editor" onClick={openEditor}>Open world editor</button>
+            )}
           </div>
         </div>
       )}
