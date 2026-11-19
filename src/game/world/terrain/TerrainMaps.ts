@@ -21,7 +21,7 @@ export interface TerrainRegions {
   caveStartRow: number;
   /** Rows [start, end) are paved Neon Junction streets. */
   junctionRows: [number, number];
-  /** Bridge deck rectangle: water continues underneath it. */
+  /** Bridge deck rectangle: water continues under all but its end rows, which rest on the banks. */
   bridge: { top: number; bottom: number; left: number; right: number };
   /** Rows of the Frequency Gate masonry, drawn as sprites instead of rock. */
   gateRows: [number, number];
@@ -80,10 +80,12 @@ export function buildTerrainMaps(grid: number[][], regions: TerrainRegions, targ
   const image = ctx.createImageData(canvas.width, canvas.height);
   const data = image.data;
 
-  const isBridge = (r: number, c: number) => r >= bridge.top && r <= bridge.bottom && c >= bridge.left && c <= bridge.right;
+  // The deck's end rows rest on the banks; only the rows between them span the
+  // river, so water stays under the deck instead of showing past its ends.
+  const spansRiver = (r: number, c: number) => r > bridge.top && r < bridge.bottom && c >= bridge.left && c <= bridge.right;
   const isWater = (r: number, c: number) => {
     const t = grid[r]?.[c];
-    return t === T.WATER || t === T.CAVE_WATER || (t === T.PATH && isBridge(r, c));
+    return t === T.WATER || t === T.CAVE_WATER || (t === T.PATH && spansRiver(r, c));
   };
   const isRock = (r: number, c: number) => {
     const t = grid[r]?.[c];

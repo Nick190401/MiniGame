@@ -828,8 +828,9 @@ a:focus-visible {
   left: 50%;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  --dialog-h: clamp(108px, 18cqh, 156px);
   width: min(92%, 880px);
-  min-height: clamp(108px, 18cqh, 156px);
+  min-height: var(--dialog-h);
   border: 1px solid var(--stroke);
   border-radius: var(--r-lg);
   background: var(--surface-strong);
@@ -838,25 +839,25 @@ a:focus-visible {
   animation: dialogue-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.dialogue.has-portrait { grid-template-columns: clamp(100px, 18cqmin, 172px) minmax(0, 1fr); }
+.dialogue.has-portrait { grid-template-columns: var(--dialog-h) minmax(0, 1fr); }
 
-/* The bust stands up out of the box; the box clips it at the bottom only. */
+/* The bust is sized from the box height: it fits its column and only its
+   head rises a little above the box, which clips it at the bottom. */
 .dialogue__portrait {
   position: relative;
-  clip-path: inset(-80% 0 0 0 round 0 0 0 17px);
+  clip-path: inset(-40% 0 0 0 round 0 0 0 17px);
 }
 
 .dialogue__portrait img {
   position: absolute;
   bottom: 0;
   left: 50%;
-  width: 116%;
+  width: auto;
+  height: calc(var(--dialog-h) * 1.15);
   max-width: none;
   transform: translateX(-50%);
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45));
 }
-
-.dialogue.is-gatekeeper .dialogue__portrait img { width: 128%; }
 
 .dialogue__body {
   display: flex;
@@ -900,7 +901,7 @@ a:focus-visible {
 }
 
 @container canvas (max-height: 460px) {
-  .dialogue { bottom: 8px; min-height: 104px; }
+  .dialogue { --dialog-h: 104px; bottom: 8px; }
   .dialogue__body { gap: 4px; padding: 10px 16px 8px; }
   .dialogue.has-portrait .dialogue__body { padding-left: 6px; }
   .dialogue__text { font-size: 14px; line-height: 1.4; }
