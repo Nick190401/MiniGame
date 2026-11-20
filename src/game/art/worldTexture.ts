@@ -11,6 +11,17 @@ export const WORLD_TEXTURE_SCALE = 1 / TEXEL;
 
 export type WorldDraw = (ctx: Ctx, width: number, height: number) => void;
 
+/**
+ * Registers a finished canvas as a plain texture. textures.addCanvas builds a
+ * CanvasTexture, which reads every pixel back into a second copy it keeps:
+ * slow at load and memory that phones (iOS especially) count against the page.
+ * Use addCanvas only for canvases that are drawn on again later.
+ */
+export function addStaticCanvas(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement): Phaser.Textures.Texture | null {
+  // Phaser's typings only name images, but a texture source may be a canvas.
+  return scene.textures.addImage(key, canvas as unknown as HTMLImageElement);
+}
+
 export function worldTexture(
   scene: Phaser.Scene,
   key: string,
@@ -26,7 +37,7 @@ export function worldTexture(
   const { canvas, ctx } = makeCanvas(width * density, height * density);
   ctx.scale(density, density);
   draw(ctx, width, height);
-  scene.textures.addCanvas(key, canvas);
+  addStaticCanvas(scene, key, canvas);
   return key;
 }
 

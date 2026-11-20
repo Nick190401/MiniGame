@@ -12,6 +12,7 @@ import { buildingTileTexture, isBuildingTile, isDoorTile } from '../art/building
 import { addCastShadow, castShadow } from '../art/castShadow';
 import { WorldCulling } from './WorldCulling';
 import type { LightSource } from './WorldLighting';
+import { tr, useLanguageStore } from '../../i18n';
 
 export interface DressingContext {
   tile: number;
@@ -20,6 +21,7 @@ export interface DressingContext {
   walls: Phaser.Physics.Arcade.StaticGroup;
   decorative: Phaser.GameObjects.Group;
   bridge: { top: number; bottom: number; left: number; right: number };
+  jetty?: { top: number; bottom: number; left: number; right: number };
   zoneRows: {
     signal: number; brook: number; junction: number; grove: number;
     gate: number; fading: number; cave: number; core: number;
@@ -114,13 +116,15 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
         const tint = zoneTint(r);
         const bottom = (r + 1) * TILE;
         // Offsets and sizes vary per tile so the field never reads as planted rows.
-        const jx = (hash2(r, c, 29) - 0.5) * 6, jy = (hash2(c, r, 23) - 0.5) * 5;
+        const jx = (hash2(r, c, 29) - 0.5) * 6, jy = (hash2(c, r, 23) - 0.5) * 7;
         const size = 0.86 + hash2(c + 7, r, 31) * 0.28;
         const back = addWorldImage(scene, cx(c) + (seed - 0.5) * 3 + jx, bottom - 2 + jy * 0.7, VEGETATION.tallGrassBack(v))
           .setOrigin(0.5, 1).setScale(WORLD_TEXTURE_SCALE * size).setFlipX(flip).setTint(tint).setDepth(1);
         add(back);
         const frontScale = WORLD_TEXTURE_SCALE * (0.9 + (size - 0.86) * 0.5);
-        const front = addWorldImage(scene, cx(c) + (seed - 0.5) * 2 + jx * 0.5, bottom, VEGETATION.tallGrassFront((v + 1) % VEGETATION.variants.tallGrass))
+        // Fronts stay sorted by the tile's foot line but are drawn a little off
+        // it, so neighbouring rows do not line up into stripes.
+        const front = addWorldImage(scene, cx(c) + (seed - 0.5) * 2 + jx * 0.5, bottom + jy * 0.45, VEGETATION.tallGrassFront((v + 1) % VEGETATION.variants.tallGrass))
           .setOrigin(0.5, 1).setScale(frontScale).setFlipX(!flip).setTint(tint)
           .setDepth(standingDepth(bottom) + 0.0001)
           .setName('tall-grass-front')
@@ -148,7 +152,9 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
 
   // ── Water life: lilies on open water, reeds along calm banks ─────────────
   const isWater = (r: number, c: number) => at(r, c) === T.WATER;
-  const inBridge = (r: number, c: number) => r >= ctx.bridge.top - 1 && r <= ctx.bridge.bottom + 1 && c >= ctx.bridge.left - 1 && c <= ctx.bridge.right + 1;
+  const near = (deck: { top: number; bottom: number; left: number; right: number } | undefined, r: number, c: number) =>
+    !!deck && r >= deck.top - 1 && r <= deck.bottom + 1 && c >= deck.left - 1 && c <= deck.right + 1;
+  const inBridge = (r: number, c: number) => near(ctx.bridge, r, c) || near(ctx.jetty, r, c);
   for (let r = 1; r < zoneRows.cave; r++) {
     for (let c = 1; c < cols - 1; c++) {
       if (!isWater(r, c) || inBridge(r, c)) continue;
@@ -260,9 +266,11 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
   };
   const occupied: Array<[number, number]> = [];
   const farFrom = (r: number, c: number, min: number) => occupied.every(([or, oc]) => Math.abs(or - r) + Math.abs(oc - c) >= min);
-  // Keep the opening cutscene stage and the respawn green free.
+  // Keep the opening cutscene stage, the respawn green and the Frequency Gate's
+  // approach and exit free (nothing may peek out from behind the monument).
   const reserved = [
     { r: 15, c: 32, radius: 4 }, { r: 11, c: 28, radius: 4 }, { r: 70, c: 31, radius: 4 }, { r: 67, c: 44, radius: 4 },
+    { r: 88, c: 32, radius: 6 }, { r: 97, c: 33, radius: 3 },
   ];
   const isReserved = (r: number, c: number) => reserved.some(z => Math.abs(z.r - r) <= z.radius && Math.abs(z.c - c) <= z.radius);
   for (let r = 2; r < 110; r++) {
@@ -316,6 +324,28 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
     }
   }
 
+  // ── Riverside jetty: the bridge's own boards and beams, cut to size ──────
+  const { jetty } = ctx;
+  if (jetty) {
+    const left = jetty.left * TILE, top = jetty.top * TILE;
+    const w = (jetty.right - jetty.left + 1) * TILE, h = (jetty.bottom - jetty.top + 1) * TILE;
+    add(addWorldImage(scene, left + w / 2 + 3, top + h / 2 + 5, FX.shadow)
+      .setDisplaySize(w * 1.05, h * 0.9).setAlpha(0.35).setDepth(0.12));
+    // The deck art is 128 units wide with its stone ends 10 units deep: its left
+    // beam and the boards beside it, then its right beam. Nine boards end on a joint.
+    const deckWidth = 128, boardsTop = 10, boardsDepth = 31.2, rightBeam = 5.4;
+    for (const [cropX, cropW, x] of [[0, w - rightBeam, left], [deckWidth - rightBeam, rightBeam, left + w - deckWidth]]) {
+      const deck = addWorldImage(scene, x, top - boardsTop, STRUCTURES.bridgeDeck).setOrigin(0, 0).setDepth(0.15);
+      const unit = deck.width / deckWidth;
+      add(deck.setCrop(cropX * unit, boardsTop * unit, cropW * unit, boardsDepth * unit).setName('jetty-deck'));
+    }
+    // Mooring posts at the far corners, standing in the water.
+    for (const x of [left + 3, left + w - 3]) {
+      add(addWorldImage(scene, x, top + h + 2, STRUCTURES.bridgePost).setOrigin(0.5, 1).setScale(WORLD_TEXTURE_SCALE * 0.75)
+        .setDepth(standingDepth(top + h + 2)).setName('jetty-post'));
+    }
+  }
+
   // ── Frequency Gate: masonry wall with the sliding doors in its centre ────
   const gateRow = zoneRows.gate;
   const gateTop = gateRow * TILE;
@@ -329,15 +359,26 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
         .setOrigin(0, 0).setTileScale(WORLD_TEXTURE_SCALE).setDepth(standingDepth(gateTop + 32) - 0.001);
       add(wall);
       add(addWorldImage(scene, x0, gateTop + 30, FX.shadow).setOrigin(0, 0.5).setDisplaySize(x1 - x0, 16).setAlpha(0.4).setDepth(0.7));
+      // Ivy hangs from the coping here and there, as on the gate's own wings;
+      // irregular spacing keeps it from repeating with the 64-unit tile.
+      for (let x = x0 + 30; x < x1 - 30; x += 70 + Math.floor(hash2(x, gateRow, 41) * 90)) {
+        const sprig = hash2(x, gateRow, 43) < 0.5 ? 'hd-wall-ivy-0' : 'hd-wall-ivy-1';
+        if (hash2(x, gateRow, 47) < 0.35 || !scene.textures.exists(sprig)) continue;
+        add(addWorldImage(scene, x, gateTop + 2, sprig).setOrigin(0.5, 0).setFlipX(hash2(x, gateRow, 53) < 0.5)
+          .setDepth(standingDepth(gateTop + 32) - 0.0009));
+      }
       runStart = -1;
     }
   }
-  const gateCenterX = ctx.gateCenterCol * TILE;
-  const gateCenterY = (gateRow + 1) * TILE;
-  const gateDepth = standingDepth(gateTop + 32);
-  add(addWorldImage(scene, gateCenterX - 16, gateCenterY, STRUCTURES.gatePanelLeft).setDepth(gateDepth).setName('gate-panel-left'), false);
-  add(addWorldImage(scene, gateCenterX + 16, gateCenterY, STRUCTURES.gatePanelRight).setDepth(gateDepth).setName('gate-panel-right'), false);
-  add(addWorldImage(scene, gateCenterX, gateTop + 34, STRUCTURES.gateFrame).setOrigin(0.5, 1).setDepth(gateDepth + 0.0002).setName('gate-frame'), false);
+  // The painted gate (src/game/world/FrequencyGate.ts) replaces this code-painted frame when its art is loaded.
+  if (!scene.textures.exists('hd-gate-arch')) {
+    const gateCenterX = ctx.gateCenterCol * TILE;
+    const gateCenterY = (gateRow + 1) * TILE;
+    const gateDepth = standingDepth(gateTop + 32);
+    add(addWorldImage(scene, gateCenterX - 16, gateCenterY, STRUCTURES.gatePanelLeft).setDepth(gateDepth).setName('gate-panel-left'), false);
+    add(addWorldImage(scene, gateCenterX + 16, gateCenterY, STRUCTURES.gatePanelRight).setDepth(gateDepth).setName('gate-panel-right'), false);
+    add(addWorldImage(scene, gateCenterX, gateTop + 34, STRUCTURES.gateFrame).setOrigin(0.5, 1).setDepth(gateDepth + 0.0002).setName('gate-frame'), false);
+  }
 
   // ── The cave ──────────────────────────────────────────────────────────────
   // Props are scanned over the whole map: the editor may place them above ground too.
@@ -391,9 +432,12 @@ export function dressWorld(scene: Phaser.Scene, grid: number[][], ctx: DressingC
           const plaque = scene.add.graphics();
           plaque.fillStyle(0x120f1c, 0.9).fillRoundedRect(-34, -100, 68, 13, 3);
           plaque.lineStyle(0.6, 0xb59cf0, 0.8).strokeRoundedRect(-34, -100, 68, 13, 3);
-          const label = scene.add.text(0, -93.5, 'UNIVERSE // SOON', {
+          const label = scene.add.text(0, -93.5, tr('UNIVERSE // SOON'), {
             fontFamily: 'DM Mono', fontSize: '5.5px', color: '#e2d6ff',
           }).setOrigin(0.5);
+          // The plaque stands as long as the world: it follows a language change.
+          const relabel = useLanguageStore.subscribe(() => { if (label.active) label.setText(tr('UNIVERSE // SOON')); });
+          label.once(Phaser.GameObjects.Events.DESTROY, relabel);
           portal.add([halo, frame, energy, plaque, label]);
           add(portal, false);
           scene.tweens.add({ targets: energy, angle: 360, duration: 14000, repeat: -1, ease: 'Linear' });

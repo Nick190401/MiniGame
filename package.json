@@ -9,6 +9,7 @@
     "test:battle": "node --test scripts/battleTurns.test.mjs",
     "test:waveform": "node --test scripts/waveform.test.mjs",
     "test:dialog": "node --test scripts/dialogCooldown.test.mjs",
+    "test:save": "node --test scripts/save.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

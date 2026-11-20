@@ -9,6 +9,13 @@ import type { LightSource } from '../world/WorldLighting';
 
 const TILE = 16;
 const BROOK_BRIDGE = { top: 44, bottom: 49, left: 28, right: 35 } as const;
+/**
+ * A plank deck along the riverside hut's front, over the river: the hut faces
+ * the water. It reaches west past the hut to the end of the hut branch, two
+ * tiles wide where the path steps down onto it, and is no wider than the
+ * bridge deck art it is cut from (128 units).
+ */
+const BROOK_JETTY = { top: 45, bottom: 46, left: 44, right: 51 } as const;
 
 const {
   GRASS: _, PATH: P, WALL: W, ARENA: A, GATE: G, SIGN: S, WATER: R, TALL_GRASS: L,
@@ -60,6 +67,7 @@ export const TERRAIN_REGIONS: TerrainRegions = {
   caveStartRow: 113,
   junctionRows: [JUNCTION_START_ROW, GROVE_START_ROW],
   bridge: BROOK_BRIDGE,
+  jetty: BROOK_JETTY,
   gateRows: [GATE_START_ROW, GATE_START_ROW + 1],
   borderCols: 4,
 };
@@ -79,6 +87,8 @@ export interface MapBuildResult {
   // Sign world positions
   signPos:  { x: number; y: number };
   sign2Pos: { x: number; y: number };
+  overlookSignPos: { x: number; y: number };
+  alcoveSignPos: { x: number; y: number };
   // Key world positions
   gatePos:    { x: number; y: number };
   bossPos:    { x: number; y: number };
@@ -186,6 +196,7 @@ function applyExpandedWorldLayout(grid: number[][]): void {
   fill(BROOK_START_ROW, 29, 44, 34, P);
   fill(45, 4, 48, 59, R);
   fill(BROOK_BRIDGE.top, BROOK_BRIDGE.left, BROOK_BRIDGE.bottom, BROOK_BRIDGE.right, P);
+  fill(BROOK_JETTY.top, BROOK_JETTY.left, BROOK_JETTY.bottom, BROOK_JETTY.right, P);
   paintRoad([
     [49, 32], [50, 35], [51, 39], [52, 43], [53, 42], [54, 38], [55, 34],
   ]);
@@ -233,8 +244,10 @@ function applyExpandedWorldLayout(grid: number[][]): void {
   ]);
   fill(82, 13, 84, 27, P);     // archive shrine lane
   fill(85, 38, 87, 52, P);     // ranger post lane
+  hLine(87, 53, 54, P);        // ranger hut doorstep: no tall grass at the door
   hLine(87, 4, 13, W); hLine(88, 49, 59, W);
-  set(89, 28, S);
+  // East of the road: the Frequency Gate's west pylon now stands where col 28 was.
+  set(89, 39, S);
 
   // FREQUENCY GATE — a landmark transition, not a full-zone wall texture.
   fill(GATE_START_ROW, 4, GATE_START_ROW + 1, MAP_COLS - 5, W);
@@ -427,6 +440,7 @@ export class MapBuilder {
       walls,
       decorative,
       bridge: BROOK_BRIDGE,
+      jetty: BROOK_JETTY,
       zoneRows: {
         signal: SIGNAL_START_ROW,
         brook: BROOK_START_ROW,
@@ -456,8 +470,10 @@ export class MapBuilder {
     const npc3Pos = { x: px(44), y: py(67) };
 
     // Signs
-    const signPos  = { x: px(36), y: py(18) };
-    const sign2Pos = { x: px(28), y: py(89) };
+    const signPos  = { x: px(36), y: py(18) };  // Echo Village, road south
+    const sign2Pos = { x: px(39), y: py(89) };  // Whisper Grove, before the gate
+    const overlookSignPos = { x: px(43), y: py(25) };  // Signal Meadow east overlook
+    const alcoveSignPos = { x: px(14), y: py(101) };   // Fading Highlands, above the alcove
 
     // Gate centre
     const gatePos = { x: px(GATE_CENTER_COL), y: py(GATE_START_ROW) };
@@ -482,7 +498,7 @@ export class MapBuilder {
       walls, decorative, terrain, worldWidth, worldHeight,
       spawnX, spawnY,
       npcPos, npc2Pos, npc3Pos,
-      signPos, sign2Pos,
+      signPos, sign2Pos, overlookSignPos, alcoveSignPos,
       gatePos, bossPos, universePortals: dressing.universePortals,
       fragment1Pos, fragment2Pos, fragment3Pos,
       tallGrassZones, tallGrassFrontTiles: dressing.tallGrassFrontTiles,

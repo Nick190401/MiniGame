@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { EventBus, EVENTS, type DialogPayload } from '../game/EventBus';
 import { useCanvasBounds } from './useCanvasBounds';
+import { useTr } from '../i18n';
 
 interface DialogueOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
@@ -58,6 +59,7 @@ function displayName(speaker: string): string {
 
 export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
   const bounds = useCanvasBounds(canvasParentRef);
+  const t = useTr();
   const [dialog, setDialog] = useState<DialogPayload | null>(null);
   const [portraits, setPortraits] = useState<Record<string, string>>({});
 
@@ -85,7 +87,7 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
 
   if (!dialog || !bounds) return null;
   const portraitUrl = dialog.portrait ? PORTRAITS[dialog.portrait] : undefined;
-  const speaker = dialog.speaker && dialog.speaker !== NARRATOR ? displayName(dialog.speaker) : null;
+  const speaker = dialog.speaker && dialog.speaker !== NARRATOR ? displayName(t(dialog.speaker)) : null;
   const classes = ['dialogue'];
   if (portraitUrl) classes.push('has-portrait');
   if (dialog.portrait === 'gatekeeper') classes.push('is-gatekeeper');
@@ -105,10 +107,10 @@ export function DialogueOverlay({ canvasParentRef }: DialogueOverlayProps) {
         )}
         <div className="dialogue__body">
           {speaker && <p className="dialogue__name">{speaker}</p>}
-          <p className="dialogue__text">{dialog.text}</p>
+          <p className="dialogue__text">{t(dialog.text)}</p>
           <p className="dialogue__continue" aria-hidden="true">
-            <span className="hint-desktop"><kbd className="keycap">E</kbd> Continue</span>
-            <span className="hint-touch">Tap to continue</span>
+            <span className="hint-desktop"><kbd className="keycap">E</kbd> {t('Continue')}</span>
+            <span className="hint-touch">{t('Tap to continue')}</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <path d="m6 9 6 6 6-6" />
             </svg>

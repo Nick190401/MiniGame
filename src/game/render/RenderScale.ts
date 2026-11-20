@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { IS_IOS } from '../../platform';
 
 /**
  * Gameplay, physics and layout keep working in logical units (the classic
@@ -10,7 +11,9 @@ import Phaser from 'phaser';
  * matching texel density.
  */
 const MIN_RENDER_SCALE = 1.5;
-const MAX_RENDER_SCALE = 2.5;
+// iOS caps it: textures and the canvas grow with the square of the scale, and
+// iOS kills pages that outgrow its memory budget.
+const MAX_RENDER_SCALE = IS_IOS ? 2 : 2.5;
 // Keeps phones with very tall viewports within a sensible fill-rate budget.
 const MAX_CANVAS_PIXELS = 3_200_000;
 
@@ -28,6 +31,16 @@ function computeRenderScale(): number {
 }
 
 export const RENDER_SCALE = computeRenderScale();
+
+/** Render scale the world's camera shakes were tuned at. */
+const SHAKE_REFERENCE_SCALE = 1.75;
+
+/**
+ * Phaser scales a shake's offset by the camera zoom twice, so one intensity
+ * shakes harder the denser the canvas. This keeps the on-screen amplitude
+ * the same on every screen, at the strength it was tuned to.
+ */
+export const shakeIntensity = (intensity: number) => intensity * (SHAKE_REFERENCE_SCALE / RENDER_SCALE) ** 2;
 
 /** The overworld is framed at twice the logical board (20 x 15 tiles). */
 export const WORLD_ZOOM = 2 * RENDER_SCALE;

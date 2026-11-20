@@ -12,7 +12,7 @@ export const ATTACKS: Record<string, Attack> = {
   'echo-wave': {
     id: 'echo-wave',
     name: 'Echo Wave',
-    damage: 14,
+    damage: 24,
     description: 'Two rippling waves of sound. Hits twice.',
     color: 0x6ea8d8,
     unlockLevel: 2,

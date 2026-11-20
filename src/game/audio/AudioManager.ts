@@ -1,10 +1,12 @@
 // Type-only: the audio manager talks about Phaser objects but never constructs
 // one, so importing the types keeps the engine out of the initial bundle.
 import type Phaser from 'phaser';
-import { EventBus, EVENTS, type ZoneUiPayload, type AttackUsedPayload, type ImpactPayload, type HealPayload } from '../EventBus';
 import {
-  MUSIC, SFX, ATTACK_SFX_BY_ID, ATTACK_SFX_BY_ENEMY_NAME, BOSS_PHASE_MUSIC,
-  SFX_URL_BY_KEY, FOOTSTEP_SFX_BY_SURFACE, FOOTSTEP_VOLUME, trackForZone,
+  EventBus, EVENTS, type ZoneUiPayload, type AttackUsedPayload, type ImpactPayload, type HealPayload, type RoomSoundPayload,
+} from '../EventBus';
+import {
+  MUSIC, SFX, ATTACK_SFX_BY_ID, ATTACK_SFX_BY_ENEMY_NAME, BOSS_PHASE_MUSIC, LOST_TRACK,
+  SFX_URL_BY_KEY, SFX_START_OFFSET, FOOTSTEP_SFX_BY_SURFACE, FOOTSTEP_VOLUME, tracksForZone,
   type FootstepSurface,
 } from './AudioLibrary';
 
@@ -21,6 +23,21 @@ import {
  */
 
 type MusicOptions = { loop?: boolean; fadeMs?: number; volume?: number; onComplete?: () => void };
+
+/**
+ * The title theme (components/MenuMusic.tsx), an HTML audio element that
+ * streams the overworld track. It keeps playing into the world until the
+ * game's own copy of that track has downloaded, then hands over.
+ */
+export interface MenuMusicHandle {
+  trackKey: string;
+  /** Playback position in seconds while it is audible, else null. */
+  position(): number | null;
+  setVolume(value: number): void;
+  setMuted(muted: boolean): void;
+  /** Fades it out; the game's music has taken over. */
+  release(): void;
+}
 type SfxOptions = { volume?: number; rate?: number };
 type Mode = 'world' | 'battle' | 'death' | 'reward';
 
@@ -30,6 +47,8 @@ type Fadeable = Phaser.Sound.BaseSound & { volume: number; setVolume(value: numb
 const SETTINGS_KEY = 'sound-quest:audio-settings';
 const DEFAULT_FADE_MS = 500;
 const BATTLE_MUSIC_VOLUME_MULTIPLIER = 0.9;
+/** Indoors the world's music plays on, muffled by the walls (a room may set its own share). */
+const INTERIOR_MUSIC_VOLUME_MULTIPLIER = 0.3;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -46,8 +65,8 @@ function loadSettings(): AudioSettings {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     return {
-      musicVolume: typeof parsed.musicVolume === 'number' ? parsed.musicVolume : fallback.musicVolume,
-      sfxVolume: typeof parsed.sfxVolume === 'number' ? parsed.sfxVolume : fallback.sfxVolume,
+      musicVolume: typeof parsed.musicVolume === 'number' ? clamp01(parsed.musicVolume) : fallback.musicVolume,
+      sfxVolume: typeof parsed.sfxVolume === 'number' ? clamp01(parsed.sfxVolume) : fallback.sfxVolume,
       muted: typeof parsed.muted === 'boolean' ? parsed.muted : fallback.muted,
     };
   } catch {
@@ -63,14 +82,30 @@ class AudioManagerImpl {
   private musicKey: string | null = null;
   private zoneTrack: string = MUSIC.overworldDefault.key;
   private mode: Mode = 'world';
+  /** The hero is inside a building. */
+  private interior = false;
+  /** Share of the music volume heard through the walls of the building the hero is in. */
+  private interiorShare = INTERIOR_MUSIC_VOLUME_MULTIPLIER;
+  /**
+   * Quincy's record player: the Lost Track, streamed by an audio element so
+   * Phaser never decodes it. The world's music fades out while it plays.
+   */
+  private record: HTMLAudioElement | null = null;
+  private recordWanted = false;
+  /** play() was refused outside a user gesture (iOS): the next tap or key press starts it. */
+  private recordAwaitsGesture = false;
 
   private settings: AudioSettings = loadSettings();
   private fadeTokens = new WeakMap<Fadeable, number>();
-  private pendingSeek: { key: string; seconds: number } | null = null;
+  private menuMusic: MenuMusicHandle | null = null;
+  /** A track asked for before its file arrived; it starts on arrival. */
+  private wantedMusic: { key: string; opts: MusicOptions } | null = null;
   private preBootSfx = new Map<string, HTMLAudioElement>();
   private footstepSound: Fadeable | null = null;
   private footstepSurface: FootstepSurface = 'none';
   private encounterSound: Phaser.Sound.BaseSound | null = null;
+  /** The current move's sound, so a combo that ends early can fade it out. */
+  private attackSound: Fadeable | null = null;
 
   /** Wire the manager up once the Phaser game instance exists. Safe to call more than once. */
   init(game: Phaser.Game): void {
@@ -78,6 +113,9 @@ class AudioManagerImpl {
     this.initialized = true;
     this.game = game;
     game.sound.mute = this.settings.muted;
+    // Most audio streams in after the world opens (see AssetStream.ts).
+    // Cache event 'add' (Phaser.Cache.Events.ADD): Phaser is type-only here.
+    game.cache.audio.events.on('add', this.onAudioAdded, this);
 
     EventBus.on(EVENTS.ZONE_UI_STATE, this.onZoneState, this);
     EventBus.on(EVENTS.BATTLE_START, this.onBattleStart, this);
@@ -88,10 +126,18 @@ class AudioManagerImpl {
     EventBus.on(EVENTS.BONUS_SONG_UNLOCKED, this.onBonusSongUnlocked, this);
     EventBus.on(EVENTS.REWARD_UI_STATE, this.onRewardUiState, this);
     EventBus.on(EVENTS.ATTACK_USED, this.onAttackUsed, this);
+    EventBus.on(EVENTS.ATTACK_SOUND_CUT, this.onAttackSoundCut, this);
     EventBus.on(EVENTS.IMPACT, this.onImpact, this);
     EventBus.on(EVENTS.HEAL, this.onHeal, this);
     EventBus.on(EVENTS.ENEMY_DEFEATED, this.onEnemyDefeated, this);
     EventBus.on(EVENTS.FOOTSTEPS, this.onFootsteps, this);
+    EventBus.on(EVENTS.INTERIOR_STATE, this.onInteriorState, this);
+    EventBus.on(EVENTS.ROOM_SOUND, this.onRoomSound, this);
+    EventBus.on(EVENTS.RECORD_PLAYER, this.onRecordPlayer, this);
+    // A hidden page stops the game and its sounds; the record's audio element would play on.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.stopRecord(true);
+    });
 
     // ENEMY_DEFEATED already covers bosses; BOSS_DEFEATED is the later story beat.
     EventBus.on(EVENTS.ENCOUNTER, () => {
@@ -130,8 +176,107 @@ class AudioManagerImpl {
 
   // ── Reactions to game events ────────────────────────────────────────────
 
+  private onInteriorState(inside: boolean, share = INTERIOR_MUSIC_VOLUME_MULTIPLIER): void {
+    if (!inside) this.releaseRecord();
+    if (inside === this.interior) return;
+    this.interior = inside;
+    this.interiorShare = share;
+    this.applyMusicVolume(600);
+  }
+
+  /** The world's music (and the title theme still standing in for it) follows the current duck. */
+  private applyMusicVolume(fadeMs: number): void {
+    if (this.music) this.fade(this.music, this.music.volume, this.targetMusicVolume(), fadeMs);
+    this.menuMusic?.setVolume(this.settings.musicVolume * this.interiorDuck());
+  }
+
+  private onRoomSound(cue: RoomSoundPayload): void {
+    this.playSfx(cue.key, { volume: cue.volume, rate: cue.rate });
+  }
+
+  private onRecordPlayer(play: boolean): void {
+    if (play) this.playRecord();
+    else this.stopRecord(false);
+  }
+
+  private playRecord(): void {
+    if (typeof Audio === 'undefined') return;
+    if (!this.record) {
+      const record = new Audio(`/${LOST_TRACK.url}`);
+      record.preload = 'auto';
+      record.addEventListener('ended', () => this.stopRecord(true));
+      record.addEventListener('error', () => this.stopRecord(true));
+      this.record = record;
+    }
+    this.recordWanted = true;
+    this.applyRecordLevel();
+    this.record.currentTime = 0;
+    this.applyMusicVolume(600);
+    this.startRecord();
+  }
+
+  private startRecord(): void {
+    const record = this.record;
+    if (!record || !this.recordWanted) return;
+    record.play().catch((error: unknown) => {
+      if (!this.recordWanted) return;
+      // Only the gesture rule can be worked around; anything else stops the record.
+      if (error instanceof DOMException && error.name === 'NotAllowedError' && !this.recordAwaitsGesture) {
+        this.recordAwaitsGesture = true;
+        // A touch unlocks media on lifting the finger (pointerup, touchend), not on pointerdown.
+        window.addEventListener('pointerdown', this.onRecordGesture, true);
+        window.addEventListener('pointerup', this.onRecordGesture, true);
+        window.addEventListener('touchend', this.onRecordGesture, true);
+        window.addEventListener('keydown', this.onRecordGesture, true);
+      } else {
+        this.stopRecord(true);
+      }
+    });
+  }
+
+  private onRecordGesture = (): void => {
+    this.clearRecordGesture();
+    this.startRecord();
+  };
+
+  private clearRecordGesture(): void {
+    this.recordAwaitsGesture = false;
+    window.removeEventListener('pointerdown', this.onRecordGesture, true);
+    window.removeEventListener('pointerup', this.onRecordGesture, true);
+    window.removeEventListener('touchend', this.onRecordGesture, true);
+    window.removeEventListener('keydown', this.onRecordGesture, true);
+  }
+
+  /** iOS ignores a script's volume on media elements, so a music level of 0 has to mute the record. */
+  private applyRecordLevel(): void {
+    if (!this.record) return;
+    this.record.volume = clamp01(this.settings.musicVolume);
+    this.record.muted = this.settings.muted || this.settings.musicVolume === 0;
+  }
+
+  /** Out of the building: the record stops and its element lets go of the downloaded song. */
+  private releaseRecord(): void {
+    this.stopRecord(false);
+    const record = this.record;
+    if (!record) return;
+    this.record = null;
+    record.removeAttribute('src');
+    record.load();
+  }
+
+  /** Lifts the needle; `bySelf` tells the room the record stopped without being asked. */
+  private stopRecord(bySelf: boolean): void {
+    this.clearRecordGesture();
+    if (!this.recordWanted) return;
+    this.recordWanted = false;
+    this.record?.pause();
+    this.applyMusicVolume(900);
+    if (bySelf) EventBus.emit(EVENTS.RECORD_PLAYER_STOPPED);
+  }
+
   private onZoneState(zone: ZoneUiPayload): void {
-    this.zoneTrack = trackForZone(zone.title);
+    const tracks = tracksForZone(zone.title);
+    this.zoneTrack = this.resolveKey(...tracks) ?? tracks[tracks.length - 1];
     if (this.mode === 'world') this.playMusic(this.zoneTrack);
   }
 
@@ -163,7 +308,8 @@ class AudioManagerImpl {
   }
 
   private onBossPhaseChanged(phaseIdx: number): void {
-    this.playSfx(SFX.bossPhaseChange.key);
+    // Phase III has its own, longer sequence; its sound follows that timing.
+    this.playAvailableSfx(phaseIdx >= 2 ? [SFX.bossPhaseFinal.key, SFX.bossPhaseChange.key] : [SFX.bossPhaseChange.key]);
     // Only switch tracks if this phase actually has its own music; otherwise
     // keep whatever is already playing instead of restarting the fallback.
     const trackKey = this.resolveKey(BOSS_PHASE_MUSIC[phaseIdx] ?? '');
@@ -196,15 +342,39 @@ class AudioManagerImpl {
 
     this.mode = 'reward';
     this.onFootsteps('none');
+    // The reward screen plays the same song: never both at once.
+    this.stopRecord(true);
     this.stopMusic(600);
   }
 
   private onAttackUsed(data: AttackUsedPayload): void {
     if (data.isPlayer) this.playAttackSfx(data.attackId);
-    else this.playAvailableSfx([
-      ATTACK_SFX_BY_ENEMY_NAME[data.name] ?? SFX.enemyAttack.key,
-      SFX.enemyAttack.key,
-    ]);
+    else {
+      const key = this.resolveKey(ATTACK_SFX_BY_ENEMY_NAME[data.name] ?? SFX.enemyAttack.key, SFX.enemyAttack.key);
+      if (key) this.playAttackSound(key);
+    }
+  }
+
+  /** Like playSfx, but keeps the sound so ATTACK_SOUND_CUT can fade it. */
+  private playAttackSound(key: string): void {
+    if (this.settings.muted || !this.game) return;
+    if (!this.game.cache.audio.has(key)) {
+      console.debug(`[audio] sfx not loaded yet: ${key}`);
+      return;
+    }
+    const sound = this.game.sound.add(key, { volume: this.settings.sfxVolume }) as unknown as Fadeable;
+    sound.once('complete', () => {
+      if (this.attackSound === sound) this.attackSound = null;
+      sound.destroy();
+    });
+    sound.play({ seek: SFX_START_OFFSET[key] ?? 0 });
+    this.attackSound = sound;
+  }
+
+  private onAttackSoundCut(fadeMs: number): void {
+    const sound = this.attackSound;
+    this.attackSound = null;
+    if (sound) this.fade(sound, sound.volume, 0, fadeMs, () => sound.destroy());
   }
 
   private onImpact(data: ImpactPayload): void {
@@ -257,6 +427,16 @@ class AudioManagerImpl {
     if (sound) this.fade(sound, sound.volume, 0, 90, () => sound.destroy());
   }
 
+  /** A streamed file arrived: start the track that was waiting for it, upgrade the footstep loop. */
+  private onAudioAdded(_cache: unknown, key: string): void {
+    if (this.wantedMusic?.key === key) this.playMusic(key, this.wantedMusic.opts);
+    const surface = this.footstepSurface;
+    if (surface !== 'none' && key === FOOTSTEP_SFX_BY_SURFACE[surface]) {
+      this.footstepSurface = 'none';
+      this.onFootsteps(surface);
+    }
+  }
+
   // ── Public API ───────────────────────────────────────────────────────────
 
   /**
@@ -286,18 +466,17 @@ class AudioManagerImpl {
     if (previous) this.fade(previous, previous.volume, 0, fadeMs, () => previous.destroy());
 
     if (!this.game.cache.audio.has(key)) {
-      console.debug(`[audio] music track not loaded yet: ${key}`);
+      // Still streaming in: it starts when it arrives. The title theme plays
+      // on meanwhile if it is this very track; any other track means it stops.
+      this.wantedMusic = { key, opts };
+      if (key !== this.menuMusic?.trackKey) this.menuMusic?.release();
       return;
     }
+    this.wantedMusic = null;
 
-    // If MenuMusic (the pre-boot HTML <audio> theme on the title/loading
-    // screens) just handed off this exact track, resume from its position
-    // instead of restarting at 0 — otherwise the melody audibly jumps back.
-    let seek = 0;
-    if (this.pendingSeek?.key === key) {
-      seek = this.pendingSeek.seconds;
-      this.pendingSeek = null;
-    }
+    // Taking over from the title theme: resume from its position instead of
+    // restarting at 0, otherwise the melody audibly jumps back.
+    const seek = key === this.menuMusic?.trackKey ? this.menuMusic.position() ?? 0 : 0;
 
     const sound = this.game.sound.add(key, { loop, volume: 0 }) as unknown as Fadeable;
     if (opts.onComplete) {
@@ -310,14 +489,17 @@ class AudioManagerImpl {
     this.music = sound;
     this.musicKey = key;
     this.fade(sound, 0, volume, fadeMs);
+    this.menuMusic?.release();
   }
 
-  /** Lets MenuMusic (see components/MenuMusic.tsx) pass its playback position for a gapless handoff. */
-  setHandoffPosition(key: string, seconds: number): void {
-    this.pendingSeek = { key, seconds: Math.max(0, seconds) };
+  /** MenuMusic (components/MenuMusic.tsx) registers the title theme for the handoff. */
+  registerMenuMusic(handle: MenuMusicHandle | null): void {
+    this.menuMusic = handle;
   }
 
   stopMusic(fadeMs = DEFAULT_FADE_MS): void {
+    this.wantedMusic = null;
+    this.menuMusic?.release();
     if (!this.music) return;
     const sound = this.music;
     this.music = null;
@@ -339,7 +521,7 @@ class AudioManagerImpl {
       console.debug(`[audio] sfx not loaded yet: ${key}`);
       return;
     }
-    this.game.sound.play(key, { volume, rate: opts.rate ?? 1 });
+    this.game.sound.play(key, { volume, rate: opts.rate ?? 1, seek: SFX_START_OFFSET[key] ?? 0 });
   }
 
   private playSfxBeforeBoot(key: string, volume: number): void {
@@ -350,7 +532,7 @@ class AudioManagerImpl {
       element = new Audio(`/${url}`);
       this.preBootSfx.set(key, element);
     }
-    element.currentTime = 0;
+    element.currentTime = SFX_START_OFFSET[key] ?? 0;
     element.volume = clamp01(volume);
     void element.play().catch(() => {
       // Missing file or blocked before any gesture — nothing to recover.
@@ -358,23 +540,29 @@ class AudioManagerImpl {
   }
 
   playAttackSfx(attackId: string): void {
-    this.playSfx(ATTACK_SFX_BY_ID[attackId] ?? SFX.attackBassDrop.key);
+    this.playAttackSound(ATTACK_SFX_BY_ID[attackId] ?? SFX.attackBassDrop.key);
   }
 
   setMusicVolume(value: number): void {
     this.settings.musicVolume = clamp01(value);
     this.persist();
     this.music?.setVolume(this.targetMusicVolume());
+    this.menuMusic?.setVolume(this.settings.musicVolume * this.interiorDuck());
+    this.applyRecordLevel();
   }
 
   setSfxVolume(value: number): void {
     this.settings.sfxVolume = clamp01(value);
     this.persist();
+    // The footstep loop keeps playing: it follows the new level at once.
+    if (this.footstepSound) this.fade(this.footstepSound, this.footstepSound.volume, FOOTSTEP_VOLUME * this.settings.sfxVolume, 0);
   }
 
   setMuted(muted: boolean): void {
     this.settings.muted = muted;
     if (this.game) this.game.sound.mute = muted;
+    this.menuMusic?.setMuted(muted);
+    this.applyRecordLevel();
     this.persist();
   }
 
@@ -390,7 +578,13 @@ class AudioManagerImpl {
   // ── Internals ────────────────────────────────────────────────────────────
 
   private targetMusicVolume(): number {
-    return this.settings.musicVolume * (this.mode === 'battle' ? BATTLE_MUSIC_VOLUME_MULTIPLIER : 1);
+    return this.settings.musicVolume * (this.mode === 'battle' ? BATTLE_MUSIC_VOLUME_MULTIPLIER : 1) * this.interiorDuck();
+  }
+
+  /** Only the world's own music is muffled indoors, not a battle, death or reward track; a playing record silences it. */
+  private interiorDuck(): number {
+    if (!this.interior || this.mode !== 'world') return 1;
+    return this.recordWanted ? 0 : this.interiorShare;
   }
 
   private persist(): void {

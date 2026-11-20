@@ -5,9 +5,38 @@ import { useGameStore } from '../../store/gameStore';
 import { ATTACKS, applyDamageVariance } from '../systems/AttackSystem';
 import { BOSS_DEFINITION } from '../entities/Enemy';
 import { BOSS_PHASES } from '../entities/Boss';
-import type { EnemyData, Attack } from '../../types/game.types';
+import { createBattleFxTextures } from '../art/battleFx';
+import { BattleFx } from '../battle/BattleFx';
+import { Combatant } from '../battle/Combatant';
+import type { Hit, MoveContext, MoveScript } from '../battle/moves';
+import { PLAYER_MOVES, heroCutIn, heroWindup } from '../battle/playerMoves';
+import { enemyMove, foeTelegraph } from '../battle/enemyMoves';
+import { enrage, unleash } from '../battle/bossPhases';
+import { heroDefeat } from '../battle/defeat';
+import { foeDefeat, heroLevelUp } from '../battle/victory';
+import type { EnemyData, EnemyAttack, Attack } from '../../types/game.types';
 
 type TurnState = 'intro' | 'player-choose' | 'player-attack' | 'enemy-attack' | 'phase-change' | 'battle-end';
+
+/** What a move reports back to the turn logic. */
+interface StrikeHooks {
+  hit(share: number, hit: Hit): void;
+  /** The target has no HP left. */
+  down(): boolean;
+  done(): void;
+}
+
+/** Longest any move may run before the turn moves on regardless. */
+const MOVE_TIMEOUT_MS = 6000;
+
+/** Above every effect: the opaque floor under the arena hides whatever falls past it. */
+const FLOOR_DEPTH = 40;
+
+/**
+ * The portrait sky band sits over the effects' dim and vignettes (4.55–4.65),
+ * so those darken the painted arena only, not the flat band above it.
+ */
+const SKY_DEPTH = 4.7;
 
 /** Bounding box of a texture's non-transparent pixels, in source-image space. */
 interface ContentBounds {
@@ -38,6 +67,10 @@ export class BattleScene extends Phaser.Scene {
   private isBoss = false;
   private currentEnemyHp = 0;
   private bossPhaseIndex = 0;
+  /** The phase whose form is on screen; it changes on the transformation frame. */
+  private shownPhaseIndex = 0;
+  /** Fades the DOM battle controls out while a defeat plays. */
+  private uiFading = false;
 
   // UI references
   private enemySprite!: Phaser.GameObjects.Sprite;
@@ -46,6 +79,12 @@ export class BattleScene extends Phaser.Scene {
   private playerRig?: Phaser.GameObjects.Container;
   private playerFeet = { x: 0, y: 0 };
   private playerIdleWeight = 0;
+  /** Holds the opponent so blows can displace it while its idle bob runs on the sprite. */
+  private enemyRig?: Phaser.GameObjects.Container;
+  private fx?: BattleFx;
+  private hero?: Combatant;
+  private foe?: Combatant;
+  private heroJitter = { x: 0, y: 0 };
   private enemyHpBar!: Phaser.GameObjects.Graphics;
   private playerHpBar!: Phaser.GameObjects.Graphics;
   private enemyHpText!: Phaser.GameObjects.Text;
@@ -62,7 +101,6 @@ export class BattleScene extends Phaser.Scene {
   private phpBarX = 0; private phpBarY = 0; private phpBarW = 0; private phpBarH = 0;
 
   // Layout refs for animations
-  private battleH = 0;
   private enemyPlatform = { x: 0, y: 0 };
   private enemyTargetHeight = 0;
 
@@ -98,6 +136,8 @@ export class BattleScene extends Phaser.Scene {
     this.isBoss = data.isBoss;
     this.currentEnemyHp = this.enemyData.maxHp;
     this.bossPhaseIndex = 0;
+    this.shownPhaseIndex = 0;
+    this.uiFading = false;
     this.attackButtons = [];
     this.ambientParticles = [];
     this.turnState = 'intro';
@@ -142,9 +182,12 @@ export class BattleScene extends Phaser.Scene {
     // halves the resolution of a PNG carrying an EXIF block, for instance —
     // assuming the authoring size there left the arena drawn at half scale
     // with the paused overworld showing through the gap.
-    const bgSource = this.textures.get(arena.key).getSourceImage();
-    const BG_SRC_W = bgSource.width || 1672;
-    const BG_SRC_H = bgSource.height || 941;
+    // The arena streams in after the world opens (see AssetStream.ts); if it
+    // failed to arrive, lay out at the authoring size and paint a stand-in.
+    const hasArenaArt = this.textures.exists(arena.key);
+    const bgSource = hasArenaArt ? this.textures.get(arena.key).getSourceImage() : undefined;
+    const BG_SRC_W = bgSource?.width || 1672;
+    const BG_SRC_H = bgSource?.height || 941;
 
     // A phone in portrait is roughly twice as tall as it is wide — far taller
     // than the 16:9 artwork. Cover-fitting there would throw away half the
@@ -169,7 +212,6 @@ export class BattleScene extends Phaser.Scene {
     const BATTLE_H   = isPortrait
       ? Math.round(Math.min(Math.max(H * 0.56, bgScaledH), bgScaledH + H * 0.16))
       : Math.floor(H * 0.60);
-    this.battleH     = BATTLE_H;
     const MSG_Y      = BATTLE_H;
     const MSG_H      = Math.max(66, Math.round(H * 0.11));
     const MENU_Y     = MSG_Y + MSG_H + 4;
@@ -195,17 +237,28 @@ export class BattleScene extends Phaser.Scene {
     // Sky band: keeps the portrait artwork from floating on flat black, and
     // gives the enemy status panel a surface to sit on.
     if (bgOffsetY > 0) {
-      const sky = this.add.graphics().setDepth(0);
+      const sky = this.add.graphics().setDepth(SKY_DEPTH);
       sky.fillGradientStyle(0x0a0605, 0x0a0605, 0x1c100b, 0x1c100b, 1, 1, 1, 1);
       sky.fillRect(0, 0, W, Math.ceil(bgOffsetY) + 2);
     }
 
-    this.add.image(bgOffsetX, bgOffsetY, arena.key).setOrigin(0, 0).setScale(bgScale).setDepth(0);
+    if (hasArenaArt) {
+      this.add.image(bgOffsetX, bgOffsetY, arena.key).setOrigin(0, 0).setScale(bgScale).setDepth(0);
+    } else {
+      const [top, bottom, floor] = this.isBoss ? [0x14070b, 0x2b1013, 0x3a1a18] : [0x0d1610, 0x2a2a1c, 0x3b3523];
+      const stand = this.add.graphics().setDepth(0);
+      stand.fillGradientStyle(top, top, bottom, bottom, 1, 1, 1, 1);
+      stand.fillRect(bgOffsetX, bgOffsetY, bgScaledW, bgScaledH);
+      for (const spot of [arena.enemy, arena.player]) {
+        stand.fillStyle(floor, 0.9);
+        stand.fillEllipse(bgOffsetX + spot.x * bgScaledW, bgOffsetY + spot.y * bgScaledH, bgScaledW * 0.26, bgScaledH * 0.09);
+      }
+    }
 
     // Feather the top edge of the artwork into that band so the join reads as
     // haze rather than a cut.
     if (bgOffsetY > 0) {
-      const seam = this.add.graphics().setDepth(1);
+      const seam = this.add.graphics().setDepth(SKY_DEPTH);
       seam.fillGradientStyle(0x0a0605, 0x0a0605, 0x0a0605, 0x0a0605, 0.92, 0.92, 0, 0);
       seam.fillRect(0, bgOffsetY, W, Math.min(64, bgScaledH * 0.22));
     }
@@ -215,7 +268,7 @@ export class BattleScene extends Phaser.Scene {
     // the gaps between the DOM control panels, which is most of a phone screen.
     this.add.rectangle(0, BATTLE_H, W, H - BATTLE_H, 0x0a0605)
       .setOrigin(0, 0)
-      .setDepth(6);
+      .setDepth(FLOOR_DEPTH);
 
     const platformPoint = (p: { x: number; y: number }) => ({
       x: bgOffsetX + p.x * bgScaledW,
@@ -312,6 +365,8 @@ export class BattleScene extends Phaser.Scene {
     this.enemySprite = this.add.sprite(0, 0, enemyTexture).setDepth(5);
     this.enemySprite.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.plantOnPlatform(this.enemySprite, enemyTexture, platformAnchors.enemy, this.enemyTargetHeight);
+    const enemyArtWidth = this.getContentBounds(enemyTexture).width * this.enemySprite.scaleX;
+    this.enemyRig = this.add.container(0, 0, [this.enemySprite]).setDepth(5);
     if (this.isBoss) {
       const contactShadow = this.add.ellipse(
         platformAnchors.enemy.x, platformAnchors.enemy.y - 2,
@@ -359,11 +414,33 @@ export class BattleScene extends Phaser.Scene {
     const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.37, 10);
     this.playerSprite = this.add.sprite(0, 0, PLAYER_BATTLE_TEXTURE).setDepth(5);
     this.plantOnPlatform(this.playerSprite, PLAYER_BATTLE_TEXTURE, platformAnchors.player, playerTargetH);
+    const playerArtWidth = this.getContentBounds(PLAYER_BATTLE_TEXTURE).width * this.playerSprite.scaleX;
     this.preparePlayerBattleTexture();
-    this.playerRig = this.add.container(0, 0, [this.playerSprite]).setDepth(5);
+    // In front of the opponent: the hero's platform is the nearest, and moves
+    // like Hook Impact bring the two close together.
+    this.playerRig = this.add.container(0, 0, [this.playerSprite]).setDepth(5.2);
     this.playerFeet = { x: platformAnchors.player.x, y: platformAnchors.player.y };
     this.playerIdleWeight = 0;
     const playerFinalX = this.playerSprite.x;
+
+    // Effect textures are painted by the loader; this only covers a missed step.
+    createBattleFxTextures(this);
+    this.fx = new BattleFx(this, {
+      arenaHeight: BATTLE_H,
+      reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+    });
+    this.heroJitter = { x: 0, y: 0 };
+    this.hero = new Combatant(
+      this, this.playerSprite, this.playerSprite, { ...platformAnchors.player }, playerTargetH, playerArtWidth, 1,
+      { x: playerFinalX, y: this.playerSprite.y },
+      (x, y) => { this.heroJitter.x = x; this.heroJitter.y = y; },
+    );
+    this.foe = new Combatant(
+      this, this.enemySprite, this.enemyRig, { ...platformAnchors.enemy }, this.enemyTargetHeight, enemyArtWidth, -1,
+      { x: enemyFinalX, y: enemySpriteY },
+      x => { if (this.enemySprite.active) this.enemySprite.x = (this.foe?.home.x ?? enemyFinalX) + x; },
+    );
+
     this.playerSprite.x = -40;
 
     this.tweens.add({
@@ -401,6 +478,10 @@ export class BattleScene extends Phaser.Scene {
     EventBus.on(EVENTS.BATTLE_UI_REQUEST, this.emitBattleUiState, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.stopEnemyEffects();
+      this.fx?.dispose();
+      this.fx = undefined;
+      this.hero = undefined;
+      this.foe = undefined;
       this.scene.setVisible(true, 'WorldScene');
       EventBus.off(EVENTS.BATTLE_UI_ACTION, this.onBattleUiAction);
       EventBus.off(EVENTS.BATTLE_UI_REQUEST, this.emitBattleUiState, this);
@@ -447,10 +528,11 @@ export class BattleScene extends Phaser.Scene {
     };
     const status = turnLabels[this.turnState];
     const enemyAccent = this.isBoss ? 0xf0362c : this.enemyData.color;
-    const phase = this.isBoss ? ['Phase I', 'Phase II', 'Phase III'][this.bossPhaseIndex] : '';
+    const phase = this.isBoss ? ['Phase I', 'Phase II', 'Phase III'][this.shownPhaseIndex] : '';
     const payload: BattleUiPayload = {
       isBoss: this.isBoss,
       phase,
+      fading: this.uiFading,
       layout: this.uiLayout,
       enemy: {
         name: this.enemyData.name,
@@ -459,7 +541,7 @@ export class BattleScene extends Phaser.Scene {
         accent: `#${enemyAccent.toString(16).padStart(6, '0')}`,
       },
       player: {
-        name: store.playerName || 'Sound Keeper',
+        name: store.playerName || 'Mr Mario',
         hp: store.hp,
         maxHp: store.maxHp,
         level: store.level,
@@ -980,7 +1062,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    this.hero?.update(time);
+    this.foe?.update(time);
     this.updatePlayerIdle(time, delta);
+    this.fx?.update(time, delta);
   }
 
   /**
@@ -991,9 +1076,12 @@ export class BattleScene extends Phaser.Scene {
   private updatePlayerIdle(time: number, delta: number): void {
     const rig = this.playerRig;
     if (!rig?.active) return;
-    const target = this.turnState === 'battle-end' ? 0 : 1;
+    // The hero holds still while attacking, so effects drawn in world space
+    // stay on the moving figure.
+    const attacking = this.turnState === 'player-attack';
+    const target = this.turnState === 'battle-end' || attacking ? 0 : 1;
     // Eases in over about a second, independent of the frame rate.
-    this.playerIdleWeight += (target - this.playerIdleWeight) * (1 - Math.exp(-delta / 350));
+    this.playerIdleWeight += (target - this.playerIdleWeight) * (1 - Math.exp(-delta / (attacking ? 140 : 350)));
     const w = this.playerIdleWeight;
     const breath = Math.sin((time / 2400) * Math.PI * 2);
     const sway = Math.sin((time / 4100) * Math.PI * 2 + 0.7);
@@ -1004,8 +1092,8 @@ export class BattleScene extends Phaser.Scene {
     const cos = Math.cos(theta);
     const sin = Math.sin(theta);
     rig.setScale(sx, sy).setRotation(theta).setPosition(
-      fx - (cos * sx * fx - sin * sy * fy),
-      fy - (sin * sx * fx + cos * sy * fy),
+      fx - (cos * sx * fx - sin * sy * fy) + this.heroJitter.x,
+      fy - (sin * sx * fx + cos * sy * fy) + this.heroJitter.y,
     );
   }
 
@@ -1072,36 +1160,64 @@ export class BattleScene extends Phaser.Scene {
       },
     });
 
+    // Rolled once; the move's hits deliver it in parts and whatever they did
+    // not deliver lands when it ends, so the total always equals the roll.
     const damage = applyDamageVariance(attack.damage);
-    this.setMessage(`${attack.name}!`);
-    this.playPlayerAttackAnimation(attack, () => {
-      this.currentEnemyHp = Math.max(0, this.currentEnemyHp - damage);
+    let dealt = 0;
+    let resolved = false;
+    const land = (amount: number) => {
+      if (amount <= 0) return;
+      dealt += amount;
+      this.currentEnemyHp = Math.max(0, this.currentEnemyHp - amount);
       this.updateEnemyHpBar();
-      this.playTargetImpact(this.enemySprite, attack.color, false);
+    };
+    this.setMessage(`${attack.name}!`);
+    this.playPlayerAttackAnimation(attack, {
+      hit: (share, hit) => {
+        if (resolved) return;
+        land(BattleScene.portion(damage, dealt, share));
+        if (hit.weight !== 'light') EventBus.emit(EVENTS.IMPACT, { isPlayer: false });
+      },
+      down: () => this.currentEnemyHp <= 0,
+      done: () => {
+        if (resolved) return;
+        resolved = true;
+        land(damage - dealt);
+        this.resolvePlayerAttack();
+      },
+    });
+  }
 
-      // A lethal hit must not start another boss phase or leave its aura alive.
-      if (this.currentEnemyHp <= 0) {
-        this.stopEnemyEffects();
-        this.time.delayedCall(600, () => this.endBattle('win'));
+  /** The part of a rolled total one hit lands; a share of 1 or more lands the rest. */
+  private static portion(total: number, dealt: number, share: number): number {
+    const left = Math.max(0, total - dealt);
+    return share >= 1 ? left : Math.min(left, Math.round(total * share));
+  }
+
+  /** Decided once per attack, after the move: a lethal or phase-crossing hit mid-combo does not branch early. */
+  private resolvePlayerAttack(): void {
+    // A lethal hit must not start another boss phase or leave its aura alive.
+    if (this.currentEnemyHp <= 0) {
+      this.stopEnemyEffects();
+      this.time.delayedCall(450, () => this.endBattle('win'));
+      return;
+    }
+
+    if (this.isBoss) {
+      const hpFrac = this.currentEnemyHp / this.enemyData.maxHp;
+      let newPhaseIdx = 0;
+      if (hpFrac <= BOSS_PHASES[2].hpThreshold) newPhaseIdx = 2;
+      else if (hpFrac <= BOSS_PHASES[1].hpThreshold) newPhaseIdx = 1;
+
+      if (newPhaseIdx > this.bossPhaseIndex) {
+        this.bossPhaseIndex = newPhaseIdx;
+        this.triggerPhaseChange(newPhaseIdx);
         return;
       }
+    }
 
-      // Check boss phase transition
-      if (this.isBoss) {
-        const hpFrac = this.currentEnemyHp / this.enemyData.maxHp;
-        let newPhaseIdx = 0;
-        if (hpFrac <= BOSS_PHASES[2].hpThreshold) newPhaseIdx = 2;
-        else if (hpFrac <= BOSS_PHASES[1].hpThreshold) newPhaseIdx = 1;
-
-        if (newPhaseIdx > this.bossPhaseIndex) {
-          this.bossPhaseIndex = newPhaseIdx;
-          this.triggerPhaseChange(newPhaseIdx);
-          return;
-        }
-      }
-
-      this.time.delayedCall(700, () => this.executeEnemyAttack());
-    });
+    // The move's follow-through already gives the hit room to breathe.
+    this.time.delayedCall(450, () => this.executeEnemyAttack());
   }
 
   private executeEnemyAttack(): void {
@@ -1114,141 +1230,39 @@ export class BattleScene extends Phaser.Scene {
     const attack = this.enemyData.attacks[Math.floor(Math.random() * this.enemyData.attacks.length)];
     const rawDmg  = Math.round(attack.damage * phaseMultiplier * levelMultiplier);
     const damage  = applyDamageVariance(rawDmg);
+    let dealt = 0;
+    let resolved = false;
+    const land = (amount: number) => {
+      if (amount <= 0) return;
+      dealt += amount;
+      useGameStore.getState().takeDamage(amount);
+      EventBus.emit(EVENTS.HP_CHANGED, useGameStore.getState().hp);
+      this.updatePlayerHpBar();
+    };
 
     this.setMessage(`${this.enemyData.name} uses ${attack.name}!`);
-    this.time.delayedCall(600, () => {
-      this.playEnemyAttackAnimation(attack, () => {
-        store.takeDamage(damage);
-        const currentHp = useGameStore.getState().hp;
-        EventBus.emit(EVENTS.HP_CHANGED, currentHp);
-        this.updatePlayerHpBar();
-        this.playTargetImpact(this.playerSprite, 0xf0362c, true);
-
-        this.time.delayedCall(700, () => {
-          if (currentHp <= 0) {
-            this.endBattle('lose');
-          } else {
-            this.setTurnState('player-choose');
-          }
-        });
+    this.time.delayedCall(500, () => {
+      this.playEnemyAttackAnimation(attack, {
+        hit: (share, hit) => {
+          if (resolved) return;
+          land(BattleScene.portion(damage, dealt, share));
+          if (hit.weight !== 'light') EventBus.emit(EVENTS.IMPACT, { isPlayer: true });
+        },
+        down: () => useGameStore.getState().hp <= 0,
+        done: () => {
+          if (resolved) return;
+          resolved = true;
+          land(damage - dealt);
+          this.time.delayedCall(450, () => {
+            if (useGameStore.getState().hp <= 0) {
+              this.endBattle('lose');
+            } else {
+              this.setTurnState('player-choose');
+            }
+          });
+        },
       });
     });
-  }
-
-  private playTargetImpact(target: Phaser.GameObjects.Sprite, color: number, playerHit: boolean): void {
-    EventBus.emit(EVENTS.IMPACT, { isPlayer: playerHit });
-    const originX = target.x;
-    const originY = target.y;
-    const offset = playerHit ? -11 : 11;
-    const echoColor = playerHit ? 0xe8b465 : 0x6ea8d8;
-    const reticleRadius = Math.max(25, Math.min(52, target.displayWidth * 0.44));
-
-    // Two displaced copies create a short chromatic signal tear at the hit frame.
-    const createEcho = (tint: number, direction: number) => {
-      const echo = this.add.sprite(originX, originY, target.texture.key, target.frame.name)
-        .setOrigin(target.originX, target.originY)
-        .setScale(target.scaleX, target.scaleY)
-        .setAngle(target.angle)
-        .setTint(tint)
-        .setAlpha(0.34)
-        .setDepth(target.depth - 0.1)
-        .setName('battle-impact-echo');
-      this.tweens.add({
-        targets: echo,
-        x: originX + direction * 15,
-        alpha: 0,
-        duration: 190,
-        ease: 'Quad.easeOut',
-        onComplete: () => echo.destroy(),
-      });
-    };
-    createEcho(color, -1);
-    createEcho(echoColor, 1);
-
-    const reticle = this.add.graphics()
-      .setPosition(originX, originY)
-      .setDepth(25)
-      .setName('battle-impact-reticle');
-    reticle.lineStyle(2, color, 0.95);
-    const r = reticleRadius;
-    const corner = 10;
-    reticle.lineBetween(-r, -r, -r + corner, -r);
-    reticle.lineBetween(-r, -r, -r, -r + corner);
-    reticle.lineBetween(r, -r, r - corner, -r);
-    reticle.lineBetween(r, -r, r, -r + corner);
-    reticle.lineBetween(-r, r, -r + corner, r);
-    reticle.lineBetween(-r, r, -r, r - corner);
-    reticle.lineBetween(r, r, r - corner, r);
-    reticle.lineBetween(r, r, r, r - corner);
-    reticle.lineStyle(1, 0xffffff, 0.72);
-    reticle.lineBetween(-7, 0, 7, 0);
-    reticle.lineBetween(0, -7, 0, 7);
-    reticle.strokeCircle(0, 0, 12);
-
-    this.tweens.add({
-      targets: reticle,
-      scaleX: 1.65,
-      scaleY: 1.65,
-      angle: playerHit ? -12 : 12,
-      alpha: 0,
-      duration: 320,
-      ease: 'Quad.easeOut',
-      onComplete: () => reticle.destroy(),
-    });
-
-    // Thin waveform shards make the hit readable without showing damage numbers.
-    for (let shardIndex = 0; shardIndex < 9; shardIndex++) {
-      const shard = this.add.graphics().setDepth(24).setPosition(originX, originY);
-      const shardColor = shardIndex % 3 === 0 ? 0xffffff : color;
-      shard.fillStyle(shardColor, 0.92);
-      shard.fillRect(-1, -1, 2 + (shardIndex % 2) * 2, 2);
-      const angle = (Math.PI * 2 * shardIndex) / 9 + Math.random() * 0.24;
-      const distance = 26 + Math.random() * 34;
-      this.tweens.add({
-        targets: shard,
-        x: originX + Math.cos(angle) * distance,
-        y: originY + Math.sin(angle) * distance,
-        alpha: 0,
-        scaleX: 0.35,
-        duration: 270 + Math.random() * 110,
-        ease: 'Quad.easeOut',
-        onComplete: () => shard.destroy(),
-      });
-    }
-
-    target.setTint(0xffffff);
-    this.time.delayedCall(75, () => {
-      if (target.active) target.setTint(color);
-    });
-    this.time.delayedCall(135, () => {
-      if (target.active) target.clearTint();
-    });
-    this.tweens.add({
-      targets: target,
-      x: originX + offset,
-      duration: 32,
-      yoyo: true,
-      repeat: 4,
-      ease: 'Sine.easeInOut',
-      onComplete: () => { if (target.active) target.x = originX; },
-    });
-
-    const hpText = playerHit ? this.playerHpText : this.enemyHpText;
-    hpText.setColor(playerHit ? '#ff8c91' : '#f8ece2');
-    this.tweens.add({
-      targets: hpText,
-      scaleX: 1.13,
-      scaleY: 1.13,
-      alpha: 0.58,
-      duration: 90,
-      yoyo: true,
-      repeat: 1,
-      onComplete: () => hpText.setScale(1).setAlpha(1).setColor('#b6aea9'),
-    });
-
-    this.cameras.main.shake(playerHit ? 180 : 140, playerHit ? 0.008 : 0.006);
-    if (playerHit) this.cameras.main.flash(90, 115, 12, 18, false);
-    else this.cameras.main.flash(70, 215, 255, 74, false);
   }
 
   private triggerPhaseChange(phaseIdx: number): void {
@@ -1266,62 +1280,51 @@ export class BattleScene extends Phaser.Scene {
       `${this.enemyData.name} is enraged!`,
       `${this.enemyData.name} unleashes its full fury!`,
     ];
-
-    this.cameras.main.flash(400, 150, 0, 200);
-    this.cameras.main.shake(300, 0.008);
-
-    this.phaseText.setText(phaseLabels[phaseIdx]);
-    this.phaseText.setColor(phaseColors[phaseIdx]);
-    // Re-plant rather than only swapping the texture: each phase render has
-    // its own transparent padding, so scale and footing must be recomputed
-    // or the later phases drift off the dais.
-    this.enemySprite.setTexture(textureKeys[phaseIdx]);
-    this.plantOnPlatform(this.enemySprite, textureKeys[phaseIdx], this.enemyPlatform, this.enemyTargetHeight);
-    EventBus.emit(EVENTS.UI_NOTICE, {
-      eyebrow: `${this.enemyData.name} changes form`,
-      title: phaseLabels[phaseIdx],
-      detail: phaseIdx === 2 ? 'Final phase. Its attacks hit hardest now.' : 'Its attacks hit harder now.',
-      accent: phaseColors[phaseIdx],
-      tone: 'danger',
-      variant: 'hero',
-      duration: 1450,
-    });
-
-    // Phase change visual: big text overlay
-    const W = logicalSize(this).width;
-    const phaseAnnounce = this.add.text(W / 2, this.battleH * 0.4, phaseLabels[phaseIdx], {
-      fontFamily: 'Sora',
-      fontSize: '16px',
-      color: phaseColors[phaseIdx],
-    }).setOrigin(0.5).setDepth(28).setAlpha(0).setScale(2).setVisible(false);
-
-    this.tweens.add({
-      targets: phaseAnnounce,
-      alpha: 1,
-      scaleX: 1, scaleY: 1,
-      duration: 400,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this.tweens.add({
-          targets: phaseAnnounce,
-          alpha: 0,
-          y: this.battleH * 0.3,
-          duration: 600,
-          delay: 600,
-          onComplete: () => phaseAnnounce.destroy(),
-        });
-      },
-    });
-
     this.setMessage(phaseMessages[phaseIdx]);
 
-    this.time.delayedCall(1600, () => {
+    // The new form appears on the transformation frame of the sequence.
+    const transform = () => {
+      this.phaseText.setText(phaseLabels[phaseIdx]);
+      this.phaseText.setColor(phaseColors[phaseIdx]);
+      // Re-plant rather than only swapping the texture: each phase render has
+      // its own transparent padding, so scale and footing must be recomputed
+      // or the later phases drift off the dais.
+      this.enemySprite.setTexture(textureKeys[phaseIdx]);
+      this.plantOnPlatform(this.enemySprite, textureKeys[phaseIdx], this.enemyPlatform, this.enemyTargetHeight);
+      this.foe?.rebase();
+      this.shownPhaseIndex = phaseIdx;
+      this.emitBattleUiState();
+      EventBus.emit(EVENTS.UI_NOTICE, {
+        eyebrow: `${this.enemyData.name} changes form`,
+        title: phaseLabels[phaseIdx],
+        detail: phaseIdx === 2 ? 'Final phase. Its attacks hit hardest now.' : 'Its attacks hit harder now.',
+        accent: phaseColors[phaseIdx],
+        tone: 'danger',
+        variant: 'hero',
+        duration: 1450,
+      });
+    };
+
+    let finished = false;
+    const next = () => {
+      if (finished) return;
+      finished = true;
       if (this.currentEnemyHp <= 0) {
         this.endBattle('win');
       } else {
         this.executeEnemyAttack();
       }
-    });
+    };
+
+    if (!this.fx || !this.foe || !this.hero) {
+      transform();
+      this.time.delayedCall(1600, next);
+      return;
+    }
+    // Phase II is a step up; Phase III is the Gatekeeper's last stand.
+    const shift = phaseIdx >= 2 ? unleash : enrage;
+    shift({ fx: this.fx, boss: this.foe, hero: this.hero, transform, done: next });
+    this.time.delayedCall(MOVE_TIMEOUT_MS, next);
   }
 
   private endBattle(outcome: 'win' | 'lose'): void {
@@ -1337,26 +1340,12 @@ export class BattleScene extends Phaser.Scene {
         : `${this.enemyData.name} was defeated!`);
       EventBus.emit(EVENTS.ENEMY_DEFEATED, this.isBoss);
 
-      // Defeat animation: blink → shrink-spin → burst particles
-      this.tweens.add({
-        targets: this.enemySprite,
-        alpha: 0,
-        duration: 120,
-        yoyo: true,
-        repeat: 3,
-        onComplete: () => {
-          this.tweens.add({
-            targets: this.enemySprite,
-            scaleX: 0,
-            scaleY: 0,
-            angle: 360,
-            duration: 500,
-            ease: 'Back.easeIn',
-            onComplete: () => this.enemySprite.setVisible(false).setActive(false),
-          });
-          this.spawnDefeatParticles(this.enemySprite.x, this.enemySprite.y);
-        },
-      });
+      // The opponent's signal tears apart and bursts.
+      if (this.fx && this.foe && this.hero) {
+        foeDefeat(this.fx, this.foe, this.hero, this.isBoss ? 0xff3d57 : this.enemyData.color, this.isBoss, () => this.enemySprite.setActive(false));
+      } else {
+        this.tweens.add({ targets: this.enemySprite, alpha: 0, duration: 500, onComplete: () => this.enemySprite.setVisible(false).setActive(false) });
+      }
 
       if (!this.isBoss) {
         const store = useGameStore.getState();
@@ -1373,6 +1362,7 @@ export class BattleScene extends Phaser.Scene {
           EventBus.emit(EVENTS.LEVEL_UP, currentLevel);
           this.time.delayedCall(500, () => {
             this.setMessage(`${this.enemyData.name} defeated! ${xpMsg}. Level up: you reached level ${currentLevel}!`);
+            if (this.fx && this.hero) heroLevelUp(this.fx, this.hero);
           });
         }
       }
@@ -1387,24 +1377,25 @@ export class BattleScene extends Phaser.Scene {
 
     } else {
       this.setMessage('You were overcome by the silence…');
-      this.cameras.main.shake(500, 0.01);
-
-      // Player sprite fades and drops
-      this.tweens.add({
-        targets: this.playerSprite,
-        alpha: 0,
-        y: this.playerSprite.y + 20,
-        duration: 800,
-        ease: 'Quad.easeIn',
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        this.scene.stop('BattleScene');
+        EventBus.emit(EVENTS.BATTLE_END, { outcome: 'lose', enemyId: this.enemyData.id, isBoss: this.isBoss });
+      };
+      // The battle controls fade as the picture dies.
+      this.time.delayedCall(1700, () => {
+        this.uiFading = true;
+        this.emitBattleUiState();
       });
-
-      this.time.delayedCall(1800, () => {
+      if (this.fx && this.hero) {
+        heroDefeat(this.fx, this.hero, finish);
+        this.time.delayedCall(MOVE_TIMEOUT_MS, finish);
+      } else {
         this.cameras.main.fadeOut(600);
-        this.time.delayedCall(600, () => {
-          this.scene.stop('BattleScene');
-          EventBus.emit(EVENTS.BATTLE_END, { outcome: 'lose', enemyId: this.enemyData.id, isBoss: this.isBoss });
-        });
-      });
+        this.time.delayedCall(2400, finish);
+      }
     }
   }
 
@@ -1443,1633 +1434,86 @@ export class BattleScene extends Phaser.Scene {
     this.emitBattleUiState();
   }
 
-  // ── Player attack animations ──────────────────────────────────────────────
+  // ── Attack animations ─────────────────────────────────────────────────────
 
-  private playPlayerAttackAnimation(attack: Attack, onComplete: () => void): void {
-    this.playPlayerAttackPrelude(attack, () => {
-      // Start the cue with the visible attack, after the track-card wind-up.
-      EventBus.emit(EVENTS.ATTACK_USED, { attackId: attack.id, name: attack.name, isPlayer: true });
-      this.runPlayerAttackAnimation(attack, onComplete);
-    });
-  }
-
-  private playPlayerAttackPrelude(attack: Attack, onComplete: () => void): void {
-    const W = logicalSize(this).width;
-    const colorHex = `#${attack.color.toString(16).padStart(6, '0')}`;
+  private playPlayerAttackAnimation(attack: Attack, hooks: StrikeHooks): void {
     const trackIndex = ['bass-drop', 'echo-wave', 'hook-impact', 'reverb-strike'].indexOf(attack.id) + 1;
     EventBus.emit(EVENTS.UI_NOTICE, {
       eyebrow: `Move ${trackIndex}`,
       title: attack.name,
       detail: attack.description,
-      accent: colorHex,
+      accent: `#${attack.color.toString(16).padStart(6, '0')}`,
       tone: 'combat',
       duration: 900,
     });
-
-    const veil = this.add.rectangle(0, 0, W, this.battleH, 0x050302, 0)
-      .setOrigin(0)
-      .setDepth(26)
-      .setName('battle-player-prelude');
-    const signalBand = this.add.graphics().setDepth(27);
-    signalBand.fillStyle(attack.color, 0.08);
-    signalBand.fillRect(0, this.battleH * 0.31, W, 68);
-    signalBand.lineStyle(1, attack.color, 0.54);
-    signalBand.lineBetween(0, this.battleH * 0.31, W, this.battleH * 0.31);
-    signalBand.lineBetween(0, this.battleH * 0.31 + 68, W, this.battleH * 0.31 + 68);
-    signalBand.setAlpha(0);
-
-    const kicker = this.add.text(W / 2, this.battleH * 0.31 + 11, `TRACK 0${trackIndex} // PLAYER SIGNAL`, {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#b6aea9', letterSpacing: 2,
-    }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setVisible(false).setName('battle-player-kicker');
-    const title = this.add.text(W / 2, this.battleH * 0.31 + 27, attack.name.toUpperCase(), {
-      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '22px', color: colorHex, letterSpacing: 2,
-    }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setScale(0.84).setVisible(false).setName('battle-player-title');
-
-    const waveform = this.add.graphics().setDepth(28).setPosition(W / 2, this.battleH * 0.31 + 62);
-    waveform.lineStyle(1, attack.color, 0.9);
-    waveform.beginPath();
-    waveform.moveTo(-102, 0);
-    for (let wave = -96; wave <= 96; wave += 8) {
-      const amplitude = wave % 24 === 0 ? 6 : wave % 16 === 0 ? 3 : 1;
-      waveform.lineTo(wave, amplitude * (wave % 32 === 0 ? -1 : 1));
-    }
-    waveform.lineTo(102, 0);
-    waveform.strokePath();
-    waveform.setScale(0, 1).setAlpha(0);
-
-    for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
-      const chargeRing = this.add.graphics()
-        .setPosition(this.playerSprite.x, this.playerSprite.y)
-        .setDepth(25)
-        .setName('battle-player-charge');
-      chargeRing.lineStyle(1.5, ringIndex === 1 ? 0xffffff : attack.color, 0.75);
-      chargeRing.strokeCircle(0, 0, 20 + ringIndex * 7);
-      chargeRing.setScale(1.8 + ringIndex * 0.18).setAlpha(0);
-      this.tweens.add({
-        targets: chargeRing,
-        scaleX: 0.36,
-        scaleY: 0.36,
-        alpha: { from: 0, to: 0.85 },
-        duration: 250 + ringIndex * 35,
-        delay: ringIndex * 20,
-        ease: 'Quad.easeIn',
-        onComplete: () => chargeRing.destroy(),
-      });
-    }
-
-    this.tweens.add({ targets: veil, alpha: 0.52, duration: 90, ease: 'Quad.easeOut' });
-    this.tweens.add({ targets: signalBand, alpha: 1, duration: 120 });
-    this.tweens.add({ targets: kicker, alpha: 1, y: kicker.y - 3, duration: 120, ease: 'Quad.easeOut' });
-    this.tweens.add({ targets: title, alpha: 1, scaleX: 1, scaleY: 1, duration: 170, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: waveform, scaleX: 1, alpha: 1, duration: 210, ease: 'Cubic.easeOut' });
-
-    this.time.delayedCall(300, () => {
-      this.tweens.add({
-        targets: [veil, signalBand, kicker, title, waveform],
-        alpha: 0,
-        duration: 120,
-        onComplete: () => {
-          veil.destroy(); signalBand.destroy(); kicker.destroy(); title.destroy(); waveform.destroy();
-          onComplete();
-        },
-      });
-    });
+    const move = PLAYER_MOVES[attack.id] ?? PLAYER_MOVES['bass-drop'];
+    this.runMove(this.hero, this.foe, attack.color, 1, hooks,
+      () => EventBus.emit(EVENTS.ATTACK_USED, { attackId: attack.id, name: attack.name, isPlayer: true }),
+      move.ultimate ? heroCutIn : heroWindup, move.script);
   }
 
-  private runPlayerAttackAnimation(attack: Attack, onComplete: () => void): void {
-    const W = logicalSize(this).width;
-    const color = attack.color;
-    const eX = this.enemySprite.x;
-    const eY = this.enemySprite.y;
-    const pX = this.playerSprite.x;
-    const pY = this.playerSprite.y;
-    const pScaleX = this.playerSprite.scaleX;
-    const pScaleY = this.playerSprite.scaleY;
-
-    switch (attack.id) {
-
-      // ── BASS DROP ─────────────────────────────────────────────────────
-      // Heavy slam: player jumps up → slams down → ground crack travels →
-      // massive shockwave + vertical pillar at enemy
-      case 'bass-drop': {
-        // Sub-bass compresses around the performer before the physical slam.
-        for (let pulseIndex = 0; pulseIndex < 3; pulseIndex++) {
-          const speakerPulse = this.add.graphics()
-            .setPosition(pX, pY + 17)
-            .setDepth(20)
-            .setName('battle-bass-pulse');
-          speakerPulse.lineStyle(2.5 - pulseIndex * 0.45, color, 0.9 - pulseIndex * 0.18);
-          speakerPulse.strokeEllipse(0, 0, 26 + pulseIndex * 12, 9 + pulseIndex * 4);
-          speakerPulse.setScale(0.35).setAlpha(0);
-          this.tweens.add({
-            targets: speakerPulse,
-            scaleX: 2.5 + pulseIndex * 0.4,
-            scaleY: 2.1 + pulseIndex * 0.32,
-            alpha: { from: 0.9, to: 0 },
-            duration: 360 + pulseIndex * 70,
-            delay: pulseIndex * 55,
-            ease: 'Cubic.easeOut',
-            onComplete: () => speakerPulse.destroy(),
-          });
-        }
-
-        const bassHorizon = this.add.graphics().setDepth(18).setAlpha(0.9);
-        bassHorizon.lineStyle(1, color, 0.42);
-        bassHorizon.beginPath();
-        bassHorizon.moveTo(0, this.battleH * 0.88);
-        for (let hx = 0; hx <= W; hx += 16) {
-          const peak = Math.abs(hx - pX) < 64 ? (hx % 32 === 0 ? -8 : 5) : 0;
-          bassHorizon.lineTo(hx, this.battleH * 0.88 + peak);
-        }
-        bassHorizon.strokePath();
-        this.tweens.add({ targets: bassHorizon, alpha: 0, duration: 650, delay: 180, onComplete: () => bassHorizon.destroy() });
-
-        // Phase 1: Player jumps up (wind-up)
-        this.tweens.add({
-          targets: this.playerSprite,
-          y: pY - 25,
-          scaleX: pScaleX * 0.9, scaleY: pScaleY * 1.08,
-          duration: 230,
-          ease: 'Quad.easeOut',
-          onComplete: () => {
-            // Phase 2: SLAM DOWN hard
-            this.tweens.add({
-              targets: this.playerSprite,
-              y: pY + 6,
-              scaleX: pScaleX * 1.14, scaleY: pScaleY * 0.84,
-              duration: 85,
-              ease: 'Quad.easeIn',
-              onComplete: () => {
-                // Reset player
-                this.tweens.add({ targets: this.playerSprite, y: pY, scaleX: pScaleX, scaleY: pScaleY, duration: 220, ease: 'Back.easeOut' });
-
-                this.cameras.main.shake(300, 0.012);
-
-                // Ground crack line from player to enemy
-                const crack = this.add.graphics().setDepth(19);
-                const crackState = { headX: pX };
-                const crackY = this.battleH * 0.88;
-                this.tweens.add({
-                  targets: crackState,
-                  headX: eX,
-                  duration: 200,
-                  ease: 'Quad.easeIn',
-                  onUpdate: () => {
-                    crack.clear();
-                    // Jagged crack
-                    crack.lineStyle(3, color, 0.8);
-                    crack.beginPath();
-                    crack.moveTo(pX, crackY);
-                    const segs = 12;
-                    for (let i = 1; i <= segs; i++) {
-                      const fx = pX + (crackState.headX - pX) * (i / segs);
-                      if (fx > crackState.headX) break;
-                      const jy = crackY + ((i % 2 === 0 ? 1 : -1) * (3 + Math.random() * 4));
-                      crack.lineTo(fx, jy);
-                    }
-                    crack.strokePath();
-                    // Glow around crack
-                    crack.lineStyle(10, color, 0.1);
-                    crack.beginPath();
-                    crack.moveTo(pX, crackY);
-                    crack.lineTo(crackState.headX, crackY);
-                    crack.strokePath();
-                  },
-                  onComplete: () => {
-                    this.tweens.add({ targets: crack, alpha: 0, duration: 500, onComplete: () => crack.destroy() });
-
-                    // Phase 3: Vertical pillar of bass energy at enemy
-                    const pillar = this.add.graphics().setDepth(20);
-                    const pillarState = { h: 0, alpha: 1 };
-                    this.tweens.add({
-                      targets: pillarState,
-                      h: this.battleH,
-                      duration: 150,
-                      ease: 'Quad.easeOut',
-                      onUpdate: () => {
-                        pillar.clear();
-                        const topY = eY - pillarState.h / 2;
-                        // Wide glow
-                        pillar.fillStyle(color, 0.08);
-                        pillar.fillRect(eX - 30, topY, 60, pillarState.h);
-                        // Medium fill
-                        pillar.fillStyle(color, 0.25);
-                        pillar.fillRect(eX - 14, topY, 28, pillarState.h);
-                        // Core beam
-                        pillar.fillStyle(color, 0.6);
-                        pillar.fillRect(eX - 5, topY, 10, pillarState.h);
-                        // White center
-                        pillar.fillStyle(0xffffff, 0.5);
-                        pillar.fillRect(eX - 2, topY, 4, pillarState.h);
-                      },
-                    });
-
-                    // Equalizer towers punch upward with the bass column.
-                    for (let barIndex = -6; barIndex <= 6; barIndex++) {
-                      const tower = this.add.rectangle(
-                        eX + barIndex * 7,
-                        eY + 24,
-                        4,
-                        14 + (6 - Math.abs(barIndex)) * 5,
-                        barIndex % 3 === 0 ? 0xffffff : color,
-                        0.85,
-                      ).setOrigin(0.5, 1).setDepth(22).setScale(1, 0.05).setName('battle-bass-equalizer');
-                      this.tweens.add({
-                        targets: tower,
-                        scaleY: 1,
-                        y: eY + 12,
-                        duration: 120 + Math.abs(barIndex) * 12,
-                        delay: Math.abs(barIndex) * 9,
-                        ease: 'Back.easeOut',
-                        onComplete: () => {
-                          this.tweens.add({
-                            targets: tower,
-                            y: tower.y - 24,
-                            scaleY: 0.18,
-                            alpha: 0,
-                            duration: 300,
-                            ease: 'Quad.easeOut',
-                            onComplete: () => tower.destroy(),
-                          });
-                        },
-                      });
-                    }
-
-                    // Shockwave rings at enemy
-                    for (let ring = 0; ring < 4; ring++) {
-                      const r = this.add.graphics().setDepth(21);
-                      r.lineStyle(3 - ring * 0.5, color, 0.7);
-                      r.strokeCircle(0, 0, 8);
-                      r.setPosition(eX, eY);
-                      r.setScale(0.5);
-                      this.tweens.add({
-                        targets: r,
-                        scaleX: 5 + ring * 1.5,
-                        scaleY: 3 + ring,
-                        alpha: 0,
-                        duration: 400 + ring * 80,
-                        delay: ring * 60,
-                        onComplete: () => r.destroy(),
-                      });
-                    }
-
-                    // Bass note symbol
-                    const note = this.add.text(eX, eY - 20, '♩', {
-                      fontFamily: 'serif', fontSize: '28px', color: '#ffffff',
-                    }).setOrigin(0.5).setDepth(22).setAlpha(0.9);
-                    this.tweens.add({
-                      targets: note,
-                      y: eY - 60, alpha: 0, scaleX: 2, scaleY: 2,
-                      duration: 500, ease: 'Quad.easeOut',
-                      onComplete: () => note.destroy(),
-                    });
-
-                    // Ground debris particles
-                    for (let d = 0; d < 8; d++) {
-                      const debris = this.add.graphics().setDepth(20);
-                      debris.fillStyle(d % 2 === 0 ? color : 0xffffff);
-                      debris.fillRect(-2, -2, 4, 3);
-                      debris.setPosition(eX + Phaser.Math.Between(-20, 20), eY + 15);
-                      this.tweens.add({
-                        targets: debris,
-                        y: eY - 20 - Math.random() * 40,
-                        x: debris.x + Phaser.Math.Between(-30, 30),
-                        alpha: 0,
-                        duration: 500,
-                        ease: 'Quad.easeOut',
-                        onComplete: () => debris.destroy(),
-                      });
-                    }
-
-                    this.time.delayedCall(450, () => {
-                      this.tweens.add({ targets: pillar, alpha: 0, duration: 200, onComplete: () => pillar.destroy() });
-                      onComplete();
-                    });
-                  },
-                });
-              },
-            });
-          },
-        });
-        break;
-      }
-
-      // ── ECHO WAVE ─────────────────────────────────────────────────────
-      // Sonic crescents: player pushes forward → two arc-shaped sound waves
-      // sweep across the field → each explodes on impact with echo ripples
-      case 'echo-wave': {
-        const waveguide = this.add.graphics().setDepth(18).setName('battle-echo-waveguide');
-        const waveguideState = { progress: 0 };
-        this.tweens.add({
-          targets: waveguideState,
-          progress: 1,
-          duration: 620,
-          ease: 'Sine.easeInOut',
-          onUpdate: () => {
-            waveguide.clear();
-            const maxX = pX + (eX - pX) * waveguideState.progress;
-            for (let lane = -1; lane <= 1; lane += 2) {
-              waveguide.lineStyle(lane < 0 ? 1 : 1.5, lane < 0 ? 0xffffff : color, lane < 0 ? 0.16 : 0.34);
-              waveguide.beginPath();
-              for (let x = pX; x <= maxX; x += 7) {
-                const t = (x - pX) / Math.max(1, eX - pX);
-                const centerY = pY + (eY - pY) * t;
-                const envelope = Math.sin(t * Math.PI);
-                const y = centerY + lane * Math.sin(t * Math.PI * 12) * 7 * envelope;
-                if (x === pX) waveguide.moveTo(x, y);
-                else waveguide.lineTo(x, y);
-              }
-              waveguide.strokePath();
-            }
-          },
-        });
-        this.tweens.add({
-          targets: waveguide,
-          alpha: 0,
-          duration: 360,
-          delay: 1080,
-          onComplete: () => waveguide.destroy(),
-        });
-
-        // Player push motion
-        this.tweens.add({
-          targets: this.playerSprite,
-          x: pX + 12,
-          scaleX: pScaleX * 1.05,
-          scaleY: pScaleY * 0.96,
-          duration: 100,
-          yoyo: true,
-          ease: 'Quad.easeOut',
-          onComplete: () => this.playerSprite.setScale(pScaleX, pScaleY),
-        });
-
-        const fireCrescent = (index: number, onDone: () => void) => {
-          const crescent = this.add.graphics().setDepth(20 + index);
-          const trail = this.add.graphics().setDepth(19 + index);
-          const arcState = { progress: 0 };
-          const crescentScale = 1 + index * 0.4;
-
-          // Trailing particles
-          const trailDots: { x: number; y: number; alpha: number }[] = [];
-
-          this.tweens.add({
-            targets: arcState,
-            progress: 1,
-            duration: 350 - index * 30,
-            ease: 'Quad.easeIn',
-            onUpdate: () => {
-              const t = arcState.progress;
-              const headX = pX + (eX - pX) * t;
-              // The two waves split into high/low stereo lanes before converging.
-              const laneDirection = index === 0 ? -1 : 1;
-              const headY = pY + (eY - pY) * t
-                + Math.sin(t * Math.PI) * laneDirection * (27 + index * 7);
-
-              crescent.clear();
-              trail.clear();
-
-              // Draw crescent arc (opening facing right)
-              const arcRadius = 18 * crescentScale;
-              crescent.lineStyle(4 * crescentScale, color, 0.9);
-              crescent.beginPath();
-              for (let a = -0.6; a <= 0.6; a += 0.08) {
-                const cx = headX + Math.cos(a + Math.PI) * arcRadius;
-                const cy = headY + Math.sin(a) * arcRadius * 1.6;
-                if (a === -0.6) crescent.moveTo(cx, cy);
-                else crescent.lineTo(cx, cy);
-              }
-              crescent.strokePath();
-
-              // Inner bright crescent
-              crescent.lineStyle(1.5 * crescentScale, 0xffffff, 0.7);
-              crescent.beginPath();
-              for (let a = -0.4; a <= 0.4; a += 0.08) {
-                const cx = headX + Math.cos(a + Math.PI) * (arcRadius * 0.7);
-                const cy = headY + Math.sin(a) * arcRadius * 1.2;
-                if (a === -0.4) crescent.moveTo(cx, cy);
-                else crescent.lineTo(cx, cy);
-              }
-              crescent.strokePath();
-
-              // Outer glow
-              crescent.fillStyle(color, 0.08);
-              crescent.fillCircle(headX, headY, arcRadius * 2);
-
-              // Trail particles
-              if (Math.random() < 0.5) {
-                trailDots.push({ x: headX - 10 + Math.random() * 5, y: headY + (Math.random() - 0.5) * 16, alpha: 0.6 });
-              }
-              trailDots.forEach(dot => {
-                dot.alpha -= 0.04;
-                if (dot.alpha > 0) {
-                  trail.fillStyle(color, dot.alpha);
-                  trail.fillCircle(dot.x, dot.y, 2);
-                }
-              });
-            },
-            onComplete: () => {
-              crescent.destroy();
-              trail.destroy();
-
-              // A short visual echo of the enemy sells the double-hit timing.
-              for (let echoIndex = 0; echoIndex < 3; echoIndex++) {
-                const echo = this.add.sprite(eX, eY, this.enemySprite.texture.key, this.enemySprite.frame.name)
-                  .setOrigin(this.enemySprite.originX, this.enemySprite.originY)
-                  .setScale(this.enemySprite.scaleX, this.enemySprite.scaleY)
-                  .setTint(echoIndex === 1 ? 0xffffff : color)
-                  .setAlpha(0.24 - echoIndex * 0.045)
-                  .setDepth(this.enemySprite.depth - 0.1)
-                  .setName('battle-echo-afterimage');
-                const direction = echoIndex % 2 === 0 ? 1 : -1;
-                this.tweens.add({
-                  targets: echo,
-                  x: eX + direction * (9 + echoIndex * 6),
-                  scaleX: this.enemySprite.scaleX * (1.04 + echoIndex * 0.04),
-                  scaleY: this.enemySprite.scaleY * (1.04 + echoIndex * 0.04),
-                  alpha: 0,
-                  duration: 280 + echoIndex * 55,
-                  delay: echoIndex * 24,
-                  ease: 'Quad.easeOut',
-                  onComplete: () => echo.destroy(),
-                });
-              }
-
-              // Impact burst at enemy
-              const impact = this.add.graphics().setPosition(eX, eY).setDepth(22);
-              // Central flash
-              impact.fillStyle(0xffffff, 0.7);
-              impact.fillCircle(0, 0, 10 * crescentScale);
-              impact.fillStyle(color, 0.5);
-              impact.fillCircle(0, 0, 20 * crescentScale);
-
-              // Echo ripples expanding outward
-              for (let r = 0; r < 3; r++) {
-                const ripple = this.add.graphics().setDepth(21);
-                ripple.lineStyle(2, color, 0.6);
-                ripple.strokeCircle(0, 0, 8);
-                ripple.setPosition(eX, eY);
-                this.tweens.add({
-                  targets: ripple,
-                  scaleX: 3 + r, scaleY: 3 + r,
-                  alpha: 0,
-                  duration: 350,
-                  delay: r * 80,
-                  onComplete: () => ripple.destroy(),
-                });
-              }
-
-              // Musical note scatter
-              const noteChars = ['♪', '♫'];
-              for (let n = 0; n < 3; n++) {
-                const nt = this.add.text(eX, eY, noteChars[n % 2], {
-                  fontFamily: 'serif', fontSize: '10px',
-                  color: n === 0 ? '#ffffff' : '#' + color.toString(16).padStart(6, '0'),
-                }).setOrigin(0.5).setDepth(23);
-                const na = Math.random() * Math.PI * 2;
-                this.tweens.add({
-                  targets: nt,
-                  x: eX + Math.cos(na) * 30, y: eY + Math.sin(na) * 30 - 10,
-                  alpha: 0, duration: 400,
-                  onComplete: () => nt.destroy(),
-                });
-              }
-
-              this.tweens.add({
-                targets: impact,
-                alpha: 0, scaleX: 2, scaleY: 2,
-                duration: 300,
-                onComplete: () => { impact.destroy(); onDone(); },
-              });
-
-              if (index === 0) this.cameras.main.shake(120, 0.004);
-              else this.cameras.main.shake(200, 0.008);
-            },
-          });
-        };
-
-        this.time.delayedCall(100, () => {
-          fireCrescent(0, () => {
-            this.time.delayedCall(120, () => {
-              fireCrescent(1, onComplete);
-            });
-          });
-        });
-        break;
-      }
-
-      // ── HOOK IMPACT ───────────────────────────────────────────────────
-      // Sharp melodic strike: player dashes with afterimage → freeze-frame →
-      // X-slash materializes → starburst explosion + sparks rain
-      case 'hook-impact': {
-        // Tempo streaks snap the whole arena toward the target on the upbeat.
-        for (let streakIndex = 0; streakIndex < 7; streakIndex++) {
-          const streak = this.add.rectangle(
-            pX - 30 - streakIndex * 14,
-            pY - 36 + streakIndex * 11,
-            34 + streakIndex * 8,
-            streakIndex % 2 === 0 ? 2 : 1,
-            streakIndex % 3 === 0 ? 0xffffff : color,
-            0.72,
-          ).setOrigin(1, 0.5).setDepth(21).setName('battle-hook-streak');
-          this.tweens.add({
-            targets: streak,
-            x: eX + 40,
-            scaleX: 2.4,
-            alpha: 0,
-            duration: 180 + streakIndex * 16,
-            delay: streakIndex * 12,
-            ease: 'Cubic.easeIn',
-            onComplete: () => streak.destroy(),
-          });
-        }
-
-        // Phase 1: Screen briefly dims
-        const dim = this.add.graphics().setDepth(18);
-        dim.fillStyle(0x000000, 0.3);
-        dim.fillRect(0, 0, W, this.battleH + 10);
-        dim.setAlpha(0);
-        this.tweens.add({ targets: dim, alpha: 1, duration: 100 });
-
-        // Phase 2: Player dash with afterimages
-        const afterimages: Phaser.GameObjects.Sprite[] = [];
-        const dashTarget = eX - 52;
-
-        // Create afterimage trail
-        for (let i = 0; i < 4; i++) {
-          this.time.delayedCall(i * 30, () => {
-            const ghost = this.add.sprite(
-              this.playerSprite.x,
-              this.playerSprite.y,
-              this.playerSprite.texture.key,
-              this.playerSprite.frame.name,
-            );
-            ghost
-              .setOrigin(this.playerSprite.originX, this.playerSprite.originY)
-              .setScale(pScaleX, pScaleY)
-              .setDepth(19)
-              .setAlpha(0.42 - i * 0.075)
-              .setTint(i % 2 === 0 ? color : 0x6ea8d8);
-            afterimages.push(ghost);
-            this.tweens.add({ targets: ghost, alpha: 0, duration: 300, delay: 60, onComplete: () => ghost.destroy() });
-          });
-        }
-
-        // Dash player forward
-        this.tweens.add({
-          targets: this.playerSprite,
-          x: dashTarget,
-          duration: 120,
-          ease: 'Quad.easeIn',
-          onComplete: () => {
-            // Phase 3: Freeze-frame flash (white overlay blink)
-            this.cameras.main.flash(80, 255, 255, 255, false);
-
-            for (let splitIndex = 0; splitIndex < 2; splitIndex++) {
-              const split = this.add.sprite(eX, eY, this.enemySprite.texture.key, this.enemySprite.frame.name)
-                .setOrigin(this.enemySprite.originX, this.enemySprite.originY)
-                .setScale(this.enemySprite.scaleX, this.enemySprite.scaleY)
-                .setTint(splitIndex === 0 ? color : 0x6ea8d8)
-                .setAlpha(0.34)
-                .setDepth(this.enemySprite.depth - 0.1)
-                .setName('battle-hook-signal-split');
-              this.tweens.add({
-                targets: split,
-                x: eX + (splitIndex === 0 ? -15 : 15),
-                y: eY + (splitIndex === 0 ? 4 : -4),
-                alpha: 0,
-                duration: 240,
-                ease: 'Quad.easeOut',
-                onComplete: () => split.destroy(),
-              });
-            }
-
-            // Phase 4: X-slash at enemy — animated drawing
-            const xSlash = this.add.graphics().setDepth(23);
-            const slashState = { t: 0 };
-            const slashLen = 55;
-
-            this.tweens.add({
-              targets: slashState,
-              t: 1,
-              duration: 120,
-              ease: 'Quad.easeOut',
-              onUpdate: () => {
-                xSlash.clear();
-                const progress = slashState.t;
-                const len = slashLen * progress;
-
-                // Slash 1: top-left to bottom-right
-                // Glow
-                xSlash.lineStyle(12, color, 0.15 * progress);
-                xSlash.lineBetween(eX - len, eY - len, eX + len, eY + len);
-                // Main
-                xSlash.lineStyle(4, color, 0.9);
-                xSlash.lineBetween(eX - len, eY - len, eX + len, eY + len);
-                // White core
-                xSlash.lineStyle(1.5, 0xffffff, 0.8);
-                xSlash.lineBetween(eX - len, eY - len, eX + len, eY + len);
-
-                // Slash 2: top-right to bottom-left
-                xSlash.lineStyle(12, color, 0.15 * progress);
-                xSlash.lineBetween(eX + len, eY - len, eX - len, eY + len);
-                xSlash.lineStyle(4, color, 0.9);
-                xSlash.lineBetween(eX + len, eY - len, eX - len, eY + len);
-                xSlash.lineStyle(1.5, 0xffffff, 0.8);
-                xSlash.lineBetween(eX + len, eY - len, eX - len, eY + len);
-              },
-              onComplete: () => {
-                // Slash linger + fade
-                this.tweens.add({
-                  targets: xSlash,
-                  alpha: 0, duration: 350, delay: 100,
-                  onComplete: () => xSlash.destroy(),
-                });
-              },
-            });
-
-            // Phase 5: Impact — starburst + sparks (slight delay for drama)
-            this.time.delayedCall(100, () => {
-              this.cameras.main.shake(250, 0.012);
-
-              // The melodic hook is a sharp waveform that closes around the target.
-              const hookWave = this.add.graphics().setDepth(24).setName('battle-hook-wave');
-              hookWave.lineStyle(10, color, 0.12);
-              hookWave.beginPath();
-              hookWave.moveTo(eX - 82, eY + 15);
-              hookWave.lineTo(eX - 34, eY + 15);
-              hookWave.lineTo(eX - 18, eY - 20);
-              hookWave.lineTo(eX + 2, eY + 29);
-              hookWave.lineTo(eX + 23, eY - 8);
-              hookWave.lineTo(eX + 38, eY + 15);
-              hookWave.lineTo(eX + 82, eY + 15);
-              hookWave.strokePath();
-              hookWave.lineStyle(2, 0xffffff, 0.88);
-              hookWave.strokePath();
-              hookWave.setScale(0.25, 1).setPosition(eX * 0.75, 0);
-              this.tweens.add({
-                targets: hookWave,
-                scaleX: 1,
-                x: 0,
-                alpha: 0,
-                duration: 360,
-                ease: 'Cubic.easeOut',
-                onComplete: () => hookWave.destroy(),
-              });
-
-              // Central starburst
-              const star = this.add.graphics().setPosition(eX, eY).setDepth(24);
-              // 12-point star
-              for (let a = 0; a < 12; a++) {
-                const angle = (a / 12) * Math.PI * 2;
-                const len = a % 2 === 0 ? 30 : 16;
-                star.lineStyle(a % 2 === 0 ? 2.5 : 1.5, 0xffffff, 0.9);
-                star.lineBetween(0, 0, Math.cos(angle) * len, Math.sin(angle) * len);
-              }
-              // Central flash layers, from glow to white-hot core.
-              star.fillStyle(color, 0.2);
-              star.fillCircle(0, 0, 30);
-              star.fillStyle(color, 0.6);
-              star.fillCircle(0, 0, 18);
-              star.fillStyle(0xffffff, 0.9);
-              star.fillCircle(0, 0, 8);
-
-              this.tweens.add({
-                targets: star,
-                alpha: 0, scaleX: 1.5, scaleY: 1.5,
-                duration: 400,
-                onComplete: () => star.destroy(),
-              });
-
-              // Spark shower (raining down from impact point)
-              for (let s = 0; s < 14; s++) {
-                const spark = this.add.graphics().setDepth(22);
-                const isWhite = s % 3 === 0;
-                spark.fillStyle(isWhite ? 0xffffff : color);
-                const size = 1.5 + Math.random() * 2;
-                spark.fillRect(-size / 2, -size / 2, size, size);
-                spark.setPosition(eX + Phaser.Math.Between(-15, 15), eY + Phaser.Math.Between(-15, 15));
-                const angle = (s / 14) * Math.PI * 2 + Math.random() * 0.5;
-                const dist = 30 + Math.random() * 40;
-                this.tweens.add({
-                  targets: spark,
-                  x: eX + Math.cos(angle) * dist,
-                  y: eY + Math.sin(angle) * dist + 15,
-                  alpha: 0,
-                  duration: 450 + Math.random() * 200,
-                  ease: 'Quad.easeOut',
-                  onComplete: () => spark.destroy(),
-                });
-              }
-
-              // Musical hook symbol
-              const hookNote = this.add.text(eX, eY - 8, '♯', {
-                fontFamily: 'serif', fontSize: '22px', color: '#ffffff',
-              }).setOrigin(0.5).setDepth(25).setAlpha(0.9);
-              this.tweens.add({
-                targets: hookNote,
-                y: eY - 50, alpha: 0, scaleX: 1.5, scaleY: 1.5,
-                duration: 500, ease: 'Quad.easeOut',
-                onComplete: () => hookNote.destroy(),
-              });
-            });
-
-            // Player returns
-            this.tweens.add({
-              targets: this.playerSprite,
-              x: pX,
-              duration: 300,
-              delay: 150,
-              ease: 'Quad.easeOut',
-            });
-
-            // Dim fades
-            this.tweens.add({
-              targets: dim,
-              alpha: 0, duration: 400, delay: 250,
-              onComplete: () => dim.destroy(),
-            });
-
-            this.time.delayedCall(500, onComplete);
-          },
-        });
-        break;
-      }
-
-      // ── REVERB STRIKE ─────────────────────────────────────────────────
-      case 'reverb-strike': {
-        // Phase 1: Screen dims
-        const dimOverlay = this.add.graphics().setDepth(18);
-        dimOverlay.fillStyle(0x000000, 1);
-        dimOverlay.fillRect(0, 0, W, this.battleH + 10);
-        dimOverlay.setAlpha(0);
-        this.tweens.add({
-          targets: dimOverlay,
-          alpha: 0.62,
-          duration: 240,
-        });
-
-        // A record-like resonance field spins up around the performer.
-        for (let orbitIndex = 0; orbitIndex < 5; orbitIndex++) {
-          const orbit = this.add.graphics()
-            .setPosition(pX, pY - 8)
-            .setDepth(20)
-            .setName('battle-reverb-orbit');
-          orbit.lineStyle(orbitIndex === 0 ? 2 : 1, orbitIndex % 2 === 0 ? color : 0xffffff, 0.68 - orbitIndex * 0.08);
-          orbit.strokeEllipse(0, 0, 25 + orbitIndex * 17, 12 + orbitIndex * 8);
-          orbit.lineBetween(12 + orbitIndex * 8, -2, 16 + orbitIndex * 9, 2);
-          orbit.setAngle(-16 + orbitIndex * 7).setScale(0.35).setAlpha(0);
-          this.tweens.add({
-            targets: orbit,
-            scaleX: 1.15,
-            scaleY: 1.15,
-            angle: orbit.angle + (orbitIndex % 2 === 0 ? 28 : -28),
-            alpha: { from: 0, to: 0.76 },
-            duration: 470 + orbitIndex * 45,
-            delay: orbitIndex * 35,
-            ease: 'Sine.easeOut',
-          });
-          this.tweens.add({
-            targets: orbit,
-            alpha: 0,
-            scaleX: 1.8,
-            scaleY: 1.8,
-            duration: 280,
-            delay: 650 + orbitIndex * 25,
-            onComplete: () => orbit.destroy(),
-          });
-        }
-
-        // Player power-up glow
-        const playerGlow = this.add.graphics().setDepth(19);
-        playerGlow.fillStyle(color, 0.3);
-        playerGlow.fillCircle(pX, pY, 30);
-        playerGlow.fillStyle(0xffffff, 0.15);
-        playerGlow.fillCircle(pX, pY, 20);
-        this.tweens.add({
-          targets: playerGlow,
-          scaleX: 1.5, scaleY: 1.5,
-          alpha: 0,
-          duration: 500,
-          onComplete: () => playerGlow.destroy(),
-        });
-
-        // Phase 2: Pulsing rings radiate from player
-        this.time.delayedCall(280, () => {
-          const chargeRings = this.add.graphics().setDepth(20);
-          let chargeT = 0;
-          this.time.addEvent({
-            delay: 16,
-            repeat: 20,
-            callback: () => {
-              chargeT++;
-              chargeRings.clear();
-              for (let i = 0; i < 4; i++) {
-                const r = (chargeT * 3.5 + i * 10) % 50;
-                const alpha = 0.7 - r / 50;
-                chargeRings.lineStyle(2, color, alpha);
-                chargeRings.strokeCircle(pX, pY - 10, r);
-              }
-            },
-          });
-
-          // Phase 3: Beam shoots from player to enemy
-          this.time.delayedCall(350, () => {
-            chargeRings.destroy();
-
-            const beam = this.add.graphics().setDepth(21);
-            const beamState = { progress: 0 };
-            this.tweens.add({
-              targets: beamState,
-              progress: 1,
-              duration: 210,
-              ease: 'Quad.easeIn',
-              onUpdate: () => {
-                beam.clear();
-                const startY = pY - 10;
-                const headX = pX + (eX - pX) * beamState.progress;
-                const headY = startY + (eY - startY) * beamState.progress;
-                beam.lineStyle(25, color, 0.09);
-                beam.lineBetween(pX, startY, headX, headY);
-                beam.lineStyle(11, color, 0.48);
-                beam.lineBetween(pX, startY, headX, headY);
-                beam.lineStyle(4, color, 0.94);
-                beam.lineBetween(pX, startY, headX, headY);
-                beam.lineStyle(1.5, 0xffffff, 0.9);
-                beam.lineBetween(pX, startY, headX, headY);
-                beam.fillStyle(0xffffff, 0.8);
-                beam.fillCircle(headX, headY, 4 + beamState.progress * 4);
-              },
-              onComplete: () => {
-                beam.destroy();
-
-                // Phase 4: Explosion at enemy
-                const explosion = this.add.graphics().setDepth(23);
-                const expState = { r: 5, alpha: 1 };
-                this.time.addEvent({
-                  delay: 16,
-                  repeat: 22,
-                  callback: () => {
-                    expState.r += 5.5;
-                    expState.alpha = Math.max(0, 1 - expState.r / 130);
-                    explosion.clear();
-                    // Outer glow
-                    explosion.fillStyle(color, expState.alpha * 0.15);
-                    explosion.fillCircle(eX, eY, expState.r * 1.3);
-                    // Outer ring
-                    explosion.lineStyle(4, color, expState.alpha);
-                    explosion.strokeCircle(eX, eY, expState.r);
-                    // Inner fill
-                    explosion.fillStyle(0xffffff, expState.alpha * 0.35);
-                    explosion.fillCircle(eX, eY, expState.r * 0.5);
-                    // Cross flare
-                    explosion.lineStyle(2, 0xffffff, expState.alpha * 0.6);
-                    explosion.lineBetween(eX - expState.r, eY, eX + expState.r, eY);
-                    explosion.lineBetween(eX, eY - expState.r, eX, eY + expState.r);
-                    // Diagonal flare
-                    explosion.lineStyle(1, color, expState.alpha * 0.4);
-                    const d = expState.r * 0.7;
-                    explosion.lineBetween(eX - d, eY - d, eX + d, eY + d);
-                    explosion.lineBetween(eX + d, eY - d, eX - d, eY + d);
-                  },
-                });
-
-                // Scatter debris particles
-                for (let p = 0; p < 16; p++) {
-                  const particle = this.add.graphics().setDepth(22);
-                  particle.fillStyle(p % 3 === 0 ? 0xffffff : color);
-                  particle.fillRect(-1.5, -1.5, 3, 3);
-                  particle.setPosition(eX, eY);
-                  const angle = (p / 16) * Math.PI * 2;
-                  const dist = 45 + Math.random() * 45;
-                  this.tweens.add({
-                    targets: particle,
-                    x: eX + Math.cos(angle) * dist,
-                    y: eY + Math.sin(angle) * dist,
-                    alpha: 0,
-                    duration: 550,
-                    ease: 'Quad.easeOut',
-                    onComplete: () => particle.destroy(),
-                  });
-                }
-
-                // Three delayed reflections make the ultimate feel like reverb,
-                // not a single generic beam impact.
-                for (let echoIndex = 0; echoIndex < 3; echoIndex++) {
-                  const echoRing = this.add.graphics()
-                    .setPosition(eX, eY)
-                    .setDepth(24 - echoIndex * 0.1)
-                    .setName('battle-reverb-reflection');
-                  echoRing.lineStyle(3 - echoIndex * 0.55, echoIndex === 1 ? 0xffffff : color, 0.9);
-                  echoRing.strokeEllipse(0, 0, 24, 24);
-                  echoRing.lineStyle(1, color, 0.5);
-                  echoRing.strokeEllipse(0, 0, 38, 16);
-                  echoRing.setScale(0.2).setAlpha(0);
-                  this.tweens.add({
-                    targets: echoRing,
-                    scaleX: 3.2 + echoIndex * 1.1,
-                    scaleY: 2.35 + echoIndex * 0.72,
-                    alpha: { from: 0.92 - echoIndex * 0.16, to: 0 },
-                    angle: echoIndex % 2 === 0 ? 18 : -18,
-                    duration: 430 + echoIndex * 100,
-                    delay: echoIndex * 125,
-                    ease: 'Cubic.easeOut',
-                    onComplete: () => echoRing.destroy(),
-                  });
-
-                  const reflectedEnemy = this.add.sprite(eX, eY, this.enemySprite.texture.key, this.enemySprite.frame.name)
-                    .setOrigin(this.enemySprite.originX, this.enemySprite.originY)
-                    .setScale(this.enemySprite.scaleX, this.enemySprite.scaleY)
-                    .setTint(echoIndex === 1 ? 0xffffff : color)
-                    .setAlpha(0)
-                    .setDepth(this.enemySprite.depth - 0.1)
-                    .setName('battle-reverb-afterimage');
-                  this.tweens.add({
-                    targets: reflectedEnemy,
-                    alpha: { from: 0.25 - echoIndex * 0.045, to: 0 },
-                    scaleX: this.enemySprite.scaleX * (1.1 + echoIndex * 0.09),
-                    scaleY: this.enemySprite.scaleY * (1.1 + echoIndex * 0.09),
-                    delay: echoIndex * 125,
-                    duration: 360 + echoIndex * 80,
-                    ease: 'Quad.easeOut',
-                    onComplete: () => reflectedEnemy.destroy(),
-                  });
-                }
-
-                this.cameras.main.shake(400, 0.016);
-                this.cameras.main.flash(300,
-                  (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff
-                );
-
-                this.time.delayedCall(550, () => {
-                  explosion.destroy();
-                  this.tweens.add({
-                    targets: dimOverlay,
-                    alpha: 0,
-                    duration: 300,
-                    onComplete: () => { dimOverlay.destroy(); onComplete(); },
-                  });
-                });
-              },
-            });
-          });
-        });
-        break;
-      }
-
-      default:
-        this.time.delayedCall(300, onComplete);
-    }
-  }
-
-  // ── Enemy attack animation ──────────────────────────────────────────────
-
-  private playEnemyAttackAnimation(attack: { name: string; damage: number }, onComplete: () => void): void {
-    this.playEnemyAttackPrelude(attack, () => {
-      // The enemy turn has a message delay and a warning card. Playing here
-      // keeps the attack cue on the first visible strike frame.
-      EventBus.emit(EVENTS.ATTACK_USED, { attackId: 'enemy-attack', name: attack.name, isPlayer: false });
-      this.runEnemyAttackAnimation(attack, onComplete);
-    });
-  }
-
-  private playEnemyAttackPrelude(attack: { name: string; damage: number }, onComplete: () => void): void {
-    const W = logicalSize(this).width;
+  private playEnemyAttackAnimation(attack: EnemyAttack, hooks: StrikeHooks): void {
     const hostileColor = this.isBoss ? 0xff3d57 : 0xe8b465;
-    const hostileHex = `#${hostileColor.toString(16).padStart(6, '0')}`;
     EventBus.emit(EVENTS.UI_NOTICE, {
       eyebrow: `${this.enemyData.name} attacks`,
       title: attack.name,
       detail: 'Brace yourself.',
-      accent: hostileHex,
+      accent: `#${hostileColor.toString(16).padStart(6, '0')}`,
       tone: 'danger',
       duration: 900,
     });
-
-    const veil = this.add.rectangle(0, 0, W, this.battleH, 0x120304, 0)
-      .setOrigin(0)
-      .setDepth(26)
-      .setName('battle-enemy-prelude');
-    const band = this.add.graphics().setDepth(27).setAlpha(0);
-    band.fillStyle(hostileColor, 0.09);
-    band.fillRect(0, this.battleH * 0.31, W, 68);
-    band.fillStyle(hostileColor, 0.9);
-    band.fillRect(0, this.battleH * 0.31, W, 2);
-    band.fillRect(0, this.battleH * 0.31 + 66, W, 2);
-    band.fillStyle(0x0a0605, 0.75);
-    for (let stripe = -20; stripe < W; stripe += 28) {
-      band.fillRect(stripe, this.battleH * 0.31, 9, 2);
-    }
-
-    const kicker = this.add.text(W / 2, this.battleH * 0.31 + 11, `HOSTILE TRANSMISSION // ${this.enemyData.name.toUpperCase()}`, {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#ffb09a', letterSpacing: 2,
-    }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setVisible(false).setName('battle-enemy-kicker');
-    const title = this.add.text(W / 2, this.battleH * 0.31 + 28, attack.name.toUpperCase(), {
-      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '21px', color: hostileHex, letterSpacing: 2,
-    }).setOrigin(0.5, 0).setDepth(28).setResolution(2).setAlpha(0).setScale(1.18, 0.75).setVisible(false).setName('battle-enemy-title');
-    const warningLeft = this.add.text(18, this.battleH * 0.31 + 29, '!!', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '13px', color: hostileHex,
-    }).setDepth(28).setResolution(2).setAlpha(0).setVisible(false);
-    const warningRight = this.add.text(W - 18, this.battleH * 0.31 + 29, '!!', {
-      fontFamily: 'DM Mono', fontStyle: 'bold', fontSize: '13px', color: hostileHex,
-    }).setOrigin(1, 0).setDepth(28).setResolution(2).setAlpha(0).setVisible(false);
-
-    const sweep = this.add.rectangle(W + 50, this.battleH / 2, 72, this.battleH, hostileColor, 0.1)
-      .setDepth(27)
-      .setAngle(9)
-      .setName('battle-hostile-sweep');
-    this.tweens.add({ targets: sweep, x: -70, duration: 310, ease: 'Cubic.easeIn', onComplete: () => sweep.destroy() });
-
-    for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
-      const chargeRing = this.add.graphics()
-        .setPosition(this.enemySprite.x, this.enemySprite.y)
-        .setDepth(25)
-        .setName('battle-enemy-charge');
-      chargeRing.lineStyle(1.5, ringIndex === 1 ? 0xffffff : hostileColor, 0.8);
-      chargeRing.strokePoints([
-        new Phaser.Math.Vector2(0, -24 - ringIndex * 6),
-        new Phaser.Math.Vector2(24 + ringIndex * 6, 0),
-        new Phaser.Math.Vector2(0, 24 + ringIndex * 6),
-        new Phaser.Math.Vector2(-24 - ringIndex * 6, 0),
-      ], true);
-      chargeRing.setScale(0.35).setAlpha(0);
-      this.tweens.add({
-        targets: chargeRing,
-        scaleX: 1.55 + ringIndex * 0.2,
-        scaleY: 1.55 + ringIndex * 0.2,
-        angle: 45 + ringIndex * 18,
-        alpha: { from: 0.92, to: 0 },
-        duration: 270 + ringIndex * 35,
-        delay: ringIndex * 22,
-        ease: 'Quad.easeOut',
-        onComplete: () => chargeRing.destroy(),
-      });
-    }
-
-    this.tweens.add({ targets: veil, alpha: 0.48, duration: 80 });
-    this.tweens.add({ targets: band, alpha: 1, duration: 90 });
-    this.tweens.add({ targets: [kicker, warningLeft, warningRight], alpha: 1, duration: 100 });
-    this.tweens.add({ targets: title, alpha: 1, scaleX: 1, scaleY: 1, duration: 150, ease: 'Back.easeOut' });
-    this.cameras.main.shake(160, 0.003);
-
-    this.time.delayedCall(300, () => {
-      this.tweens.add({
-        targets: [veil, band, kicker, title, warningLeft, warningRight],
-        alpha: 0,
-        duration: 110,
-        onComplete: () => {
-          veil.destroy(); band.destroy(); kicker.destroy(); title.destroy(); warningLeft.destroy(); warningRight.destroy();
-          onComplete();
-        },
-      });
-    });
+    const { script, color } = enemyMove(this.enemyData.id, attack.name, this.isBoss);
+    const power = this.isBoss ? 1 + this.bossPhaseIndex * 0.15 : 1;
+    this.runMove(this.foe, this.hero, color, power, hooks,
+      () => EventBus.emit(EVENTS.ATTACK_USED, { attackId: 'enemy-attack', name: attack.name, isPlayer: false }),
+      foeTelegraph, script);
   }
 
-  private runEnemyAttackAnimation(attack: { name: string; damage: number }, onComplete: () => void): void {
-    const origX = this.enemySprite.x;
-    const origY = this.enemySprite.y;
-    const pX = this.playerSprite.x;
-    const pY = this.playerSprite.y;
-    const origScaleX = this.enemySprite.scaleX;
-    const origScaleY = this.enemySprite.scaleY;
-
-    // Match the visual attack family to the assigned sound family. Boss moves
-    // need explicit routing because their names do not contain the old generic
-    // "static" / "glitch" keywords.
-    const enemyId = this.enemyData.id;
-    const zapAttacks = new Set(['Frequency Lock']);
-    const voidAttacks = new Set(['Silence Wave', 'Void Crush']);
-
-    if (enemyId === 'static-noise' || zapAttacks.has(attack.name) || attack.name.toLowerCase().includes('static')) {
-      // Electric attack — zap bolts
-      this.playZapAttack(origX, origY, pX, pY, onComplete);
-    } else if (enemyId === 'broken-signal' || attack.name.toLowerCase().includes('glitch')) {
-      // Glitch attack — screen corruption effect
-      this.playGlitchAttack(origX, origY, pX, pY, onComplete);
-    } else if (enemyId === 'silence' || voidAttacks.has(attack.name) || attack.name.toLowerCase().includes('void')) {
-      // Void attack — dark wave
-      this.playVoidAttack(origX, origY, pX, pY, onComplete);
-    } else {
-      // Default / boss — enhanced lunge
-      this.playLungeAttack(origX, origY, pX, pY, origScaleX, origScaleY, onComplete);
+  /**
+   * Plays a move's wind-up and choreography. Its hits land damage with the
+   * target's reaction; completion is idempotent and guarded by a timeout, so
+   * a move that never reports back cannot leave the turn stuck.
+   */
+  private runMove(
+    attacker: Combatant | undefined,
+    target: Combatant | undefined,
+    color: number,
+    power: number,
+    hooks: StrikeHooks,
+    cue: () => void,
+    windup: (ctx: MoveContext, then: () => void) => void,
+    script: MoveScript,
+  ): void {
+    const fx = this.fx;
+    if (!fx || !attacker || !target) {
+      hooks.done();
+      return;
     }
-  }
-
-  private playLungeAttack(origX: number, origY: number, pX: number, pY: number, origScaleX: number, origScaleY: number, onComplete: () => void): void {
-    const lungeX = origX - (origX - pX) * 0.4;
-    const lungeY = origY + (pY - origY) * 0.3;
-
-    // A hostile vector locks onto the player before the physical strike.
-    const attackVector = this.add.graphics().setDepth(20).setName('battle-lunge-vector');
-    attackVector.lineStyle(10, 0xff4444, 0.08);
-    attackVector.lineBetween(origX, origY, pX, pY);
-    attackVector.lineStyle(1, 0xff8a66, 0.72);
-    attackVector.lineBetween(origX, origY, pX, pY);
-    for (let marker = 1; marker < 6; marker++) {
-      const t = marker / 6;
-      const mx = origX + (pX - origX) * t;
-      const my = origY + (pY - origY) * t;
-      attackVector.fillStyle(0xffffff, 0.75 - marker * 0.08);
-      attackVector.fillTriangle(mx - 4, my - 3, mx + 3, my, mx - 4, my + 3);
-    }
-    attackVector.setAlpha(0);
-    this.tweens.add({ targets: attackVector, alpha: 1, duration: 90 });
-
-    const lock = this.add.graphics().setPosition(pX, pY).setDepth(21).setName('battle-lunge-lock');
-    lock.lineStyle(2, 0xf0362c, 0.88);
-    lock.strokeCircle(0, 0, 22);
-    lock.lineBetween(-32, -22, -18, -22); lock.lineBetween(-32, -22, -32, -8);
-    lock.lineBetween(32, 22, 18, 22); lock.lineBetween(32, 22, 32, 8);
-    lock.setScale(1.5).setAlpha(0);
-    this.tweens.add({ targets: lock, scaleX: 1, scaleY: 1, angle: 20, alpha: 1, duration: 130, ease: 'Back.easeOut' });
-
-    const chargeGlow = this.add.graphics().setPosition(origX, origY).setDepth(19);
-    chargeGlow.fillStyle(0xff4444, 0.3);
-    chargeGlow.fillCircle(0, 0, 25);
-    this.tweens.add({
-      targets: chargeGlow,
-      alpha: 0,
-      scaleX: 0.3, scaleY: 0.3,
-      duration: 160,
-      onComplete: () => chargeGlow.destroy(),
-    });
-
-    for (let ghostIndex = 0; ghostIndex < 3; ghostIndex++) {
-      this.time.delayedCall(45 + ghostIndex * 32, () => {
-        const ghost = this.add.sprite(this.enemySprite.x, this.enemySprite.y, this.enemySprite.texture.key, this.enemySprite.frame.name)
-          .setOrigin(this.enemySprite.originX, this.enemySprite.originY)
-          .setScale(origScaleX, origScaleY)
-          .setTint(ghostIndex % 2 === 0 ? 0xf0362c : 0xffb36b)
-          .setAlpha(0.28 - ghostIndex * 0.05)
-          .setDepth(this.enemySprite.depth - 0.1)
-          .setName('battle-lunge-afterimage');
-        this.tweens.add({ targets: ghost, alpha: 0, duration: 240, onComplete: () => ghost.destroy() });
-      });
-    }
-
-    this.tweens.add({
-      targets: this.enemySprite,
-      x: lungeX,
-      y: lungeY,
-      scaleX: origScaleX * 1.12,
-      scaleY: origScaleY * 1.12,
-      duration: 140,
-      ease: 'Quad.easeIn',
-      onComplete: () => {
-        this.tweens.add({ targets: [attackVector, lock], alpha: 0, duration: 90, onComplete: () => { attackVector.destroy(); lock.destroy(); } });
-        // Impact flash at player — multiple layers
-        const impact = this.add.graphics().setPosition(pX, pY).setDepth(20);
-        impact.fillStyle(0xff4444, 0.15);
-        impact.fillCircle(0, 0, 40);
-        impact.fillStyle(0xff4444, 0.4);
-        impact.fillCircle(0, 0, 22);
-        impact.fillStyle(0xffffff, 0.5);
-        impact.fillCircle(0, 0, 8);
-        this.tweens.add({
-          targets: impact,
-          alpha: 0,
-          scaleX: 1.6, scaleY: 1.6,
-          duration: 280,
-          onComplete: () => impact.destroy(),
-        });
-
-        // Impact sparks
-        for (let i = 0; i < 6; i++) {
-          const spark = this.add.graphics().setDepth(20);
-          spark.fillStyle(i % 2 === 0 ? 0xffffff : 0xff6644);
-          spark.fillRect(-1, -1, 2, 2);
-          spark.setPosition(pX, pY);
-          const angle = Math.random() * Math.PI * 2;
-          this.tweens.add({
-            targets: spark,
-            x: pX + Math.cos(angle) * (20 + Math.random() * 20),
-            y: pY + Math.sin(angle) * (20 + Math.random() * 20),
-            alpha: 0,
-            duration: 300,
-            onComplete: () => spark.destroy(),
-          });
-        }
-
-        if (this.isBoss) this.cameras.main.shake(180, 0.007);
-
-        // Return to original position
-        this.tweens.add({
-          targets: this.enemySprite,
-          x: origX,
-          y: origY,
-          scaleX: origScaleX,
-          scaleY: origScaleY,
-          duration: 300,
-          ease: 'Quad.easeOut',
-          onComplete,
-        });
+    let cued = false;
+    let finished = false;
+    const ctx: MoveContext = {
+      fx, attacker, target, color, power,
+      cue: () => {
+        if (cued || finished) return;
+        cued = true;
+        cue();
       },
-    });
-  }
-
-  private playZapAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
-    // Frequency nodes preview the route before the unstable current connects.
-    for (let nodeIndex = 0; nodeIndex < 6; nodeIndex++) {
-      const t = (nodeIndex + 1) / 7;
-      const node = this.add.graphics()
-        .setPosition(origX + (pX - origX) * t, origY + (pY - origY) * t)
-        .setDepth(21)
-        .setName('battle-zap-node');
-      node.lineStyle(1, nodeIndex % 2 === 0 ? 0xffffff : 0x398bc6, 0.82);
-      node.strokeCircle(0, 0, 3 + (nodeIndex % 2) * 2);
-      node.setScale(0.25).setAlpha(0);
-      this.tweens.add({
-        targets: node,
-        scaleX: 1.65,
-        scaleY: 1.65,
-        alpha: { from: 0, to: 0.86 },
-        duration: 130,
-        delay: nodeIndex * 24,
-        yoyo: true,
-        ease: 'Sine.easeInOut',
-        onComplete: () => node.destroy(),
-      });
-    }
-
-    // Lightning bolt zigzag from enemy to player
-    const bolt = this.add.graphics().setDepth(22);
-    const segments = 8;
-    const dx = (pX - origX) / segments;
-    const dy = (pY - origY) / segments;
-
-    let frame = 0;
-    this.time.addEvent({
-      delay: 16,
-      repeat: 18,
-      callback: () => {
-        frame++;
-        bolt.clear();
-
-        const points: Phaser.Math.Vector2[] = [new Phaser.Math.Vector2(origX, origY)];
-        for (let i = 1; i <= Math.min(frame, segments); i++) {
-          const jitter = (Math.random() - 0.5) * 30;
-          points.push(new Phaser.Math.Vector2(
-            origX + dx * i + (i < segments ? jitter : 0),
-            origY + dy * i + (i < segments ? jitter * 0.5 : 0),
-          ));
-        }
-
-        // Draw glow first, then the exact same path as a white-hot core.
-        bolt.lineStyle(11, 0x398bc6, 0.14);
-        bolt.beginPath();
-        points.forEach((point, index) => index === 0 ? bolt.moveTo(point.x, point.y) : bolt.lineTo(point.x, point.y));
-        bolt.strokePath();
-        bolt.lineStyle(3, 0x398bc6, 0.96);
-        bolt.beginPath();
-        points.forEach((point, index) => index === 0 ? bolt.moveTo(point.x, point.y) : bolt.lineTo(point.x, point.y));
-        bolt.strokePath();
-        bolt.lineStyle(1, 0xffffff, 0.88);
-        bolt.beginPath();
-        points.forEach((point, index) => index === 0 ? bolt.moveTo(point.x, point.y) : bolt.lineTo(point.x, point.y));
-        bolt.strokePath();
-
-        points.slice(2, -1).forEach((point, index) => {
-          if ((index + frame) % 2 !== 0) return;
-          bolt.lineStyle(1, 0xaacde6, 0.55);
-          bolt.lineBetween(point.x, point.y, point.x + (index % 2 === 0 ? 12 : -12), point.y - 8 - index * 2);
-        });
+      hit: (share, hit) => {
+        if (finished) return;
+        fx.react(target, hit, hit.at);
+        hooks.hit(share, hit);
       },
-    });
-
-    this.time.delayedCall(320, () => {
-      bolt.destroy();
-      // Impact flash
-      const flash = this.add.graphics().setPosition(pX, pY).setDepth(21);
-      flash.fillStyle(0x398bc6, 0.5);
-      flash.fillCircle(0, 0, 20);
-      flash.fillStyle(0xffffff, 0.6);
-      flash.fillCircle(0, 0, 8);
-
-      for (let cageIndex = 0; cageIndex < 3; cageIndex++) {
-        const cage = this.add.graphics().setPosition(pX, pY).setDepth(22).setName('battle-zap-cage');
-        cage.lineStyle(2, cageIndex === 1 ? 0xffffff : 0x398bc6, 0.82);
-        cage.strokePoints([
-          new Phaser.Math.Vector2(0, -18 - cageIndex * 5),
-          new Phaser.Math.Vector2(16 + cageIndex * 5, 10 + cageIndex * 3),
-          new Phaser.Math.Vector2(-16 - cageIndex * 5, 10 + cageIndex * 3),
-        ], true);
-        this.tweens.add({
-          targets: cage,
-          scaleX: 1.8 + cageIndex * 0.3,
-          scaleY: 1.8 + cageIndex * 0.3,
-          angle: cageIndex % 2 === 0 ? 35 : -35,
-          alpha: 0,
-          duration: 280 + cageIndex * 70,
-          delay: cageIndex * 35,
-          onComplete: () => cage.destroy(),
-        });
-      }
-      this.tweens.add({
-        targets: flash,
-        alpha: 0,
-        scaleX: 1.8, scaleY: 1.8,
-        duration: 250,
-        onComplete: () => { flash.destroy(); onComplete(); },
-      });
-    });
-  }
-
-  private playGlitchAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
-    const W = logicalSize(this).width;
-    const radioColors = [0xcc1111, 0xff6600, 0xffaa00, 0xffdd44, 0x8b1a1a];
-
-    // Phase 1: Radio interference — crimson/amber glitch bars + static burst
-    const glitch = this.add.graphics().setDepth(22);
-    this.time.addEvent({
-      delay: 35,
-      repeat: 14,
-      callback: () => {
-        glitch.clear();
-        for (let i = 0; i < 5; i++) {
-          const barY = Phaser.Math.Between(10, this.battleH - 10);
-          const barH = Phaser.Math.Between(1, 6);
-          const c = radioColors[Math.floor(Math.random() * radioColors.length)];
-          glitch.fillStyle(c, 0.2 + Math.random() * 0.2);
-          glitch.fillRect(0, barY, W, barH);
-        }
-        // Screen tear strips
-        for (let i = 0; i < 2; i++) {
-          const stripY = Phaser.Math.Between(30, this.battleH - 30);
-          const stripH = Phaser.Math.Between(8, 20);
-          glitch.fillStyle(0x1a0000, 0.3);
-          glitch.fillRect(Phaser.Math.Between(-30, 0), stripY, W + 30, stripH);
-        }
+      targetDown: () => hooks.down(),
+      cutSound: ms => EventBus.emit(EVENTS.ATTACK_SOUND_CUT, ms),
+      done: () => {
+        if (finished) return;
+        finished = true;
+        hooks.done();
       },
-    });
-
-    // Phase 2: Speaker shockwave — dual bass rings from enemy's speakers
-    this.time.delayedCall(80, () => {
-      for (const side of [-1, 1]) {
-        const sx = origX + 25 * side;
-        for (let r = 0; r < 3; r++) {
-          const ring = this.add.graphics().setDepth(23);
-          ring.lineStyle(2.5, 0xcc8800, 0.7);
-          ring.strokeCircle(0, 0, 8);
-          ring.setPosition(sx, origY);
-          this.tweens.add({
-            targets: ring,
-            scaleX: 5 + r * 2,
-            scaleY: 3 + r,
-            alpha: 0,
-            duration: 400 + r * 100,
-            delay: r * 60,
-            onComplete: () => ring.destroy(),
-          });
-        }
-      }
-
-      // Frequency beam — amber line with distortion traveling to player
-      const beam = this.add.graphics().setDepth(23);
-      const beamState = { progress: 0 };
-
-      this.tweens.add({
-        targets: beamState,
-        progress: 1,
-        duration: 280,
-        ease: 'Quad.easeIn',
-        onUpdate: () => {
-          beam.clear();
-          const headX = origX + (pX - origX) * beamState.progress;
-          const headY = origY + (pY - origY) * beamState.progress;
-          beam.lineStyle(24, 0xff6600, 0.08);
-          beam.lineBetween(origX, origY, headX, headY);
-          // Core frequency line follows the real enemy-to-player vector.
-          beam.lineStyle(3, 0xffaa00, 0.85);
-          beam.beginPath();
-          beam.moveTo(origX, origY);
-          for (let i = 0; i <= 16; i++) {
-            const t = (i / 16) * beamState.progress;
-            const sx = origX + (pX - origX) * t;
-            const sy = origY + (pY - origY) * t;
-            const jitter = Math.sin(t * 18 + beamState.progress * 9) * 8 * Math.sin(t * Math.PI);
-            beam.lineTo(sx, sy + jitter);
-          }
-          beam.strokePath();
-          // White hot core
-          beam.lineStyle(1, 0xffffff, 0.5);
-          beam.lineBetween(origX, origY, headX, headY);
-        },
-        onComplete: () => {
-          this.tweens.add({ targets: beam, alpha: 0, duration: 200, onComplete: () => beam.destroy() });
-        },
-      });
-    });
-
-    // Phase 3: Crimson shrapnel — metal shards from the broken radio
-    this.time.delayedCall(200, () => {
-      for (let i = 0; i < 8; i++) {
-        const shard = this.add.graphics().setDepth(21);
-        const c = radioColors[i % radioColors.length];
-        // Elongated metal shard shape
-        shard.fillStyle(c, 0.85);
-        shard.fillRect(-2, -4, 4, 8);
-        shard.setPosition(origX + Phaser.Math.Between(-25, 25), origY + Phaser.Math.Between(-15, 15));
-        this.tweens.add({
-          targets: shard,
-          x: pX + Phaser.Math.Between(-18, 18),
-          y: pY + Phaser.Math.Between(-18, 18),
-          angle: Phaser.Math.Between(180, 720),
-          duration: 180 + i * 35,
-          ease: 'Quad.easeIn',
-          onComplete: () => shard.destroy(),
-        });
-      }
-    });
-
-    // Phase 4: Impact — fiery radio burst + bass rings at player
-    this.time.delayedCall(520, () => {
-      glitch.destroy();
-      this.cameras.main.shake(200, 0.008);
-
-      // Central impact — crimson + amber + white
-      const impact = this.add.graphics().setPosition(pX, pY).setDepth(22);
-      impact.fillStyle(0x8b1a1a, 0.5);
-      impact.fillCircle(0, 0, 24);
-      impact.fillStyle(0xff6600, 0.4);
-      impact.fillCircle(0, 0, 16);
-      impact.fillStyle(0xffdd44, 0.5);
-      impact.fillCircle(0, 0, 8);
-      impact.fillStyle(0xffffff, 0.5);
-      impact.fillCircle(0, 0, 4);
-
-      // Bass disruption rings
-      for (let r = 0; r < 3; r++) {
-        const ring = this.add.graphics().setDepth(21);
-        const rc = [0xcc8800, 0xff4400, 0xffaa00][r];
-        ring.lineStyle(2, rc, 0.6);
-        ring.strokeCircle(0, 0, 6);
-        ring.setPosition(pX, pY);
-        this.tweens.add({
-          targets: ring,
-          scaleX: 3.5 + r, scaleY: 3.5 + r,
-          alpha: 0,
-          duration: 300 + r * 80,
-          delay: r * 50,
-          onComplete: () => ring.destroy(),
-        });
-      }
-
-      // Hot metal debris scatter
-      for (let d = 0; d < 8; d++) {
-        const debris = this.add.graphics().setDepth(22);
-        const dc = radioColors[d % radioColors.length];
-        debris.fillStyle(dc, 0.8);
-        debris.fillRect(-1.5, -1.5, 3, 3);
-        debris.setPosition(pX, pY);
-        const angle = (d / 8) * Math.PI * 2;
-        this.tweens.add({
-          targets: debris,
-          x: pX + Math.cos(angle) * 35,
-          y: pY + Math.sin(angle) * 35,
-          alpha: 0,
-          angle: 180,
-          duration: 400,
-          ease: 'Quad.easeOut',
-          onComplete: () => debris.destroy(),
-        });
-      }
-
-      this.tweens.add({
-        targets: impact,
-        alpha: 0,
-        scaleX: 2, scaleY: 2,
-        duration: 300,
-        onComplete: () => { impact.destroy(); onComplete(); },
-      });
-    });
+    };
+    this.time.delayedCall(MOVE_TIMEOUT_MS, () => ctx.done());
+    windup(ctx, () => script(ctx));
   }
-
-  private playVoidAttack(origX: number, origY: number, pX: number, pY: number, onComplete: () => void): void {
-    const voidPurple = 0x8d4ac7;
-    const voidTeal = 0x6ea8d8;
-    const veil = this.add.rectangle(0, 0, logicalSize(this).width, this.battleH, 0x050107, 0)
-      .setOrigin(0)
-      .setDepth(19)
-      .setName('battle-void-veil');
-    this.tweens.add({ targets: veil, alpha: 0.46, duration: 150 });
-
-    // Rings are pulled inward to form a moving pocket of silence.
-    for (let ringIndex = 0; ringIndex < 4; ringIndex++) {
-      const collapseRing = this.add.graphics()
-        .setPosition(origX, origY)
-        .setDepth(21)
-        .setName('battle-void-collapse');
-      collapseRing.lineStyle(2 - ringIndex * 0.25, ringIndex % 2 === 0 ? voidPurple : voidTeal, 0.76);
-      collapseRing.strokeEllipse(0, 0, 42 + ringIndex * 18, 28 + ringIndex * 12);
-      collapseRing.setScale(1.8 + ringIndex * 0.2).setAlpha(0);
-      this.tweens.add({
-        targets: collapseRing,
-        scaleX: 0.12,
-        scaleY: 0.12,
-        angle: ringIndex % 2 === 0 ? 42 : -42,
-        alpha: { from: 0.82, to: 0 },
-        duration: 260 + ringIndex * 35,
-        delay: ringIndex * 24,
-        ease: 'Cubic.easeIn',
-        onComplete: () => collapseRing.destroy(),
-      });
-    }
-
-    const orb = this.add.graphics()
-      .setPosition(origX, origY)
-      .setDepth(23)
-      .setScale(0.15)
-      .setAlpha(0)
-      .setName('battle-void-orb');
-    orb.fillStyle(voidPurple, 0.16); orb.fillCircle(0, 0, 24);
-    orb.lineStyle(3, voidPurple, 0.86); orb.strokeCircle(0, 0, 17);
-    orb.lineStyle(1.5, voidTeal, 0.82); orb.strokeEllipse(0, 0, 39, 14);
-    orb.fillStyle(0x000000, 0.96); orb.fillCircle(0, 0, 11);
-    orb.fillStyle(0xffffff, 0.82); orb.fillCircle(-4, -4, 2);
-
-    this.tweens.add({ targets: orb, scaleX: 1, scaleY: 1, alpha: 1, angle: 60, duration: 190, ease: 'Back.easeOut' });
-    this.time.delayedCall(190, () => {
-      const trailEvent = this.time.addEvent({
-        delay: 38,
-        loop: true,
-        callback: () => {
-          if (!orb.active) return;
-          const residue = this.add.graphics().setPosition(orb.x, orb.y).setDepth(21);
-          residue.fillStyle(Math.random() > 0.5 ? voidPurple : voidTeal, 0.5);
-          residue.fillRect(-2, -2, 4, 4);
-          this.tweens.add({
-            targets: residue,
-            x: residue.x + Phaser.Math.Between(-10, 10),
-            y: residue.y + Phaser.Math.Between(-8, 8),
-            scaleX: 0.1,
-            scaleY: 0.1,
-            alpha: 0,
-            duration: 260,
-            onComplete: () => residue.destroy(),
-          });
-        },
-      });
-
-      this.tweens.add({
-        targets: orb,
-        x: pX,
-        y: pY,
-        angle: 420,
-        scaleX: 1.24,
-        scaleY: 1.24,
-        duration: 390,
-        ease: 'Cubic.easeIn',
-        onComplete: () => {
-          trailEvent.remove();
-          orb.destroy();
-
-          const pulledEcho = this.add.sprite(pX, pY, this.playerSprite.texture.key, this.playerSprite.frame.name)
-            .setOrigin(this.playerSprite.originX, this.playerSprite.originY)
-            .setScale(this.playerSprite.scaleX * 1.24, this.playerSprite.scaleY * 1.24)
-            .setTint(voidPurple)
-            .setAlpha(0.36)
-            .setDepth(this.playerSprite.depth - 0.1)
-            .setName('battle-void-player-echo');
-          this.tweens.add({
-            targets: pulledEcho,
-            scaleX: this.playerSprite.scaleX * 0.35,
-            scaleY: this.playerSprite.scaleY * 0.35,
-            alpha: 0,
-            angle: -16,
-            duration: 270,
-            ease: 'Cubic.easeIn',
-            onComplete: () => pulledEcho.destroy(),
-          });
-
-          const implosion = this.add.graphics().setPosition(pX, pY).setDepth(24).setName('battle-void-implosion');
-          implosion.fillStyle(voidPurple, 0.34); implosion.fillCircle(0, 0, 34);
-          implosion.lineStyle(4, voidTeal, 0.78); implosion.strokeCircle(0, 0, 29);
-          implosion.lineStyle(1, 0xffffff, 0.66); implosion.strokeCircle(0, 0, 40);
-          implosion.fillStyle(0x000000, 0.92); implosion.fillCircle(0, 0, 16);
-          implosion.setScale(1.65);
-          this.tweens.add({
-            targets: implosion,
-            scaleX: 0.08,
-            scaleY: 0.08,
-            angle: -90,
-            duration: 190,
-            ease: 'Cubic.easeIn',
-            onComplete: () => {
-              this.cameras.main.flash(70, 72, 30, 92, false);
-              this.cameras.main.shake(180, 0.006);
-              this.tweens.add({
-                targets: [implosion, veil],
-                alpha: 0,
-                duration: 170,
-                onComplete: () => { implosion.destroy(); veil.destroy(); onComplete(); },
-              });
-            },
-          });
-        },
-      });
-    });
-  }
-
-  // ── Defeat particles ────────────────────────────────────────────────────
 
   // ── Silence enemy ambient effects ──────────────────────────────────────
 
@@ -3515,31 +1959,4 @@ export class BattleScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
   }
-
-  private spawnDefeatParticles(x: number, y: number): void {
-    const colors = [0xf8ece2, 0xff7a2b, 0xe8b465, 0x6ea8d8];
-    for (let i = 0; i < 18; i++) {
-      const particle = this.add.graphics().setDepth(25);
-      const c = colors[i % colors.length];
-      const size = 2 + Math.random() * 3;
-      particle.fillStyle(c, 0.9);
-      particle.fillRect(-size / 2, -size / 2, size, size);
-      particle.setPosition(x, y);
-
-      const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
-      const dist = 55 + Math.random() * 65;
-      this.tweens.add({
-        targets: particle,
-        x: x + Math.cos(angle) * dist,
-        y: y + Math.sin(angle) * dist - 20,
-        alpha: 0,
-        scaleX: 0.2,
-        scaleY: 0.2,
-        duration: 650 + Math.random() * 350,
-        ease: 'Quad.easeOut',
-        onComplete: () => particle.destroy(),
-      });
-    }
-  }
-
 }

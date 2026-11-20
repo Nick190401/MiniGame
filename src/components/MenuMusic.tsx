@@ -2,23 +2,24 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { AudioManager } from '../game/audio/AudioManager';
 import { MUSIC } from '../game/audio/AudioLibrary';
-import { EventBus, EVENTS } from '../game/EventBus';
 
 const TRACK_URL = `/${MUSIC.overworldDefault.url}`;
 
 /**
  * Plays the game's theme on the title screen, independent of Phaser (which
- * hasn't booted yet at that point). Keeps playing at full volume straight
- * through the loading screen — it only fades out once WorldScene is
- * actually ready and its own AudioManager-driven music has taken over, so
- * the handoff is a clean crossfade instead of a cut during loading. Fades
- * back in if the player ever returns to the title screen (e.g. exiting the
- * map editor).
+ * hasn't booted yet at that point). Keeps playing through the loading screen
+ * and into the world while the game's own copy of the track streams in; it
+ * only fades out once AudioManager starts its music, so the handoff is a
+ * clean crossfade from the same position. Until then it follows the in-game
+ * music volume and mute. Fades back in if the player ever returns to the
+ * title screen (e.g. exiting the map editor).
  */
 export function MenuMusic() {
   const gamePhase = useGameStore(s => s.gamePhase);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const unlockedRef = useRef(false);
+  /** The game's own music has taken over. */
+  const releasedRef = useRef(false);
   const fadeTokenRef = useRef(0);
 
   if (!audioRef.current && typeof Audio !== 'undefined') {
@@ -54,7 +55,8 @@ export function MenuMusic() {
     if (!audio) return;
 
     const unlock = () => {
-      if (unlockedRef.current) return;
+      // Once the game's own music has taken over, the title theme stays out of it.
+      if (unlockedRef.current || releasedRef.current) return;
       const { muted, musicVolume } = AudioManager.getSettings();
       if (muted) return;
       unlockedRef.current = true;
@@ -69,27 +71,35 @@ export function MenuMusic() {
     };
   }, [fadeTo]);
 
-  // The one true handoff point: WorldScene is ready and its own music has
-  // started, so this can fade out. Deliberately NOT tied to gamePhase
-  // leaving 'title' — that flips the instant the loading screen appears,
-  // which is long before the world (and its music) actually exist.
+  // The one true handoff point: AudioManager starts the game's own music.
+  // Deliberately NOT tied to gamePhase leaving 'title' or to the world being
+  // ready: the in-game copy of the track may still be downloading then.
   useEffect(() => {
-    const onSceneReady = (sceneKey: string) => {
-      if (sceneKey !== 'WorldScene') return;
-      const audio = audioRef.current;
-      // Hand off the exact playback position so the in-game AudioManager
-      // resumes the same track from here instead of restarting it at 0 —
-      // otherwise the melody audibly jumps back at the exact handoff moment.
-      if (audio) AudioManager.setHandoffPosition(MUSIC.overworldDefault.key, audio.currentTime);
-      fadeTo(0, 800);
-    };
-    EventBus.on(EVENTS.SCENE_READY, onSceneReady);
-    return () => { EventBus.off(EVENTS.SCENE_READY, onSceneReady); };
+    const audio = audioRef.current;
+    if (!audio) return;
+    AudioManager.registerMenuMusic({
+      trackKey: MUSIC.overworldDefault.key,
+      position: () => (!releasedRef.current && !audio.paused ? audio.currentTime : null),
+      setVolume: (value) => {
+        if (releasedRef.current || !unlockedRef.current) return;
+        // A fade to 0 pauses it; the slider change is a gesture, so it may play again.
+        if (value > 0 && audio.paused) audio.play().catch(() => {});
+        fadeTo(value, 150);
+      },
+      setMuted: (muted) => { audio.muted = muted; },
+      release: () => {
+        if (releasedRef.current) return;
+        releasedRef.current = true;
+        fadeTo(0, 800);
+      },
+    });
+    return () => AudioManager.registerMenuMusic(null);
   }, [fadeTo]);
 
   // Editor mode has no music of its own, so cut here. Returning to the
   // title screen (from editor, or any other unexpected path back) resumes.
   useEffect(() => {
+    if (gamePhase === 'title') releasedRef.current = false;
     if (!unlockedRef.current) return;
     const audio = audioRef.current;
     if (!audio) return;

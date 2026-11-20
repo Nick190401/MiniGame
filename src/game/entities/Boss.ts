@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BOSS_DEFINITION } from './Enemy';
 import type { BossPhase } from '../../types/game.types';
 import { FX } from '../art/fx';
+import { shakeIntensity } from '../render/RenderScale';
 
 /** The Gatekeeper towers ~100 world units over the Core. */
 const WORLD_HEIGHT = 101;
@@ -117,7 +118,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
 
     // Screen flash
     this.scene.cameras.main.flash(300, 255, 0, 0);
-    this.scene.cameras.main.shake(200, 0.005);
+    this.scene.cameras.main.shake(200, shakeIntensity(0.005));
 
     this.updateAura();
   }

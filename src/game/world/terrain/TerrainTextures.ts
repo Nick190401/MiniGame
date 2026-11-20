@@ -57,52 +57,58 @@ function strokeBuckets(
   });
 }
 
-/** Lush meadow grass seen from slightly above: dense blades over a dark mat. */
+/**
+ * Meadow grass in the painted style of the world art: broad, soft colour
+ * patches under a light layer of short brush dabs. No fine blades and no
+ * specks, so it reads as one calm surface at the overworld zoom; flowers
+ * and bushes are painted objects placed on top.
+ */
 export function paintGrass(): HTMLCanvasElement {
   const S = TERRAIN_DETAIL_SIZE;
   const { canvas, ctx } = makeCanvas(S, S);
   paintPixels(ctx, S, (u, v) => {
-    const n = fbm(u, v, 6, 4, 11);
-    const m = fbm(u, v, 24, 3, 17);
-    return [clamp255(52 + n * 30 + m * 10), clamp255(84 + n * 34 + m * 12), clamp255(34 + n * 14)];
+    const n = fbm(u, v, 4, 3, 11);
+    const m = fbm(u, v, 10, 2, 17);
+    return [clamp255(58 + n * 26 + m * 8), clamp255(96 + n * 30 + m * 10), clamp255(40 + n * 12)];
   });
-  const rand = rng(4021);
-  const wind = (x: number, y: number) => -Math.PI / 2 + (valueNoise(x / 64, y / 64, S / 64, 9) - 0.5) * 1.6;
-  // Shadowed undergrowth, mid blades, then sunlit tips on top.
-  strokeBuckets(ctx, S, 16000, rand, [[0x22401a, 0.75], [0x2b4d1f, 0.7], [0x30552a, 0.65]], [1.6, 2.2], [5, 10], wind);
-  strokeBuckets(ctx, S, 15000, rand, [[0x3f6e2a, 0.8], [0x4b7d31, 0.8], [0x568a37, 0.75], [0x467631, 0.8]], [1.2, 1.7], [5, 11], wind);
-  strokeBuckets(ctx, S, 9000, rand, [[0x6f9e45, 0.8], [0x82ad52, 0.75], [0x97bb5e, 0.7], [0xa8c56a, 0.6]], [0.9, 1.3], [3, 8], wind);
 
-  // Clover patches and a few tiny wild flowers break up the repetition.
+  // Mottling: large soft light and shade patches, like a painted lawn.
+  const patches = rng(2203);
+  for (let i = 0; i < 150; i++) {
+    const x = patches() * S, y = patches() * S;
+    const r = 10 + patches() * 30;
+    const light = patches() < 0.5;
+    wrapDraw(S, S, x, y, r, (px, py) => {
+      const fill = ctx.createRadialGradient(px, py, 0, px, py, r);
+      fill.addColorStop(0, rgba(light ? 0x78aa48 : 0x325c26, light ? 0.2 : 0.22));
+      fill.addColorStop(1, rgba(light ? 0x78aa48 : 0x325c26, 0));
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
+  const rand = rng(4021);
+  const wind = (x: number, y: number) => -Math.PI / 2 + (valueNoise(x / 64, y / 64, S / 64, 9) - 0.5) * 1.2;
+  // Broad, low-contrast dabs: shade first, then light.
+  strokeBuckets(ctx, S, 1800, rand, [[0x3a6a28, 0.34], [0x356326, 0.3], [0x2f5a24, 0.26]], [3.2, 4.2], [5, 9], wind);
+  strokeBuckets(ctx, S, 1300, rand, [[0x6c9f42, 0.32], [0x7aae4a, 0.3], [0x88ba54, 0.24]], [2.4, 3.2], [4, 7], wind);
+
+  // A few soft clover patches break up the repetition.
   const clover = rng(77);
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 12; i++) {
     const cx = clover() * S, cy = clover() * S;
-    for (let k = 0; k < 9; k++) {
-      const lx = cx + (clover() - 0.5) * 26, ly = cy + (clover() - 0.5) * 20;
+    for (let k = 0; k < 7; k++) {
+      const lx = cx + (clover() - 0.5) * 24, ly = cy + (clover() - 0.5) * 18;
       wrapDraw(S, S, lx, ly, 8, (x, y) => {
         for (let leaf = 0; leaf < 3; leaf++) {
           const a = leaf * 2.1 + clover();
-          ctx.fillStyle = rgba(leaf === 0 ? 0x5e9a3c : 0x4f8a34, 0.9);
+          ctx.fillStyle = rgba(leaf === 0 ? 0x58923a : 0x4b8232, 0.55);
           ctx.beginPath();
-          ctx.ellipse(x + Math.cos(a) * 2.2, y + Math.sin(a) * 2.2, 2.3, 1.7, a, 0, Math.PI * 2);
+          ctx.ellipse(x + Math.cos(a) * 2.4, y + Math.sin(a) * 2.4, 2.6, 2, a, 0, Math.PI * 2);
           ctx.fill();
         }
       });
     }
-  }
-  const flowers = rng(91);
-  const petals = [0xf4f1de, 0xf1d65a, 0xc9a6e6, 0xffffff];
-  for (let i = 0; i < 70; i++) {
-    const x = flowers() * S, y = flowers() * S;
-    const color = petals[Math.floor(flowers() * petals.length)];
-    wrapDraw(S, S, x, y, 4, (fx, fy) => {
-      ctx.fillStyle = 'rgba(20,40,14,0.35)';
-      ctx.beginPath(); ctx.arc(fx + 0.8, fy + 1, 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = rgba(color, 0.95);
-      ctx.beginPath(); ctx.arc(fx, fy, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(255,220,120,0.9)';
-      ctx.beginPath(); ctx.arc(fx, fy, 0.55, 0, Math.PI * 2); ctx.fill();
-    });
   }
   return canvas;
 }

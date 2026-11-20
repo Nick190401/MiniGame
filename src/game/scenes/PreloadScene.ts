@@ -5,16 +5,24 @@ import { EventBus, EVENTS } from '../EventBus';
 import { createCharacterTextures } from '../art/characters';
 import { PLAYER_TEXTURE_ASSETS } from '../assets/PlayerTextures';
 import { NPC_TEXTURE_ASSETS } from '../assets/NpcTextures';
-import { WORLD_IMAGE_ASSETS, WORLD_TILESET_ASSETS } from '../assets/WorldAssets';
-import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from '../audio/AudioLibrary';
+import { WORLD_TILESET_ASSETS } from '../assets/WorldAssets';
+import { BOOT_AUDIO, BOOT_IMAGES, beginStream } from '../assets/AssetStream';
+import { bootAssetUrl, bootPrefetchProgress, releaseBootPrefetch } from '../assets/BootPrefetch';
 import { ensureTerrainTextures } from '../world/terrain/TerrainLayer';
 import { createFxTextures } from '../art/fx';
+import { createBattleFxTextures } from '../art/battleFx';
+import { createHealFxTextures } from '../art/healFx';
 import { createVegetationTextures } from '../art/vegetation';
 import { createStructureTextures } from '../art/structures';
+import { createGateTextures } from '../art/gateArt';
 import { createLandmarkTextures } from '../art/landmarkArt';
 import { createCaveTextures } from '../art/caveArt';
 import { createItemTextures } from '../art/items';
 import { loadPaintedWorldArt, registerPaintedWorldArt } from '../art/paintedArt';
+
+/** Share of the loading bar that belongs to the download; building the world fills the rest. */
+export const DOWNLOAD_SHARE = 80;
+const BUILD_STEPS = 6;
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -24,34 +32,48 @@ export class PreloadScene extends Phaser.Scene {
   preload(): void {
     // Standalone frames avoid iOS WebKit decoding the 4x4 sheet at a
     // density-adjusted size and exposing four characters in one frame.
-    WORLD_IMAGE_ASSETS.forEach(({ key, url }) => this.load.image(key, url));
+    // The battle art streams in later (see AssetStream.ts).
+    // Each file comes from the title screen's in-memory copy when there is one (see BootPrefetch.ts).
+    BOOT_IMAGES.forEach(({ key, url }) => this.load.image(key, bootAssetUrl(url)));
     // Painted character frames, the player's full-body art and NPC portraits.
-    [...PLAYER_TEXTURE_ASSETS, ...NPC_TEXTURE_ASSETS].forEach(({ key, url }) => this.load.image(key, url));
-    WORLD_TILESET_ASSETS.forEach(({ key, url, frameConfig }) => this.load.spritesheet(key, url, frameConfig));
+    [...PLAYER_TEXTURE_ASSETS, ...NPC_TEXTURE_ASSETS].forEach(({ key, url }) => this.load.image(key, bootAssetUrl(url)));
+    WORLD_TILESET_ASSETS.forEach(({ key, url, frameConfig }) => this.load.spritesheet(key, bootAssetUrl(url), frameConfig));
     // Hand-painted world art; it takes over these keys from the code painters.
     loadPaintedWorldArt(this);
 
-    // Music/SFX are optional: files may not exist yet (see AudioLibrary.ts).
-    // A missing file just fails to load — it never blocks the other assets
-    // or crashes the boot sequence, it only logs a quiet debug note below.
-    const availableAudio = new Set(Object.keys(import.meta.glob('/public/assets/audio/**/*.{mp3,ogg,wav}')).map(path => path.replace('/public/', '')));
-    [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS]
-      .filter(({ key, url }) => key !== 'music-battle-intro' && availableAudio.has(url))
-      .forEach(({ key, url }) => this.load.audio(key, url));
+    // Only the small sounds of the first minutes; music and the rest stream
+    // in behind the world. A missing file just fails to load and never blocks
+    // the boot sequence; it only logs a quiet debug note below.
+    BOOT_AUDIO.forEach(({ key, url }) => this.load.audio(key, bootAssetUrl(url)));
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
       if (file.type === 'audio') console.debug(`[audio] not found yet, skipping: ${file.src}`);
+    });
+    // The download is most of the wait on a real connection: show it moving.
+    this.load.on(Phaser.Loader.Events.PROGRESS, (value: number) => {
+      EventBus.emit(EVENTS.LOADING_UI_STATE, {
+        step: 0,
+        total: BUILD_STEPS,
+        label: 'Downloading art and sound',
+        // Never behind what the title-screen download already showed.
+        progress: Math.round(Math.max(value, bootPrefetchProgress()) * DOWNLOAD_SHARE),
+      });
     });
   }
 
   create(): void {
+    releaseBootPrefetch();
+    // The rest of the game downloads while the world is built and played.
+    beginStream(this);
+    this.scene.launch('StreamScene');
+
     useLogicalCamera(this);
     const { width, height } = logicalSize(this);
     this.cameras.main.setBackgroundColor('#0a0605');
     EventBus.emit(EVENTS.LOADING_UI_STATE, {
       step: 0,
-      total: 6,
+      total: BUILD_STEPS,
       label: 'Opening the sound archive',
-      progress: 0,
+      progress: DOWNLOAD_SHARE,
     });
 
     const text = (
@@ -198,13 +220,13 @@ export class PreloadScene extends Phaser.Scene {
     const loadingText = text(52, 388, '00 // OPENING ARCHIVE', {
       fontFamily: 'DM Mono', fontSize: '8px', color: '#a9a099', letterSpacing: 1,
     });
-    const progressText = text(width - 52, 384, '00%', {
+    const progressText = text(width - 52, 384, `${DOWNLOAD_SHARE}%`, {
       fontFamily: 'Sora', fontStyle: 'bold', fontSize: '17px', color: '#ff7a2b',
     }).setOrigin(1, 0);
 
     const segmentGap = 5;
-    const segmentWidth = (width - 109 - segmentGap * 5) / 6;
-    const segments = Array.from({ length: 6 }, (_, index) => {
+    const segmentWidth = (width - 109 - segmentGap * (BUILD_STEPS - 1)) / BUILD_STEPS;
+    const segments = Array.from({ length: BUILD_STEPS }, (_, index) => {
       const segment = this.add.rectangle(
         52 + index * (segmentWidth + segmentGap),
         421,
@@ -226,6 +248,8 @@ export class PreloadScene extends Phaser.Scene {
           registerPaintedWorldArt(this);
           ensureTerrainTextures(this);
           createFxTextures(this);
+          createBattleFxTextures(this);
+          createHealFxTextures(this);
           createVegetationTextures(this);
         },
       },
@@ -233,6 +257,7 @@ export class PreloadScene extends Phaser.Scene {
         label: 'Building the villages',
         fn: () => {
           createStructureTextures(this);
+          createGateTextures(this);
           createLandmarkTextures(this);
         },
       },
@@ -250,6 +275,7 @@ export class PreloadScene extends Phaser.Scene {
       { label: 'Preparing the interface', fn: () => TextureFactory.createUITextures(this) },
     ];
 
+    const progressAfter = (done: number) => Math.round(DOWNLOAD_SHARE + (done / steps.length) * (100 - DOWNLOAD_SHARE));
     let step = 0;
     const runNextStep = () => {
       if (step >= steps.length) {
@@ -262,41 +288,40 @@ export class PreloadScene extends Phaser.Scene {
           progress: 100,
           ready: true,
         });
-        this.time.delayedCall(40, () => {
-          this.cameras.main.fadeOut(120, 5, 9, 8);
-          this.time.delayedCall(120, () => {
-            this.scene.start('WorldScene');
-            EventBus.emit(EVENTS.SCENE_READY, 'WorldScene');
-          });
-        });
+        // The opaque loading overlay covers the canvas until the world's first
+        // frame is drawn (WorldScene reports SCENE_READY), so no fade of its own.
+        this.scene.start('WorldScene');
         return;
       }
 
       const currentStep = steps[step];
       loadingText.setText(`${String(step + 1).padStart(2, '0')} // ${currentStep.label}`);
-      currentStep.fn();
-      step++;
-
-      const progress = step / steps.length;
-      progressText.setText(`${Math.round(progress * 100).toString().padStart(2, '0')}%`);
+      // Name the step before its work blocks the page, and give the overlay a
+      // frame to paint it, so the bar says what it is waiting on.
       EventBus.emit(EVENTS.LOADING_UI_STATE, {
         step,
         total: steps.length,
         label: currentStep.label,
-        progress: Math.round(progress * 100),
+        progress: progressAfter(step),
       });
-      const activeSegment = segments[step - 1];
-      activeSegment.segment.setFillStyle(step === steps.length ? 0xff7a2b : 0x6ea8d8, 1);
-      activeSegment.marker.setColor(step === steps.length ? '#ff7a2b' : '#76afd7');
-      this.tweens.add({
-        targets: activeSegment.segment,
-        alpha: 0.48,
-        duration: 90,
-        yoyo: true,
-        ease: 'Sine.easeInOut',
-      });
+      this.time.delayedCall(16, () => {
+        currentStep.fn();
+        step++;
 
-      this.time.delayedCall(16, runNextStep);
+        progressText.setText(`${progressAfter(step).toString().padStart(2, '0')}%`);
+        const activeSegment = segments[step - 1];
+        activeSegment.segment.setFillStyle(step === steps.length ? 0xff7a2b : 0x6ea8d8, 1);
+        activeSegment.marker.setColor(step === steps.length ? '#ff7a2b' : '#76afd7');
+        this.tweens.add({
+          targets: activeSegment.segment,
+          alpha: 0.48,
+          duration: 90,
+          yoyo: true,
+          ease: 'Sine.easeInOut',
+        });
+
+        runNextStep();
+      });
     };
 
     this.time.delayedCall(16, runNextStep);

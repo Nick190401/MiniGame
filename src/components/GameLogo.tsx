@@ -1,3 +1,5 @@
+import { useTr } from '../i18n';
+
 // A single, quiet waveform drawn once: it runs behind the wordmark like a
 // signal trace, swelling in the middle where the title sits.
 const WAVE_PATH = (() => {
@@ -12,6 +14,7 @@ const WAVE_PATH = (() => {
 })();
 
 export function GameLogo({ compact = false }: { compact?: boolean }) {
+  const t = useTr();
   return (
     <h1 className={`game-logo${compact ? ' game-logo--compact' : ''}`} aria-label="Sound Quest">
       <svg className="game-logo__wave" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden="true">
@@ -19,7 +22,7 @@ export function GameLogo({ compact = false }: { compact?: boolean }) {
       </svg>
       <span className="game-logo__word" aria-hidden="true">Sound</span>
       <span className="game-logo__word game-logo__word--accent" aria-hidden="true">Quest</span>
-      <span className="game-logo__tagline" aria-hidden="true">Find the lost track</span>
+      <span className="game-logo__tagline" aria-hidden="true">{t('Find the lost track')}</span>
     </h1>
   );
 }

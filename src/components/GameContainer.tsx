@@ -4,12 +4,14 @@ import { gameConfig } from '../game/config';
 import { HUD } from './HUD';
 import { MobileControls } from './MobileControls';
 import { DialogueOverlay } from './DialogueOverlay';
+import { NoteReader } from './NoteReader';
 import { BattleOverlay } from './BattleOverlay';
 import { DeathOverlay } from './DeathOverlay';
 import { GameNoticeOverlay } from './GameNoticeOverlay';
 import { LoadingOverlay } from './LoadingOverlay';
 import { ZoneOverlay } from './ZoneOverlay';
 import { RewardModal } from './RewardModal';
+import { PauseMenu } from './PauseMenu';
 import { useGameStore } from '../store/gameStore';
 import { getAttacksForLevel } from '../game/systems/AttackSystem';
 import { MAX_LEVEL, XP_THRESHOLDS, getMaxHpForLevel } from '../game/systems/XPSystem';
@@ -17,6 +19,16 @@ import type { WorldScene } from '../game/scenes/WorldScene';
 import { EventBus, EVENTS } from '../game/EventBus';
 import { AudioManager } from '../game/audio/AudioManager';
 import { RENDER_SCALE } from '../game/render/RenderScale';
+import { IS_IOS } from '../platform';
+
+/** A 32 kHz AudioContext, or none (Phaser then creates its own) where the rate is unsupported. */
+function createIosAudioContext(): AudioContext | undefined {
+  try {
+    return new AudioContext({ sampleRate: 32000 });
+  } catch {
+    return undefined;
+  }
+}
 
 interface GameContainerProps {
   visible: boolean;
@@ -107,6 +119,10 @@ export function GameContainer({ visible }: GameContainerProps) {
 
       gameRef.current = new Phaser.Game({
         ...gameConfig,
+        // iOS: decoded sound is kept as raw samples at the context's rate;
+        // 32 kHz holds a third less than the default 48 kHz. Elsewhere the key
+        // must stay absent: Phaser treats an explicit undefined as "no config".
+        ...(IS_IOS ? { audio: { context: createIosAudioContext() } } : {}),
         parent: containerRef.current,
         scale: {
           ...gameConfig.scale,
@@ -125,11 +141,12 @@ export function GameContainer({ visible }: GameContainerProps) {
         requestAnimationFrame(() => gameRef.current?.scale.setGameSize(responsiveSize.width, responsiveSize.height));
       });
 
-      // Expose game instance for console commands
-      (window as unknown as Record<string, unknown>).game = gameRef.current;
-
-      // Register console cheat commands
-      registerCheatCommands(gameRef);
+      // Console commands (and the game instance behind them) exist only in
+      // development: in a release they would hand out the ending.
+      if (import.meta.env.DEV) {
+        (window as unknown as Record<string, unknown>).game = gameRef.current;
+        registerCheatCommands(gameRef);
+      }
     }, 50);
 
     return () => clearTimeout(timer);
@@ -226,11 +243,17 @@ export function GameContainer({ visible }: GameContainerProps) {
           {worldReady && !battleActive && !deathActive && !cutsceneActive && <HUD canvasParentRef={containerRef} />}
           {worldReady && !battleActive && !deathActive && !cutsceneActive && <MobileControls />}
           {worldReady && !battleActive && !deathActive && <DialogueOverlay canvasParentRef={containerRef} />}
+          {worldReady && !battleActive && !deathActive && <NoteReader canvasParentRef={containerRef} />}
           {!worldReady && <LoadingOverlay canvasParentRef={containerRef} />}
           {worldReady && !battleActive && !deathActive && !cutsceneActive && <ZoneOverlay canvasParentRef={containerRef} />}
           {battleActive && !deathActive && <BattleOverlay canvasParentRef={containerRef} />}
           {worldReady && !deathActive && <GameNoticeOverlay canvasParentRef={containerRef} />}
           {deathActive && <DeathOverlay canvasParentRef={containerRef} />}
+          <PauseMenu
+            gameRef={gameRef}
+            canvasParentRef={containerRef}
+            available={worldReady && !battleActive && !deathActive && !cutsceneActive}
+          />
           <RewardModal />
         </>
       )}

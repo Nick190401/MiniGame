@@ -3,6 +3,7 @@ import { useGameStore } from './store/gameStore';
 import { TitleScreen } from './components/TitleScreen';
 import { MenuMusic } from './components/MenuMusic';
 import { COMING_SOON } from './config';
+import { prefetchBootAssets } from './game/assets/BootPrefetch';
 
 // Phaser is 1.5 MB of engine that the title screen has no use for, so the two
 // components that own it are split out and fetched on the way in rather than
@@ -16,11 +17,17 @@ export default function App() {
   const gamePhase = useGameStore(s => s.gamePhase);
   const onTitle = COMING_SOON || gamePhase === 'title';
 
-  // Warm the engine chunk while the player is still reading the title screen,
-  // so pressing start doesn't wait on a download.
+  // Warm the engine chunk, then the loading screen's art, while the player is
+  // still reading the title screen, so pressing start doesn't wait on a
+  // download. With Save-Data on, the art waits until the player starts.
   useEffect(() => {
     if (COMING_SOON || !onTitle) return;
-    const warm = () => { void import('./components/GameContainer'); };
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+    const warm = () => {
+      void import('./components/GameContainer').finally(() => {
+        if (!saveData) void prefetchBootAssets();
+      });
+    };
     const idle = window.requestIdleCallback;
     if (idle) {
       const handle = idle(warm, { timeout: 2500 });

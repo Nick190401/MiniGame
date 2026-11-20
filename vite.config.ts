@@ -6,7 +6,8 @@ import { PLAYER_TEXTURE_ASSETS } from './src/game/assets/PlayerTextures';
 import { NPC_TEXTURE_ASSETS } from './src/game/assets/NpcTextures';
 import { WORLD_IMAGE_ASSETS, WORLD_TILESET_ASSETS } from './src/game/assets/WorldAssets';
 import { PAINTED_WORLD_ART } from './src/game/assets/WorldArt';
-import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS } from './src/game/audio/AudioLibrary';
+import { INTERIOR_ROOM_ART, SOUND_LAB_NOTE_URL } from './src/game/assets/InteriorArt';
+import { ALL_MUSIC_ASSETS, ALL_SFX_ASSETS, IOS_AUDIO_VARIANTS } from './src/game/audio/AudioLibrary';
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), runtimeAssetsPlugin({
@@ -16,9 +17,12 @@ export default defineConfig({
       ...WORLD_IMAGE_ASSETS.map(asset => asset.url),
       ...WORLD_TILESET_ASSETS.map(asset => asset.url),
       ...PAINTED_WORLD_ART.map(asset => asset.url),
+      // Room paintings stream in on demand, never with the world (InteriorStream.ts).
+      ...Object.values(INTERIOR_ROOM_ART).map(art => art.url),
+      SOUND_LAB_NOTE_URL,
       '.htaccess',
     ],
-    optional: [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS].map(asset => asset.url),
+    optional: [...ALL_MUSIC_ASSETS, ...ALL_SFX_ASSETS, ...IOS_AUDIO_VARIANTS].map(asset => asset.url),
   })],
   // No client-side router — disable the SPA HTML fallback so missing static
   // assets (e.g. audio files not added yet) 404 cleanly instead of silently

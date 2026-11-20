@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { buildTerrainMaps, type TerrainRegions } from './TerrainMaps';
 import { paintDirt, paintGrass, paintNoise, paintPaving, paintStone } from './TerrainTextures';
 import { TERRAIN_FRAGMENT, TERRAIN_VERTEX } from './terrainShader';
+import { addStaticCanvas } from '../../art/worldTexture';
 
 const DETAIL_TEXTURES: Array<[string, () => HTMLCanvasElement]> = [
   ['terrain-grass', paintGrass],
@@ -14,7 +15,7 @@ const DETAIL_TEXTURES: Array<[string, () => HTMLCanvasElement]> = [
 /** Paints the repeating surface textures once per game; cheap to call again. */
 export function ensureTerrainTextures(scene: Phaser.Scene): void {
   DETAIL_TEXTURES.forEach(([key, paint]) => {
-    if (!scene.textures.exists(key)) scene.textures.addCanvas(key, paint());
+    if (!scene.textures.exists(key)) addStaticCanvas(scene, key, paint());
   });
 }
 

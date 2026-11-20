@@ -1,8 +1,9 @@
 """Build animation-sized attack cues without changing playback speed or pitch.
 
 Run with: python scripts/prepare_enemy_attack_audio.py
-Original recordings remain untouched. Times are seconds from the start of
-BattleScene.runEnemyAttackAnimation (after the warning prelude).
+Original recordings remain untouched. Times are seconds from the cue start:
+each attack in src/game/battle/enemyMoves.ts starts its cue that long before
+its own impact frame (CUE_IMPACT_MS there must match `impact` here).
 """
 
 from pathlib import Path
@@ -12,10 +13,8 @@ import wave
 
 ROOT = Path(__file__).resolve().parents[1] / 'public/assets/audio/sfx/attacks'
 # source, output, source accent, visual impact, animation end, fade-out
-# Zap: flash at 320 ms, end at 570 ms.
-# Glitch: burst at 520 ms, end at 820 ms.
-# Void: orb arrives at 580 ms, end at 940 ms.
-# Lunge: contact at 140 ms, return ends at 440 ms.
+# Static Noise and Frequency Lock hit at 320 ms, Broken Signal at 520 ms,
+# Silence and the Gatekeeper's void attacks at 580 ms, Gate Slam at 140 ms.
 CUES = [
     ('white_noise', 'white-noise', .79, .32, .57, .10),
     ('frequency_jab', 'frequency-jab', .06, .32, .57, .06),

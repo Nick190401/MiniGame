@@ -271,37 +271,38 @@ export function renderLedgeStone(w: number, h: number, variant: number, density:
  * darker at the base where they crowd together, some carrying seed heads.
  * `front` clumps are shorter (they cover a walker's legs).
  */
+/**
+ * Encounter grass in the painted style: a few broad, smoothly shaded blades
+ * in a saturated green, tapering to points, with a clear clump silhouette.
+ * `front` is the short tuft drawn in front of the walker's legs.
+ */
 export function renderGrassTuft(w: number, h: number, variant: number, density: number, front: boolean): HTMLCanvasElement {
   const s = new LitSprite(w, h, density);
   const rand = rng((front ? 2600 : 2400) + variant * 19);
-  const base = rgb(0x2a4a1c), mid = rgb(0x4f7a2e), tip = rgb(0x9fb85c), dry = rgb(0xb9b072);
+  const base = rgb(0x2a5220), mid = rgb(0x44802e), tip = rgb(0x7fb44e);
   const groundY = h - 0.8;
-  const blades = front ? 16 : 26;
+  const blades = front ? 7 : 11;
   for (let i = 0; i < blades; i++) {
-    const x0 = w * 0.5 + (rand() - 0.5) * w * 0.8;
+    const x0 = w * 0.5 + (rand() - 0.5) * w * 0.72;
     const centre = 1 - Math.abs(x0 - w / 2) / (w / 2);
-    const len = (front ? 4 + rand() * 3.6 + centre * 2 : 6.4 + rand() * 5 + centre * 3.6) * (0.9 + rand() * 0.2);
-    const lean = (x0 - w / 2) * (0.25 + rand() * 0.3) + (rand() - 0.5) * 3;
+    const len = (front ? 5 + rand() * 2.4 + centre * 2 : 8 + rand() * 3.4 + centre * 4.4) * (0.92 + rand() * 0.16);
+    const lean = (x0 - w / 2) * (0.3 + rand() * 0.25) + (rand() - 0.5) * 2;
     const z = (front ? 2 : 0) + rand() * 1.5;
-    const width = 0.42 + rand() * 0.22;
-    const rootY = groundY - rand() * 1.6;
-    // Three segments bend the blade over as it rises.
+    const width = 0.95 + rand() * 0.35;
+    const rootY = groundY - rand() * 1.2;
+    // Three segments curve the blade over and taper it to a point.
     let px = x0, py = rootY, pr = width;
     for (let k = 1; k <= 3; k++) {
       const t = k / 3;
       const nx = x0 + lean * t * t, ny = rootY - len * t * (1 - 0.08 * t * Math.abs(lean) / 4);
-      const nr = width * (1 - t * 0.85);
-      const col = k === 1 ? mixRGB(base, mid, 0.5 + rand() * 0.3) : k === 2 ? mixRGB(mid, tip, rand() * 0.4) : mixRGB(tip, dry, rand() * 0.5);
-      s.limb(px, py, nx, ny, pr, nr, z + t * 1.2, col, { translucency: 0.65, specular: 0.06 });
+      const nr = Math.max(0.08, width * (1 - t * 0.92));
+      const col = k === 1 ? mixRGB(base, mid, 0.55 + rand() * 0.2) : k === 2 ? mixRGB(mid, tip, 0.2 + rand() * 0.25) : mixRGB(mid, tip, 0.6 + rand() * 0.3);
+      s.limb(px, py, nx, ny, pr, nr, z + t * 1.2, col, { translucency: 0.5, specular: 0.05 });
       px = nx; py = ny; pr = nr;
-    }
-    if (!front && rand() < 0.25) {
-      // Seed head.
-      s.ellipsoid(px, py - 0.9, 0.45, 1.4, z + 1.6, 0.5, mixRGB(dry, rgb(0xd8cc8c), rand()), { translucency: 0.4 }, lean * 0.04);
     }
   }
   // Roots fade into the ground instead of ending on a hard line.
-  return fadeBottom(s.render({ wrap: 0.35, occlusion: 1.1, selfShadow: 0.6, formRadius: 2, formWeight: 0.35, shadowReach: 5 }), 2.4 * density);
+  return fadeBottom(s.render({ wrap: 0.45, occlusion: 0.9, selfShadow: 0.5, formRadius: 2.4, formWeight: 0.4, shadowReach: 4 }), 2.4 * density);
 }
 
 /** Fades the lowest `px` rows of a sprite to transparent (the rest is untouched). */

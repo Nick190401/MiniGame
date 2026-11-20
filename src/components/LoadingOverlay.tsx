@@ -4,6 +4,7 @@ import { useCanvasBounds } from './useCanvasBounds';
 import { BrandLogo } from './BrandLogo';
 import { GameLogo } from './GameLogo';
 import { useKeyArt } from './useKeyArt';
+import { useTr } from '../i18n';
 
 interface LoadingOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
@@ -20,6 +21,7 @@ export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
   const bounds = useCanvasBounds(canvasParentRef);
   const [loading, setLoading] = useState(initialLoading);
   const keyArt = useKeyArt();
+  const t = useTr();
 
   useEffect(() => {
     const onLoading = (payload: LoadingUiPayload) => setLoading(payload);
@@ -31,6 +33,7 @@ export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
 
   if (!bounds) return null;
   const progress = Math.round(Math.max(0, Math.min(100, loading.progress)));
+  const label = t(loading.label);
 
   return (
     <section
@@ -45,14 +48,14 @@ export function LoadingOverlay({ canvasParentRef }: LoadingOverlayProps) {
       <div
         className="loading-screen__status"
         role="progressbar"
-        aria-label="Loading the world"
+        aria-label={t('Loading the world')}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={progress}
-        aria-valuetext={`${loading.label}, ${progress}%`}
+        aria-valuetext={`${label}, ${progress}%`}
       >
         <div className="loading-screen__row">
-          <span className="loading-screen__label">{loading.label}</span>
+          <span className="loading-screen__label">{label}</span>
           <span className="loading-screen__percent">{progress}%</span>
         </div>
         <div className="meter meter--loading"><i className="meter__fill" style={{ width: `${progress}%` }} /></div>

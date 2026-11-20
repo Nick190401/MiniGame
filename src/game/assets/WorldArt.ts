@@ -13,6 +13,10 @@ export interface PaintedArt {
 const art = (key: string): PaintedArt => ({ key, url: `assets/world/${key}.webp` });
 
 export const PAINTED_WORLD_ART: readonly PaintedArt[] = [
+  // The long wall either side of the Frequency Gate, built from the gate wings' own stones.
+  art('hd-gate-wall'),
+  art('hd-wall-ivy-0'),
+  art('hd-wall-ivy-1'),
   art('landmark-cottage'),
   art('landmark-professor-lab'),
   art('landmark-clinic'),
@@ -52,6 +56,14 @@ export const PAINTED_WORLD_ART: readonly PaintedArt[] = [
   art('hd-gate-frame'),
   art('hd-gate-panel-left'),
   art('hd-gate-panel-right'),
+  // The Frequency Gate: the painted stone and its glow masks (src/game/world/FrequencyGate.ts).
+  art('hd-gate-arch'),
+  art('hd-gate-disc'),
+  art('hd-gate-glow-runes'),
+  art('hd-gate-glow-studs'),
+  art('hd-gate-glow-tines'),
+  art('hd-gate-glow-ring'),
+  art('hd-gate-glow-wave'),
   art('landmark-universe-portal'),
   art('hd-cave-crystal'),
   art('hd-cave-crystal-purified'),

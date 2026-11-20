@@ -321,6 +321,38 @@ a:focus-visible {
 .title-screen__start:active { transform: translateY(1px); }
 .title-screen__start:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
 
+.title-screen__save {
+  color: rgba(247, 239, 232, 0.94);
+  font: 600 clamp(13px, 1.6dvh, 15px)/1.4 var(--font-body);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Continue and New game side by side, so the pair stays on the art anchor. */
+.title-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.title-screen__new {
+  min-height: clamp(52px, 6.4dvh, 64px);
+  padding: 0 clamp(20px, 2.6vw, 30px);
+  border: 1px solid rgba(255, 236, 216, 0.34);
+  border-radius: 999px;
+  background: rgba(16, 12, 10, 0.62);
+  color: var(--text);
+  font: 600 clamp(14px, 1.7dvh, 16px)/1 var(--font-body);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.title-screen__new:hover { border-color: rgba(255, 236, 216, 0.6); background: rgba(16, 12, 10, 0.82); }
+.title-screen__new:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+
 .title-screen__start-hint,
 .title-screen__soon-text {
   color: rgba(247, 239, 232, 0.86);
@@ -453,6 +485,16 @@ a:focus-visible {
   font: 400 15px/1.5 var(--font-body);
 }
 
+.name-dialog__warning {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(242, 195, 95, 0.36);
+  border-radius: var(--r-sm);
+  background: rgba(242, 195, 95, 0.08);
+  color: #f6d68f;
+  font: 500 14px/1.45 var(--font-body);
+}
+
 .name-dialog__field {
   display: grid;
   gap: 8px;
@@ -571,6 +613,8 @@ a:focus-visible {
 .hud__body {
   display: grid;
   flex: 1;
+  /* The column may be narrower than a long name: the name row then ellipsizes. */
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: 7px;
 }
@@ -583,6 +627,10 @@ a:focus-visible {
 }
 
 .hud__name {
+  /* Takes the row's free space, so the level sits by the menu key; long names
+     shrink first and end in an ellipsis. */
+  flex: 1;
+  min-width: 0;
   /* Sideways only: accented capitals (Ä, Ö, É) rise above the line box. */
   overflow-x: clip;
   overflow-y: visible;
@@ -621,6 +669,68 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
+/* Quest progress: one pip per sound fragment, filled once it is found. */
+.hud__quest {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud__pips {
+  display: flex;
+  gap: 5px;
+}
+
+.hud__pips i {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--stroke-strong);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.hud__pips i.is-found {
+  border-color: var(--gold);
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(242, 195, 95, 0.55);
+}
+
+/* The way into the pause menu: a quiet round key at the end of the name row.
+   Negative margins keep the row as tall as the name; ::after widens the target. */
+.hud__menu {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px -8px -6px -2px;
+  padding: 0;
+  border: 1px solid var(--stroke);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-2);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.hud__menu::after {
+  position: absolute;
+  inset: -8px;
+  content: '';
+}
+
+.hud__menu:hover {
+  border-color: var(--stroke-strong);
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+}
+
+.hud__menu svg { width: 14px; height: 14px; }
 
 @container canvas (max-width: 620px) {
   .hud {
@@ -689,6 +799,152 @@ a:focus-visible {
   .zone-banner { padding: 10px 32px 14px; }
   .zone-banner__title { font-size: 21px; }
   .zone-banner__meta { font-size: 12px; }
+}
+
+/* Pause menu ------------------------------------------------------------------ */
+
+.pause-layer {
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(8, 5, 4, 0.58);
+  backdrop-filter: blur(5px) saturate(0.8);
+  pointer-events: auto;
+  animation: fade-in 180ms ease-out both;
+}
+
+.pause-menu {
+  display: grid;
+  gap: 18px;
+  width: min(380px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 24px 24px 22px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  background: var(--surface-strong);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), var(--highlight);
+  touch-action: pan-y;
+  animation: dialog-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.pause-menu__head {
+  display: grid;
+  gap: 4px;
+}
+
+.pause-menu__eyebrow {
+  color: var(--gold);
+  font: 700 13px/1.3 var(--font-body);
+}
+
+.pause-menu__title {
+  color: var(--text);
+  font: 700 24px/1.2 var(--font-display);
+}
+
+.pause-menu__controls {
+  display: grid;
+  gap: 4px;
+}
+
+.pause-menu__slider {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 4.5ch;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  color: var(--text-2);
+  font: 600 14px/1.3 var(--font-body);
+}
+
+.pause-menu__slider input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  accent-color: var(--ember);
+  cursor: pointer;
+}
+
+.pause-menu__slider output {
+  color: var(--text);
+  font: 500 13px/1 var(--font-body);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pause-menu__switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--stroke);
+  color: var(--text);
+  font: 600 14px/1.3 var(--font-body);
+  cursor: pointer;
+}
+
+.pause-menu__switch-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.pause-menu__switch-copy small {
+  color: var(--text-3);
+  font: 400 12px/1.3 var(--font-body);
+}
+
+/* A switch, not a tick box: the knob slides to the ember side when muted. */
+.pause-menu__switch input {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: rgba(255, 244, 232, 0.1);
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.pause-menu__switch input::before {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  content: '';
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 160ms ease;
+}
+
+.pause-menu__switch input:checked {
+  border-color: var(--ember);
+  background: var(--ember);
+}
+
+.pause-menu__switch input:checked::before {
+  background: var(--on-ember);
+  transform: translateX(18px);
+}
+
+.pause-menu__resume { width: 100%; }
+
+/* Phone held sideways: everything still fits without scrolling. */
+@container canvas (max-height: 460px) {
+  .pause-menu { gap: 10px; padding: 16px 20px; }
+  .pause-menu__title { font-size: 20px; }
+  .pause-menu__slider { min-height: 36px; }
+  .pause-menu__switch { min-height: 44px; margin-top: 2px; padding-top: 6px; }
 }
 
 /* Notices --------------------------------------------------------------------- */
@@ -916,12 +1172,114 @@ a:focus-visible {
   .dialogue { bottom: calc(var(--touch-controls-h, 0px) + 12px); }
 }
 
+/* Note reader ----------------------------------------------------------------- */
+
+/* A note found in the world, held up close: the painted sheet with the writing
+   set inside its clean area (x 80-940, y 150-1060 of the 1024 x 1335 image). */
+.note-layer {
+  z-index: 85;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  background: rgba(8, 5, 4, 0.68);
+  pointer-events: auto;
+  animation: fade-in 180ms ease-out both;
+}
+
+.note-sheet {
+  /* As large as the canvas allows, at the sheet's own proportions. */
+  --sheet-h: min(80cqh, 118cqw);
+  position: relative;
+  flex: none;
+  height: var(--sheet-h);
+  aspect-ratio: 1024 / 1335;
+  outline: none;
+  animation: dialog-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.note-sheet__paper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.55));
+}
+
+/* Without the painted sheet, plain paper keeps the note readable. */
+.note-sheet.is-plain {
+  border-radius: 4px;
+  background: #ead9b6;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Handwriting: the reading face, slanted and loosely set in brown ink. */
+.note-sheet__writing {
+  position: absolute;
+  inset: 11.5% 9% 21% 8.5%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  color: #3b2615;
+  font: italic 500 clamp(13px, calc(var(--sheet-h) * 0.029), 24px) / 1.42 var(--font-body);
+  transform: rotate(-1.2deg);
+  text-wrap: pretty;
+}
+
+.note-sheet__title {
+  font: inherit;
+  font-size: 1.3em;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.2em;
+}
+
+.note-sheet__line:nth-of-type(even) { padding-left: 0.6em; }
+
+.note-sheet__signature {
+  align-self: flex-end;
+  margin-top: 0.3em;
+  font-size: 1.15em;
+  transform: rotate(-3deg);
+}
+
+/* Added later, in other ink. */
+.note-sheet__postscript {
+  margin-top: auto;
+  color: #24405c;
+  font-weight: 400;
+  transform: rotate(1.6deg);
+}
+
+.note-layer__hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font: 500 13px/1 var(--font-body);
+}
+
+.note-layer__hint > span { display: inline-flex; align-items: center; gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .note-layer,
+  .note-sheet { animation: none; }
+}
+
 /* Battle ---------------------------------------------------------------------- */
 
 .battle-ui {
   z-index: 47;
   color: var(--text);
+  transition: opacity 320ms ease;
 }
+
+/* The controls leave with the picture when the hero falls. */
+.battle-ui.is-fading { opacity: 0; }
 
 .battle-card {
   --card-accent: var(--steel);
@@ -1251,66 +1609,163 @@ a:focus-visible {
 
 /* Defeat ---------------------------------------------------------------------- */
 
+/* The canvas below draws the dead channel; this layer only carries the words. */
 .death-screen {
   z-index: 70;
   display: grid;
-  place-items: center;
+  align-items: center;
+  justify-items: start;
   overflow: hidden;
-  padding: 24px;
-  background: radial-gradient(ellipse 80% 70% at 50% 40%, #2b100b 0%, #130807 56%, #070404 100%);
+  padding: clamp(20px, 6cqmin, 56px) clamp(24px, 8cqw, 96px);
   pointer-events: auto;
-  animation: fade-in 500ms ease both;
-}
-
-.death-screen__figure {
-  position: absolute;
-  bottom: -6%;
-  left: 50%;
-  height: 74%;
-  max-width: none;
-  opacity: 0.08;
-  filter: grayscale(1) brightness(1.5);
-  transform: translateX(-50%);
-  pointer-events: none;
 }
 
 .death-screen__content {
-  position: relative;
   display: grid;
-  justify-items: center;
-  gap: 12px;
-  width: min(640px, 100%);
-  text-align: center;
+  justify-items: start;
+  gap: 14px;
+  width: min(460px, 54cqw);
+  animation: death-content-in 700ms 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* While reconnecting the words step aside for the revival. */
+.death-screen.is-reconnecting .death-screen__content { animation: death-content-out 260ms ease forwards; }
+
 .death-screen__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   color: #ff9283;
-  font: 700 15px/1.3 var(--font-body);
+  font: 700 14px/1.3 var(--font-body);
+  letter-spacing: 0.02em;
+}
+
+.death-screen__eyebrow i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 12px var(--danger);
+  animation: death-blink 1.4s steps(2, jump-none) infinite;
 }
 
 .death-screen__title {
+  position: relative;
   color: var(--text);
-  font: 800 clamp(38px, 9cqmin, 68px)/1 var(--font-display);
-  letter-spacing: -0.015em;
-  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+  font: 800 clamp(40px, min(12cqmin, 9cqw), 92px)/0.95 var(--font-display);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  text-shadow: 0 8px 40px rgba(0, 0, 0, 0.75);
 }
 
+/* Torn red and cyan copies flick across the title now and then. */
+.death-screen__title::before,
+.death-screen__title::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  opacity: 0.7;
+  pointer-events: none;
+  clip-path: inset(0 0 100% 0);
+}
+
+.death-screen__title::before { color: #ff3b4a; animation: death-tear-a 3.4s steps(1, end) 1.2s infinite; }
+.death-screen__title::after { color: #38d6ff; animation: death-tear-b 3.4s steps(1, end) 1.2s infinite; }
+
 .death-screen__text {
-  max-width: 34ch;
+  max-width: 36ch;
   color: var(--text-2);
   font: 400 16px/1.55 var(--font-body);
 }
 
+.death-screen__progress {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.death-screen__level {
+  color: var(--gold);
+  font: 700 14px/1 var(--font-display);
+}
+
+.death-screen__xp {
+  color: var(--text-3);
+  font: 500 13px/1 var(--font-body);
+  white-space: nowrap;
+}
+
+.death-screen__tip {
+  max-width: 44ch;
+  padding: 10px 14px;
+  border-left: 2px solid var(--gold);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: rgba(16, 12, 10, 0.72);
+  color: var(--text-2);
+  font: 400 14px/1.5 var(--font-body);
+}
+
+.death-screen__tip span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--gold);
+  font: 700 12px/1.2 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .death-screen__action {
   min-width: 220px;
-  margin-top: 14px;
+  margin-top: 6px;
+}
+
+/* Upright phone: the words on top, the ghost standing beneath them. */
+@container canvas (orientation: portrait) {
+  .death-screen__content { align-self: start; justify-self: center; justify-items: center; width: min(520px, 100%); margin-top: 5cqh; text-align: center; }
+  .death-screen__title { font-size: clamp(40px, 13cqw, 72px); }
+  .death-screen__tip { border-left: 0; border-top: 2px solid var(--gold); border-radius: 0 0 var(--r-sm) var(--r-sm); }
+  .death-screen__progress { margin-inline: auto; }
 }
 
 @container canvas (max-height: 460px) {
-  .death-screen { padding: 12px; }
-  .death-screen__content { gap: 6px; }
-  .death-screen__text { font-size: 14px; }
-  .death-screen__action { margin-top: 8px; }
+  .death-screen__content { gap: 7px; }
+  .death-screen__title { font-size: clamp(32px, min(12cqh, 9cqw), 56px); }
+  .death-screen__text, .death-screen__tip { font-size: 13px; }
+  .death-screen__tip { padding: 6px 10px; }
+  .death-screen__action { margin-top: 2px; }
+}
+
+@keyframes death-content-in {
+  from { opacity: 0; transform: translateX(-14px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes death-content-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes death-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes death-tear-a {
+  0%, 84% { clip-path: inset(0 0 100% 0); transform: none; }
+  85% { clip-path: inset(10% 0 62% 0); transform: translateX(-7px); }
+  87% { clip-path: inset(54% 0 22% 0); transform: translateX(5px); }
+  89% { clip-path: inset(30% 0 48% 0); transform: translateX(-3px); }
+  91%, 100% { clip-path: inset(0 0 100% 0); transform: none; }
+}
+
+@keyframes death-tear-b {
+  0%, 85% { clip-path: inset(0 0 100% 0); transform: none; }
+  86% { clip-path: inset(62% 0 8% 0); transform: translateX(6px); }
+  88% { clip-path: inset(18% 0 66% 0); transform: translateX(-5px); }
+  90% { clip-path: inset(40% 0 34% 0); transform: translateX(3px); }
+  92%, 100% { clip-path: inset(0 0 100% 0); transform: none; }
 }
 
 /* Touch controls -------------------------------------------------------------- */
@@ -1939,12 +2394,17 @@ a:focus-visible {
   .title-screen .game-logo,
   .name-dialog-scrim,
   .name-dialog,
+  .pause-layer,
+  .pause-menu,
   .hud,
   .dialogue,
   .battle-card,
   .battle-log,
   .battle-move,
-  .death-screen,
+  .death-screen__content,
+  .death-screen__eyebrow i,
+  .death-screen__title::before,
+  .death-screen__title::after,
   .reward-screen,
   .reward-card,
   .reward-record,
@@ -1954,6 +2414,10 @@ a:focus-visible {
 
   .btn,
   .meter__fill,
+  .hud__menu,
+  .title-screen__new,
+  .pause-menu__switch input,
+  .pause-menu__switch input::before,
   .title-screen__start,
   .battle-move,
   .touch-dpad__thumb { transition: none; }

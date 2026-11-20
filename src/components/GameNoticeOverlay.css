@@ -1,0 +1,5 @@
+/* A notice placed under the HUD: on a phone, where notices otherwise slide over
+   the HUD, it stacks below it so the buttons it talks about stay in view. */
+@container canvas (max-width: 620px) {
+  .notice-layer.is-compact.is-under-hud .notice { top: calc(var(--hud-h, 74px) + 8px); }
+}

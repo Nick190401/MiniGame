@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { makeCanvas, radial, rgba, type Ctx } from './paint';
+import { addStaticCanvas } from './worldTexture';
 
 /** Pixel sizes of the item textures (the WorldScene scales the sprites to world size). */
 export const ITEM_TEXTURE_SIZE = { fragment: 192, lostTrack: 192 } as const;
@@ -89,7 +90,7 @@ export function createItemTextures(scene: Phaser.Scene): void {
     if (scene.textures.exists(key)) scene.textures.remove(key);
     const { canvas, ctx } = makeCanvas(size, size);
     paintVinyl(ctx, size, master);
-    scene.textures.addCanvas(key, canvas);
+    addStaticCanvas(scene, key, canvas);
   };
   add('item-fragment-mr', ITEM_TEXTURE_SIZE.fragment, false);
   add('item-lost-track', ITEM_TEXTURE_SIZE.lostTrack, true);

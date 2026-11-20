@@ -3,6 +3,7 @@ import { TEXEL } from '../../render/RenderScale';
 import { CHARACTER_DIRECTIONS, CHARACTER_FRAME, characterFrameKey, characterSourceKey, WALK_FRAMES } from '../../assets/PlayerTextures';
 import { NPC_IDS } from '../../assets/NpcTextures';
 import { makeCanvas } from '../paint';
+import { addStaticCanvas } from '../worldTexture';
 
 export { CHARACTER_FRAME };
 
@@ -31,7 +32,7 @@ export function createCharacterTextures(scene: Phaser.Scene): void {
         const sourceKey = characterSourceKey(key);
         if (scene.textures.exists(key) || !scene.textures.exists(sourceKey)) continue;
         const source = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement;
-        scene.textures.addCanvas(key, downsample(source, width, height));
+        addStaticCanvas(scene, key, downsample(source, width, height));
         // Only this one reduction needs the full-size frame; free its memory.
         scene.textures.remove(sourceKey);
       }

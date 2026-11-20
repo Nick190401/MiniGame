@@ -104,6 +104,10 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     this.syncShadow();
   }
 
+  get facing(): NpcDirection {
+    return this.direction;
+  }
+
   faceToward(x: number, y: number): void {
     const dx = x - this.x;
     const dy = y - this.y;

@@ -6,12 +6,14 @@ import {
   resetMobileInput,
   type MobileDirection,
 } from '../game/input/MobileInput';
+import { useTr } from '../i18n';
 
 type Direction = MobileDirection;
 
 const DIRECTIONS: Direction[] = ['up', 'right', 'down', 'left'];
 
 export function MobileControls() {
+  const t = useTr();
   const [visible, setVisible] = useState(false);
   const [activeDirection, setActiveDirection] = useState<Direction | null>(null);
   const [dialogActive, setDialogActive] = useState(false);
@@ -145,7 +147,7 @@ export function MobileControls() {
         className="touch-dpad"
         data-direction={activeDirection ?? 'idle'}
         role="group"
-        aria-label="Movement pad"
+        aria-label={t('Movement pad')}
         onPointerDown={beginMovement}
         onPointerMove={updateMovement}
         onPointerUp={endMovement}
@@ -170,12 +172,12 @@ export function MobileControls() {
         ref={actionRef}
         type="button"
         className={`touch-action${dialogActive ? ' is-dialog' : ''}`}
-        aria-label={dialogActive ? 'Continue dialogue' : 'Interact'}
+        aria-label={t(dialogActive ? 'Continue dialogue' : 'Interact')}
         onPointerDown={triggerAction}
         onContextMenu={event => event.preventDefault()}
       >
         <span className="touch-action__key" aria-hidden="true">A</span>
-        <span className="touch-action__label" aria-hidden="true">{dialogActive ? 'Next' : 'Interact'}</span>
+        <span className="touch-action__label" aria-hidden="true">{t(dialogActive ? 'Next' : 'Interact')}</span>
       </button>
     </>
   );

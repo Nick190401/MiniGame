@@ -2,368 +2,306 @@ import Phaser from 'phaser';
 import { logicalSize, useLogicalCamera } from '../render/RenderScale';
 import { useGameStore } from '../../store/gameStore';
 import { EventBus, EVENTS } from '../EventBus';
+import { BFX, BFX_DENSITY } from '../art/battleFx';
+import { BattleFx, ease, lerp, lerpColor } from '../battle/BattleFx';
+import { BOSS_DEFINITION, ENEMY_DEFINITIONS } from '../entities/Enemy';
+
+const STATIC_KEY = 'death-static';
+/** How the hero's ghost is tinted while the channel is dead. */
+const GHOST_TINT = 0x3c3532;
 
 /**
- * Full-screen broadcast-failure sequence shown over the paused world.
- * The world remains recoverable: reconnecting restores HP and returns the
- * player to the Echo Village checkpoint.
+ * The defeat screen: a dead channel. Static, broken receiver rings, a flat
+ * heartbeat line and the hero's fading ghost sit behind the DOM overlay's
+ * text and button (components/DeathOverlay.tsx). Respawning brings the
+ * heartbeat and the colour back and the picture powers on in Echo Village
+ * with full HP.
  */
 export class DeathScene extends Phaser.Scene {
   private canRespawn = false;
   private respawning = false;
-  private reconnectLabel?: Phaser.GameObjects.Text;
+  private defeatedBy = '';
+  private isBoss = false;
+  private fx?: BattleFx;
+  private ghost?: Phaser.GameObjects.Sprite;
+  private ghostSplit: Phaser.GameObjects.Sprite[] = [];
+  private staticLayer?: Phaser.GameObjects.TileSprite;
+  private line?: Phaser.GameObjects.Graphics;
+  private lineReach = 0;
+  private pulses: Array<{ start: number; size: number; speed: number }> = [];
+  private nextBlip = 0;
+  private reducedMotion = false;
+  private layout = { width: 0, height: 0, ghostX: 0, ghostY: 0, ghostH: 0, lineY: 0, textEdge: 0 };
 
   constructor() {
     super({ key: 'DeathScene' });
   }
 
-  create(): void {
+  init(data: { enemyId?: string; isBoss?: boolean } = {}): void {
+    this.isBoss = !!data.isBoss;
+    const enemy = this.isBoss ? BOSS_DEFINITION : ENEMY_DEFINITIONS.find(entry => entry.id === data.enemyId);
+    this.defeatedBy = enemy?.name ?? '';
     this.canRespawn = false;
     this.respawning = false;
+    this.ghostSplit = [];
+    this.pulses = [];
+    this.lineReach = 0;
+  }
+
+  create(): void {
+    useLogicalCamera(this);
+    const { width: W, height: H } = logicalSize(this);
+    this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    this.fx = new BattleFx(this, { arenaHeight: H, reducedMotion: this.reducedMotion });
+
     EventBus.emit(EVENTS.PLAYER_DIED);
-    EventBus.emit(EVENTS.DEATH_UI_STATE, { ready: false, reconnecting: false });
+    this.emitState(false, false);
     EventBus.on(EVENTS.DEATH_UI_ACTION, this.onDeathUiAction);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off(EVENTS.DEATH_UI_ACTION, this.onDeathUiAction);
+      this.fx?.dispose();
+      this.fx = undefined;
     });
 
-    useLogicalCamera(this);
-    const { width: W, height: H } = logicalSize(this);
-    const store = useGameStore.getState();
-    const playerName = (store.playerName || 'Sound Keeper').toUpperCase();
-
-    const text = (
-      x: number,
-      y: number,
-      value: string,
-      style: Phaser.Types.GameObjects.Text.TextStyle,
-    ) => {
-      const label = this.add.text(x, y, value, style).setResolution(2);
-      label.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-      return label;
+    // Landscape: text on the left, the ghost on the right. Portrait: the text
+    // sits on top and the ghost stands below it.
+    const portrait = H > W * 1.05;
+    const ghostH = portrait ? Math.min(H * 0.42, W * 1.05) : Math.min(H * 0.82, W * 0.6);
+    const ghostX = portrait ? W * 0.5 : W * 0.75;
+    const ghostY = portrait ? H * 1.02 : H * 0.96;
+    // In landscape the line fades out before it reaches the words on the left;
+    // in portrait it runs below them, across the ghost's waist.
+    this.layout = {
+      width: W, height: H, ghostX, ghostY, ghostH,
+      lineY: ghostY - ghostH * (portrait ? 0.46 : 0.56),
+      textEdge: portrait ? 0 : W * 0.5,
     };
+    const centre = { x: ghostX, y: ghostY - ghostH * 0.5 };
 
-    // Near-black broadcast layer: the paused world is only faintly perceptible.
-    const backdrop = this.add.graphics().setName('death-backdrop');
-    backdrop.fillStyle(0x060403, 0.965);
-    backdrop.fillRect(0, 0, W, H);
-    backdrop.fillGradientStyle(0x2d0d0b, 0x060403, 0x060403, 0x281a15, 0.44, 0, 0, 0.22);
-    backdrop.fillRect(0, 0, W, H);
-    backdrop.lineStyle(1, 0x695449, 0.075);
-    for (let x = 20; x < W; x += 32) backdrop.lineBetween(x, 0, x, H);
-    for (let y = 16; y < H; y += 32) backdrop.lineBetween(0, y, W, y);
-    backdrop.lineStyle(1, 0xe8b465, 0.12);
-    backdrop.lineBetween(22, 82, W - 22, 82);
-    backdrop.lineBetween(22, H - 42, W - 22, H - 42);
-    backdrop.setAlpha(0);
-    this.tweens.add({ targets: backdrop, alpha: 1, duration: 380, ease: 'Quad.easeOut' });
+    // Opaque from the first frame: the paused world never shows through.
+    this.add.rectangle(0, 0, W, H, 0x070404, 1).setOrigin(0).setDepth(0);
+    const haze = this.add.image(centre.x, centre.y, BFX.glow).setTint(0x3a0b08).setDepth(1).setAlpha(0)
+      .setDisplaySize(Math.max(W, H) * 1.3, Math.max(W, H) * 1.3);
+    this.tweens.add({ targets: haze, alpha: 0.85, duration: 700, delay: 150 });
+    this.tweens.add({ targets: haze, scaleX: haze.scaleX * 1.08, scaleY: haze.scaleY * 1.08, duration: 3400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    const scanlines = this.add.graphics().setName('death-scanlines').setAlpha(0);
-    scanlines.lineStyle(1, 0xff7a2b, 0.028);
-    for (let y = 1; y < H; y += 5) scanlines.lineBetween(0, y, W, y);
-    this.tweens.add({ targets: scanlines, alpha: 1, duration: 720 });
+    this.buildRings(centre.x, centre.y, ghostH);
+    this.buildGhost(ghostX, ghostY, ghostH);
+    this.buildStatic(W, H);
 
-    // Sparse dead pixels create signal noise without obscuring the layout.
-    const noise = this.add.graphics().setName('death-noise').setAlpha(0);
-    for (let index = 0; index < 58; index++) {
-      const color = index % 11 === 0 ? 0xe8b465 : index % 7 === 0 ? 0x6ea8d8 : 0x82776f;
-      noise.fillStyle(color, index % 11 === 0 ? 0.32 : 0.16);
-      noise.fillRect(Phaser.Math.Between(18, W - 18), Phaser.Math.Between(18, H - 18), index % 9 === 0 ? 3 : 1, 1);
-    }
-    this.tweens.add({ targets: noise, alpha: 1, duration: 500, delay: 180 });
+    this.line = this.add.graphics().setDepth(6);
+    this.tweens.addCounter({ from: 0, to: 1, duration: 520, delay: 450, ease: 'Sine.easeInOut', onUpdate: tween => { this.lineReach = tween.getValue() ?? 0; } });
+    this.nextBlip = this.time.now + 1600;
 
-    // Header preserves the game's archive/control-room visual language.
-    const header = this.add.container(0, -8).setName('death-header').setAlpha(0);
-    const brand = this.add.graphics();
-    brand.fillStyle(0xe8b465, 1);
-    brand.fillRect(24, 23, 32, 32);
-    brand.fillStyle(0x110906, 1);
-    brand.fillRect(48, 23, 8, 8);
-    header.add(brand);
-    header.add(text(40, 39, 'SQ', {
-      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '11px', color: '#110906',
-    }).setOrigin(0.5));
-    header.add(text(69, 25, 'SOUND QUEST', {
-      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '11px', color: '#f8ece2', letterSpacing: 2,
-    }));
-    header.add(text(69, 43, 'SYSTEM // BROADCAST FAILURE', {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#82776f', letterSpacing: 1,
-    }));
+    this.add.image(W / 2, H / 2, BFX.vignette).setTint(0x000000).setDepth(9).setAlpha(0.9)
+      .setDisplaySize(Math.max(W, H) * 1.45, Math.max(W, H) * 1.45);
 
-    const status = this.add.graphics();
-    status.fillStyle(0xe8b465, 0.08);
-    status.fillRoundedRect(W - 145, 27, 119, 24, 3);
-    status.lineStyle(1, 0xe8b465, 0.5);
-    status.strokeRoundedRect(W - 145, 27, 119, 24, 3);
-    status.fillStyle(0xe8b465, 1);
-    status.fillCircle(W - 129, 39, 3);
-    header.add(status);
-    header.add(text(W - 117, 34, 'LINK LOST', {
-      fontFamily: 'DM Mono', fontSize: '7px', color: '#ff8a66', letterSpacing: 1,
-    }));
-    this.tweens.add({ targets: header, y: 0, alpha: 1, duration: 420, delay: 120, ease: 'Cubic.easeOut' });
-
-    // Editorial title block: fast, legible and recognisable at game resolution.
-    const accentRule = this.add.rectangle(35, 128, 3, 146, 0xe8b465, 1)
-      .setOrigin(0, 0)
-      .setScale(1, 0)
-      .setName('death-accent-rule');
-    this.tweens.add({ targets: accentRule, scaleY: 1, duration: 480, delay: 220, ease: 'Cubic.easeOut' });
-
-    const eyebrow = text(52, 113, 'TRANSMISSION 00 // TERMINATED', {
-      fontFamily: 'DM Mono', fontSize: '7px', color: '#afa7a2', letterSpacing: 2,
-    }).setAlpha(0);
-    const signalTitle = text(48, 132, 'SIGNAL', {
-      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '49px', color: '#f8ece2', letterSpacing: -1,
-    }).setAlpha(0);
-    const lostTitle = text(48, 177, 'LOST', {
-      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '67px', color: '#e8b465', letterSpacing: -1,
-    }).setAlpha(0);
-    [
-      { target: eyebrow, x: 52, delay: 260 },
-      { target: signalTitle, x: 48, delay: 340 },
-      { target: lostTitle, x: 48, delay: 440 },
-    ].forEach(({ target, x, delay }) => {
-      target.setX(x - 16);
-      this.tweens.add({ targets: target, x, alpha: 1, duration: 440, delay, ease: 'Cubic.easeOut' });
-    });
-
-    const description = text(52, 258,
-      'Your channel dropped below recoverable levels.\nThe sonic archive retained your progress.', {
-        fontFamily: 'DM Mono', fontSize: '8px', color: '#a9a09a', lineSpacing: 6,
-      }).setAlpha(0);
-    this.tweens.add({ targets: description, alpha: 1, y: 254, duration: 460, delay: 620, ease: 'Quad.easeOut' });
-
-    // Useful context replaces the old generic death sentence.
-    const archivePanel = this.add.graphics().setAlpha(0);
-    archivePanel.fillStyle(0x110906, 0.9);
-    archivePanel.fillRoundedRect(52, 311, 267, 62, 4);
-    archivePanel.lineStyle(1, 0x493a33, 0.85);
-    archivePanel.strokeRoundedRect(52, 311, 267, 62, 4);
-    archivePanel.fillStyle(0xe8b465, 0.8);
-    archivePanel.fillRect(52, 311, 3, 62);
-    this.tweens.add({ targets: archivePanel, alpha: 1, duration: 380, delay: 760 });
-
-    const metaLabels = [
-      text(68, 323, 'CALLSIGN', { fontFamily: 'DM Mono', fontSize: '5px', color: '#756b64', letterSpacing: 1 }),
-      text(202, 323, 'LEVEL', { fontFamily: 'DM Mono', fontSize: '5px', color: '#756b64', letterSpacing: 1 }),
-      text(68, 352, 'RECOVERY POINT', { fontFamily: 'DM Mono', fontSize: '5px', color: '#756b64', letterSpacing: 1 }),
-      text(68, 333, playerName, { fontFamily: 'Sora', fontStyle: 'bold', fontSize: '9px', color: '#f8ece2' }),
-      text(202, 333, String(store.level).padStart(2, '0'), { fontFamily: 'Sora', fontStyle: 'bold', fontSize: '10px', color: '#ff7a2b' }),
-      text(168, 349, 'ECHO VILLAGE // FULL HP', { fontFamily: 'DM Mono', fontSize: '6px', color: '#6ea8d8', letterSpacing: 1 }),
-    ];
-    metaLabels.forEach((label, index) => {
-      label.setAlpha(0);
-      this.tweens.add({ targets: label, alpha: 1, duration: 300, delay: 800 + index * 35 });
-    });
-
-    // Broken record / receiver visual on the right.
-    const receiver = this.add.container(468, 231).setName('death-receiver').setAlpha(0).setScale(0.9);
-    const receiverGlow = this.add.graphics();
-    receiverGlow.fillStyle(0xe8b465, 0.035);
-    receiverGlow.fillCircle(0, 0, 132);
-    receiverGlow.fillStyle(0x6ea8d8, 0.025);
-    receiverGlow.fillCircle(0, 0, 96);
-    receiver.add(receiverGlow);
-
-    const rings = this.add.graphics().setName('death-broken-rings');
-    rings.lineStyle(1, 0x6ea8d8, 0.3);
-    rings.beginPath(); rings.arc(0, 0, 112, -2.9, -0.38); rings.strokePath();
-    rings.beginPath(); rings.arc(0, 0, 112, 0.08, 2.35); rings.strokePath();
-    rings.lineStyle(1, 0xe8b465, 0.72);
-    rings.beginPath(); rings.arc(0, 0, 84, -2.3, -0.12); rings.strokePath();
-    rings.beginPath(); rings.arc(0, 0, 84, 0.35, 1.85); rings.strokePath();
-    rings.lineStyle(2, 0xff7a2b, 0.3);
-    rings.beginPath(); rings.arc(0, 0, 55, -2.8, -1.2); rings.strokePath();
-    rings.beginPath(); rings.arc(0, 0, 55, -0.82, 1.95); rings.strokePath();
-    rings.lineStyle(1, 0x635a53, 0.28);
-    rings.lineBetween(-132, 0, 132, 0);
-    rings.lineBetween(0, -132, 0, 132);
-    for (let index = 0; index < 28; index++) {
-      const angle = (index / 28) * Math.PI * 2;
-      const inner = index % 4 === 0 ? 119 : 124;
-      rings.lineStyle(index % 4 === 0 ? 2 : 1, index % 4 === 0 ? 0xe8b465 : 0x5b4940, index % 4 === 0 ? 0.68 : 0.34);
-      rings.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * 131, Math.sin(angle) * 131);
-    }
-    receiver.add(rings);
-    this.tweens.add({ targets: rings, angle: -360, duration: 24000, repeat: -1, ease: 'Linear' });
-
-    const platform = this.add.graphics();
-    platform.fillStyle(0x000000, 0.55);
-    platform.fillEllipse(0, 62, 82, 17);
-    platform.lineStyle(1, 0xe8b465, 0.38);
-    platform.strokeEllipse(0, 62, 70, 12);
-    receiver.add(platform);
-
-    const playerGhost = this.add.sprite(0, 63, 'player-battle')
-      .setOrigin(0.5, 1)
-      .setTint(0x8c8179)
-      .setAlpha(0.48);
-    playerGhost.setScale(95 / playerGhost.height);
-    receiver.add(playerGhost);
-    this.tweens.add({ targets: playerGhost, alpha: 0.18, duration: 680, yoyo: true, repeat: -1, ease: 'Stepped' });
-
-    const waveform = this.add.graphics().setName('death-flatline');
-    receiver.add(waveform);
-    const drawWaveform = (amplitude: number) => {
-      waveform.clear();
-      let previous: Phaser.Math.Vector2 | undefined;
-      for (let x = -104; x <= 104; x += 4) {
-        const envelope = Math.max(0.16, 1 - Math.abs(x) / 130);
-        const dropout = x > 18 && x < 42;
-        const y = Math.sin(x * 0.31) * amplitude * envelope + Math.sin(x * 0.67) * amplitude * 0.24;
-        if (!dropout && previous) {
-          waveform.lineStyle(1, Math.abs(x) < 18 ? 0xff7a2b : 0x6ea8d8, dropout ? 0 : 0.72);
-          waveform.lineBetween(previous.x, previous.y, x, y);
-        }
-        previous = dropout ? undefined : new Phaser.Math.Vector2(x, y);
-      }
-      waveform.fillStyle(0xe8b465, 0.9);
-      waveform.fillRect(24, -2, 4, 4);
-      waveform.fillRect(34, -1, 2, 2);
-    };
-    drawWaveform(18);
-    this.time.delayedCall(420, () => this.tweens.addCounter({
-      from: 18,
-      to: 1.5,
-      duration: 880,
-      ease: 'Cubic.easeIn',
-      onUpdate: tween => drawWaveform(tween.getValue() ?? 1.5),
-    }));
-
-    const receiverLabel = text(0, 94, 'NO CARRIER // 00.0 HZ', {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#ff8a66', letterSpacing: 1,
-    }).setOrigin(0.5);
-    receiver.add(receiverLabel);
-    this.tweens.add({ targets: receiverLabel, alpha: 0.35, duration: 420, yoyo: true, repeat: -1 });
-    this.tweens.add({ targets: receiver, alpha: 1, scaleX: 1, scaleY: 1, duration: 620, delay: 280, ease: 'Back.easeOut' });
-
-    // A single scanning fault line gives the screen motion after the reveal.
-    const scanner = this.add.rectangle(W / 2, -3, W, 2, 0xe8b465, 0.18).setName('death-scan-fault');
-    this.tweens.add({
-      targets: scanner,
-      y: H + 3,
-      alpha: { from: 0.26, to: 0 },
-      duration: 1900,
-      delay: 520,
-      repeat: -1,
-      repeatDelay: 900,
-      ease: 'Linear',
-    });
-
-    // Recovery action appears quickly, but input is briefly gated against key carry-over.
-    const button = this.add.container(52, 401).setName('death-reconnect').setAlpha(0).setY(413);
-    const buttonBg = this.add.graphics();
-    const drawButton = (hovered: boolean) => {
-      buttonBg.clear();
-      buttonBg.fillStyle(hovered ? 0xff7a2b : 0x160c09, 0.98);
-      buttonBg.fillRoundedRect(0, 0, 267, 39, 4);
-      buttonBg.lineStyle(hovered ? 2 : 1, hovered ? 0xff7a2b : 0x6ea8d8, hovered ? 1 : 0.75);
-      buttonBg.strokeRoundedRect(0, 0, 267, 39, 4);
-      buttonBg.fillStyle(hovered ? 0x110906 : 0x6ea8d8, 1);
-      buttonBg.fillRect(0, 0, 4, 39);
-    };
-    drawButton(false);
-    this.reconnectLabel = text(17, 12, 'RECONNECT SIGNAL', {
-      fontFamily: 'Sora', fontStyle: 'bold', fontSize: '11px', color: '#f8ece2', letterSpacing: 1,
-    });
-    const keyBg = this.add.graphics();
-    keyBg.fillStyle(0x0a0605, 0.9);
-    keyBg.fillRoundedRect(207, 10, 48, 19, 3);
-    keyBg.lineStyle(1, 0x82776f, 0.45);
-    keyBg.strokeRoundedRect(207, 10, 48, 19, 3);
-    const keyText = text(231, 16, 'ENTER', {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#b6aea9', letterSpacing: 1,
-    }).setOrigin(0.5, 0);
-    const hitZone = this.add.zone(133.5, 19.5, 267, 39).setInteractive({ useHandCursor: true });
-    button.add([buttonBg, this.reconnectLabel, keyBg, keyText, hitZone]);
-
-    hitZone.on('pointerover', () => {
-      if (!this.canRespawn) return;
-      drawButton(true);
-      this.reconnectLabel?.setColor('#110906');
-    });
-    hitZone.on('pointerout', () => {
-      drawButton(false);
-      this.reconnectLabel?.setColor('#f8ece2');
-    });
-    hitZone.on('pointerdown', () => this.respawn());
-    this.tweens.add({ targets: button, y: 401, alpha: 1, duration: 420, delay: 720, ease: 'Cubic.easeOut' });
-
-    const footer = text(W - 24, H - 29, 'SPACE / ENTER / TAP  //  ARCHIVE SAFE', {
-      fontFamily: 'DM Mono', fontSize: '6px', color: '#756b64', letterSpacing: 1,
-    }).setOrigin(1, 0.5).setAlpha(0);
-    this.tweens.add({ targets: footer, alpha: 0.72, duration: 420, delay: 900 });
-
-    this.time.delayedCall(850, () => {
+    // Input is briefly gated against keys still held from the fight.
+    this.time.delayedCall(1000, () => {
       this.canRespawn = true;
-      EventBus.emit(EVENTS.DEATH_UI_STATE, { ready: true, reconnecting: false });
+      this.emitState(true, false);
     });
     if (this.input.keyboard) {
       this.input.keyboard.on('keydown-SPACE', () => this.respawn());
       this.input.keyboard.on('keydown-ENTER', () => this.respawn());
     }
-
-    this.time.addEvent({
-      delay: 1180,
-      loop: true,
-      callback: () => this.playGlitchBurst(W, signalTitle, lostTitle, receiver),
-    });
+    if (!this.reducedMotion) {
+      this.time.addEvent({ delay: 1700, loop: true, callback: () => this.glitchBurst() });
+    }
   }
 
-  private playGlitchBurst(
-    width: number,
-    signalTitle: Phaser.GameObjects.Text,
-    lostTitle: Phaser.GameObjects.Text,
-    receiver: Phaser.GameObjects.Container,
-  ): void {
-    const glitch = this.add.graphics().setName('death-glitch-burst').setDepth(30);
-    for (let index = 0; index < 5; index++) {
-      const y = Phaser.Math.Between(92, 378);
-      const x = Phaser.Math.Between(24, width - 150);
-      glitch.fillStyle(index % 2 === 0 ? 0xe8b465 : 0x6ea8d8, 0.12 + index * 0.025);
-      glitch.fillRect(x, y, Phaser.Math.Between(28, 132), index % 3 === 0 ? 2 : 1);
+  private emitState(ready: boolean, reconnecting: boolean): void {
+    EventBus.emit(EVENTS.DEATH_UI_STATE, { ready, reconnecting, defeatedBy: this.defeatedBy, isBoss: this.isBoss });
+  }
+
+  /** Broken receiver rings turning slowly behind the ghost. */
+  private buildRings(x: number, y: number, size: number): void {
+    const rings = this.add.graphics().setPosition(x, y).setDepth(2).setAlpha(0).setScale(0.9);
+    const r = size * 0.42;
+    const arc = (radius: number, from: number, to: number, width: number, color: number, alpha: number) => {
+      rings.lineStyle(width, color, alpha);
+      rings.beginPath();
+      rings.arc(0, 0, radius, from, to);
+      rings.strokePath();
+    };
+    arc(r * 1.3, -2.9, -0.38, 1, 0x6ea8d8, 0.26);
+    arc(r * 1.3, 0.08, 2.35, 1, 0x6ea8d8, 0.26);
+    arc(r, -2.3, -0.12, 1.5, 0xe8b465, 0.55);
+    arc(r, 0.35, 1.85, 1.5, 0xe8b465, 0.55);
+    arc(r * 0.66, -2.8, -1.2, 2, 0xff7a2b, 0.32);
+    arc(r * 0.66, -0.82, 1.95, 2, 0xff7a2b, 0.32);
+    for (let index = 0; index < 4; index++) {
+      const angle = (index / 4) * Math.PI * 2 + Math.PI / 4;
+      rings.lineStyle(2, 0xe8b465, 0.45);
+      rings.lineBetween(Math.cos(angle) * r * 1.22, Math.sin(angle) * r * 1.22, Math.cos(angle) * r * 1.4, Math.sin(angle) * r * 1.4);
     }
-    const direction = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
-    signalTitle.setX(48 + direction * 2);
-    lostTitle.setX(48 - direction * 3);
-    receiver.setX(468 + direction * 2);
-    this.time.delayedCall(70, () => {
-      signalTitle.setX(48);
-      lostTitle.setX(48);
-      receiver.setX(468);
-      glitch.destroy();
+    rings.setName('death-rings');
+    this.tweens.add({ targets: rings, alpha: 1, scaleX: 1, scaleY: 1, duration: 700, delay: 200, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: rings, angle: -360, duration: 36000, repeat: -1 });
+  }
+
+  /** The hero as a dim ghost, split in red and cyan, shedding their signal upward. */
+  private buildGhost(x: number, y: number, height: number): void {
+    const ghost = this.add.sprite(x, y, 'player-battle').setOrigin(0.5, 1).setDepth(4).setTint(GHOST_TINT).setAlpha(0);
+    ghost.setScale(height / ghost.height);
+    this.ghost = ghost;
+    this.ghostSplit = [0xff2a3a, 0x2ad8ff].map((color, index) => this.add.sprite(x + (index ? 3 : -3), y, 'player-battle')
+      .setOrigin(0.5, 1).setScale(ghost.scaleX).setDepth(3.9).setTintFill(color).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0));
+
+    // Flickers on like a bad picture, then breathes.
+    const steps = [0.45, 0.1, 0.65, 0.25, 0.72];
+    steps.forEach((alpha, index) => this.time.delayedCall(300 + index * 70, () => ghost.setAlpha(alpha)));
+    this.time.delayedCall(300 + steps.length * 70, () => {
+      this.ghostSplit.forEach(copy => copy.setAlpha(0.16));
+      ghost.setAlpha(0.72);
+      this.tweens.add({ targets: ghost, alpha: 0.52, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     });
+
+    // Signal fragments drift up off the figure.
+    const width = ghost.displayWidth * 0.5;
+    const motes = this.add.particles(0, 0, BFX.dot, {
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(x - width / 2, y - height * 0.85, width, height * 0.8) } as Phaser.Types.GameObjects.Particles.EmitZoneData,
+      frequency: this.reducedMotion ? 160 : 55,
+      lifespan: { min: 1400, max: 2400 },
+      speedY: { min: -38, max: -14 },
+      speedX: { min: -6, max: 6 },
+      // About 4 px across: the dot texture is 8 logical px at its density.
+      scale: { start: 0.5 / BFX_DENSITY, end: 0 },
+      alpha: { start: 0.7, end: 0 },
+      color: [0xbfe3f2, 0x6ea8d8, 0x3a2420],
+      blendMode: Phaser.BlendModes.ADD,
+    });
+    motes.setDepth(5);
+  }
+
+  /** Animated television static over everything, plus fine scanlines. */
+  private buildStatic(W: number, H: number): void {
+    if (!this.textures.exists(STATIC_KEY)) {
+      const texture = this.textures.createCanvas(STATIC_KEY, 192, 144);
+      if (texture) {
+        const ctx = texture.getContext();
+        const image = ctx.createImageData(192, 144);
+        for (let i = 0; i < image.data.length; i += 4) {
+          const v = Math.random() * 255;
+          image.data[i] = v; image.data[i + 1] = v; image.data[i + 2] = v; image.data[i + 3] = 255;
+        }
+        ctx.putImageData(image, 0, 0);
+        texture.refresh();
+      }
+    }
+    // Starts as a burst of static that settles into a faint grain.
+    this.staticLayer = this.add.tileSprite(0, 0, W, H, STATIC_KEY).setOrigin(0).setDepth(7)
+      .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.32).setTileScale(1.5, 1.5);
+    this.tweens.add({ targets: this.staticLayer, alpha: 0.06, duration: 800, ease: 'Quad.easeOut' });
+
+    const scanlines = this.add.graphics().setDepth(8);
+    scanlines.lineStyle(1, 0x000000, 0.18);
+    for (let y = 1; y < H; y += 3) scanlines.lineBetween(0, y, W, y);
+  }
+
+  private glitchBurst(): void {
+    if (this.respawning || !this.ghost || !this.fx) return;
+    const { width: W, height: H } = this.layout;
+    this.fx.glitch(this.ghost, { slices: 3, amount: 10, life: 70 });
+    for (let i = 0; i < 3; i++) {
+      const bar = this.add.image(W / 2, Math.random() * H, BFX.scan, i % 3)
+        .setDisplaySize(W * (0.3 + Math.random() * 0.7), 2 + Math.random() * 4)
+        .setTint(i % 2 ? 0x6ea8d8 : 0xe8b465).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(8.5);
+      this.time.delayedCall(70, () => bar.destroy());
+    }
+  }
+
+  update(time: number, delta: number): void {
+    this.fx?.update(time, delta);
+    if (this.staticLayer && (!this.reducedMotion || Math.floor(time / 100) % 2 === 0)) {
+      this.staticLayer.setTilePosition(Math.random() * 192, Math.random() * 144);
+    }
+    if (!this.respawning && time > this.nextBlip) {
+      // A faint blip now and then: the channel is down, not gone.
+      this.pulses.push({ start: time, size: 5, speed: 0.55 });
+      this.nextBlip = time + 2600;
+    }
+    this.drawLine(time);
+  }
+
+  /** The heartbeat line: flat, with pulses running along it from the left. */
+  private drawLine(time: number): void {
+    const line = this.line;
+    if (!line) return;
+    const { width: W, lineY, textEdge } = this.layout;
+    const reach = W * this.lineReach;
+    this.pulses = this.pulses.filter(pulse => (time - pulse.start) * pulse.speed < W + 60);
+    const offset = (x: number) => {
+      let y = 0;
+      for (const pulse of this.pulses) {
+        const d = (x - (time - pulse.start) * pulse.speed) / 4;
+        if (d >= 0 && d < 2) y -= pulse.size * (d / 2);
+        else if (d >= 2 && d < 4) y += -pulse.size + pulse.size * 1.45 * ((d - 2) / 2);
+        else if (d >= 4 && d < 6) y += pulse.size * 0.45 * (1 - (d - 4) / 2);
+      }
+      return y;
+    };
+    line.clear();
+    if (reach < 1) return;
+    const fadeFrom = textEdge * 0.7;
+    const visibility = (x: number) => (textEdge <= 0 ? 1 : Phaser.Math.Clamp((x - fadeFrom) / (textEdge - fadeFrom), 0, 1));
+    let previous = new Phaser.Math.Vector2(0, lineY + offset(0));
+    for (let x = 3; x <= reach; x += 3) {
+      const point = new Phaser.Math.Vector2(x, lineY + offset(x));
+      const v = visibility(x);
+      if (v > 0) {
+        line.lineStyle(7, 0xff5a4a, 0.16 * v);
+        line.lineBetween(previous.x, previous.y, point.x, point.y);
+        line.lineStyle(1.6, 0xff7a6a, 0.9 * v);
+        line.lineBetween(previous.x, previous.y, point.x, point.y);
+      }
+      previous = point;
+    }
   }
 
   private respawn(): void {
-    if (!this.canRespawn || this.respawning) return;
+    if (!this.canRespawn || this.respawning || !this.fx) return;
     this.respawning = true;
     this.canRespawn = false;
-    EventBus.emit(EVENTS.DEATH_UI_STATE, { ready: false, reconnecting: true });
-    this.reconnectLabel?.setText('RECONNECTING...').setColor('#ff7a2b');
+    this.emitState(false, true);
+    const fx = this.fx;
+    const { width: W, height: H, ghostX, ghostY, ghostH } = this.layout;
+    const centre = { x: ghostX, y: ghostY - ghostH * 0.5 };
 
-    const { width: W, height: H } = logicalSize(this);
-    const reconnectWave = this.add.graphics()
-      .setName('death-reconnect-wave')
-      .setDepth(60)
-      .setPosition(W / 2, H / 2)
-      .setScale(0, 1);
-    reconnectWave.fillStyle(0x6ea8d8, 0.18);
-    reconnectWave.fillRect(-W / 2, -14, W, 28);
-    reconnectWave.fillStyle(0xff7a2b, 0.9);
-    reconnectWave.fillRect(-W / 2, -1, W, 2);
-    this.tweens.add({ targets: reconnectWave, scaleX: 1, duration: 180, ease: 'Cubic.easeOut' });
+    // Two strong heartbeats bring the signal back.
+    [0, 330].forEach((beat, index) => this.time.delayedCall(beat, () => {
+      this.pulses.push({ start: this.time.now, size: 26 - index * 4, speed: 1.6 });
+      fx.ring(centre.x, centre.y, { color: index ? 0x6ea8d8 : 0xff7a2b, from: 30, to: ghostH * 1.1, life: 520, soft: true, alpha: 0.8 });
+      fx.shake(0.2);
+    }));
+    // The ghost gets its colour back and the split closes.
+    const ghost = this.ghost;
+    if (ghost) {
+      this.tweens.killTweensOf(ghost);
+      const back = ease('Sine.easeInOut');
+      fx.animate(700, t => {
+        ghost.setTint(lerpColor(GHOST_TINT, 0xffffff, back(t))).setAlpha(lerp(ghost.alpha, 1, t));
+        this.ghostSplit.forEach((copy, index) => copy.setX(ghost.x + (index ? 1 : -1) * 3 * (1 - t)).setAlpha(0.16 * (1 - t)));
+      });
+    }
+    this.time.delayedCall(560, () => this.staticLayer && this.tweens.add({ targets: this.staticLayer, alpha: 0.3, duration: 180, yoyo: true }));
 
-    this.cameras.main.flash(130, 73, 223, 191, false);
-    this.time.delayedCall(150, () => this.cameras.main.fadeOut(420, 5, 9, 8));
-    this.time.delayedCall(500, () => {
-      const store = useGameStore.getState();
-      const healedAmount = store.maxHp - store.hp;
-      store.restoreHp(store.maxHp);
-      EventBus.emit(EVENTS.HEAL, { amount: healedAmount, source: 'respawn' });
-      EventBus.emit(EVENTS.RESPAWN);
-      this.scene.stop('DeathScene');
+    // Power on: a bright line opens into white, the world appears through it.
+    this.time.delayedCall(760, () => {
+      const flash = this.add.rectangle(W / 2, H / 2, W, H, 0xffffff, 1).setDepth(20).setScale(1, 0.006);
+      this.tweens.add({
+        targets: flash, scaleY: 1, duration: 170, ease: 'Expo.easeIn',
+        onComplete: () => {
+          // Hand over to the world underneath, then let the white go.
+          this.children.list.filter(child => child !== flash).forEach(child => (child as unknown as { setVisible?: (v: boolean) => void }).setVisible?.(false));
+          const store = useGameStore.getState();
+          const healedAmount = store.maxHp - store.hp;
+          store.restoreHp(store.maxHp);
+          EventBus.emit(EVENTS.HEAL, { amount: healedAmount, source: 'respawn' });
+          EventBus.emit(EVENTS.RESPAWN);
+          this.tweens.add({ targets: flash, alpha: 0, duration: 480, ease: 'Quad.easeOut', onComplete: () => this.scene.stop('DeathScene') });
+        },
+      });
     });
   }
 

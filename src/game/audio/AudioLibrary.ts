@@ -11,6 +11,8 @@
  * `url`, done — no changes needed anywhere else.
  */
 
+import { IS_IOS } from '../../platform';
+
 export interface AudioAsset {
   key: string;
   url: string;
@@ -54,24 +56,33 @@ export const MUSIC = {
 export const BOSS_PHASE_MUSIC = [MUSIC.bossPhase1.key, MUSIC.bossPhase2.key, MUSIC.bossPhase3.key];
 
 /**
- * WorldScene zone title → overworld track. The corrupted cave uses its own
- * theme; restored cave/Core zones return to the normal overworld track.
+ * The Lost Track, the reward song. Kept out of MUSIC on purpose: everything
+ * there streams into Phaser, which would decode the whole song into memory.
+ * It is streamed by an HTML audio element instead (RewardModal, and Quincy's
+ * record player through AudioManager).
  */
-const ZONE_TRACK_BY_TITLE: Record<string, string> = {
-  'Echo Village': MUSIC.overworldDefault.key,
-  'Signal Meadow': MUSIC.overworldDefault.key,
-  'Brookside Crossing': MUSIC.overworldDefault.key,
-  'Neon Junction': MUSIC.overworldDefault.key,
-  'Whisper Grove': MUSIC.overworldDefault.key,
-  'Fading Highlands': MUSIC.overworldDefault.key,
-  'Resonant Cave': MUSIC.overworldDefault.key,
-  'Void Cave': MUSIC.cave.key,
-  'The Living Core': MUSIC.overworldDefault.key,
-  'The Core': MUSIC.cave.key,
+export const LOST_TRACK: AudioAsset = track('music-lost-track', 'music/reward/du-schaffst-das.mp3');
+
+/**
+ * WorldScene zone title → its own track first, then the track that stands in
+ * until that file exists. The corrupted cave falls back to its own theme;
+ * restored cave/Core zones fall back to the normal overworld track.
+ */
+const ZONE_TRACKS_BY_TITLE: Record<string, string[]> = {
+  'Echo Village': [MUSIC.echoVillage.key, MUSIC.overworldDefault.key],
+  'Signal Meadow': [MUSIC.signalPath.key, MUSIC.overworldDefault.key],
+  'Brookside Crossing': [MUSIC.signalPath.key, MUSIC.overworldDefault.key],
+  'Neon Junction': [MUSIC.neonJunction.key, MUSIC.overworldDefault.key],
+  'Whisper Grove': [MUSIC.fadingPath.key, MUSIC.overworldDefault.key],
+  'Fading Highlands': [MUSIC.fadingPath.key, MUSIC.overworldDefault.key],
+  'Resonant Cave': [MUSIC.resonantCave.key, MUSIC.overworldDefault.key],
+  'Void Cave': [MUSIC.voidCave.key, MUSIC.cave.key],
+  'The Living Core': [MUSIC.livingCore.key, MUSIC.overworldDefault.key],
+  'The Core': [MUSIC.theCore.key, MUSIC.cave.key],
 };
 
-export function trackForZone(zoneTitle: string): string {
-  return ZONE_TRACK_BY_TITLE[zoneTitle] ?? MUSIC.overworldDefault.key;
+export function tracksForZone(zoneTitle: string): string[] {
+  return ZONE_TRACKS_BY_TITLE[zoneTitle] ?? [MUSIC.overworldDefault.key];
 }
 
 // ---- SFX --------------------------------------------------------------------
@@ -89,7 +100,8 @@ export const SFX = {
   enemySignalAttack: track('sfx-enemy-signal-attack', 'sfx/attacks/enemy-signal.mp3'),
   enemySilenceAttack: track('sfx-enemy-silence-attack', 'sfx/attacks/enemy-silence.mp3'),
   enemyVoidTouch: track('sfx-enemy-void-touch', 'sfx/attacks/void-touch.mp3'),
-  // Edited cues align their accents and tails with BattleScene's animations.
+  // Edited cues align their accents and tails with the attack choreographies
+  // in src/game/battle/enemyMoves.ts.
   // Regenerate from the originals with scripts/prepare_enemy_attack_audio.py.
   enemyWhiteNoise: track('sfx-enemy-white-noise', 'sfx/attacks/synced/white-noise.wav'),
   enemyFrequencyJab: track('sfx-enemy-frequency-jab', 'sfx/attacks/synced/frequency-jab.wav'),
@@ -108,7 +120,9 @@ export const SFX = {
   // Battle beats
   encounter: track('sfx-encounter', 'sfx/battle/encounter.mp3'),
   victory: track('sfx-victory', 'sfx/battle/victory.mp3'),
-  bossPhaseChange: track('sfx-boss-phase-change', 'sfx/battle/boss-phase-change.mp3'),
+  // Built by scripts/build_event_sfx.py; their beats follow the phase animations.
+  bossPhaseChange: track('sfx-boss-phase-change', 'sfx/battle/boss-phase-change.wav'),
+  bossPhaseFinal: track('sfx-boss-phase-final', 'sfx/battle/boss-phase-final.wav'),
   bossDefeated: track('sfx-boss-defeated', 'sfx/battle/boss-defeated.mp3'),
   bossAppeared: track('sfx-boss-appeared', 'sfx/world/boss_erscheinen.wav'),
   enemyDefeated: track('sfx-enemy-defeated', 'sfx/battle/enemy-defeated.mp3'),
@@ -117,20 +131,31 @@ export const SFX = {
   levelUp: track('sfx-level-up', 'sfx/world/level-up.mp3'),
   itemPickup: track('sfx-item-pickup', 'sfx/world/collect_disc.mp3'),
   gateOpen: track('sfx-gate-open', 'sfx/world/gate-open.mp3'),
-  gateBlocked: track('sfx-gate-blocked', 'sfx/world/gate-blocked.mp3'),
+  gateBlocked: track('sfx-gate-blocked', 'sfx/world/gate-blocked.wav'),
   heal: track('sfx-heal', 'sfx/world/heal.mp3'),
   respawn: track('sfx-respawn', 'sfx/world/respawn.mp3'),
 
   // Footsteps — looped for as long as the player is walking, swapped by the
   // surface underfoot (see FOOTSTEP_SFX_BY_SURFACE).
   footstepsGround: track('sfx-footsteps-ground', 'sfx/world/footsteps_minimalistic.mp3'),
-  footstepsGrass: track('sfx-footsteps-grass', 'sfx/world/walking_in_grass.mp3'),
+  // iOS keeps decoded sound as raw samples in a tight memory budget: an 8 s
+  // seamless excerpt instead of the 107 s recording (≈2 MB instead of ≈39 MB).
+  footstepsGrass: track('sfx-footsteps-grass', IS_IOS ? 'sfx/world/walking_in_grass-loop.wav' : 'sfx/world/walking_in_grass.mp3'),
 
   // UI
   dialogBlip: track('sfx-dialog-blip', 'sfx/ui/dialog-blip.mp3'),
   uiClick: track('sfx-ui-click', 'sfx/ui/click.mp3'),
   uiConfirm: track('sfx-ui-confirm', 'sfx/ui/confirm.mp3'),
 } as const;
+
+/**
+ * Seconds of lead-in skipped when a cue plays, so its transient lands on the
+ * frame that triggers it. damage.mp3 opens with about 0.25 s of near-silence.
+ */
+export const SFX_START_OFFSET: Record<string, number> = {
+  [SFX.playerHit.key]: 0.22,
+  [SFX.enemyHit.key]: 0.22,
+};
 
 /** Attack.id (see AttackSystem.ts ATTACKS) → sfx key. Unknown ids fall back to Bass Drop. */
 export const ATTACK_SFX_BY_ID: Record<string, string> = {
@@ -169,6 +194,9 @@ export const FOOTSTEP_SFX_BY_SURFACE: Record<Exclude<FootstepSurface, 'none'>, s
 
 /** Footsteps sit under the music rather than on top of it. */
 export const FOOTSTEP_VOLUME = 0.4;
+
+/** Files only iOS plays (see above); the build ships them too. */
+export const IOS_AUDIO_VARIANTS: AudioAsset[] = [track('sfx-footsteps-grass', 'sfx/world/walking_in_grass-loop.wav')];
 
 export const ALL_MUSIC_ASSETS: AudioAsset[] = Object.values(MUSIC);
 export const ALL_SFX_ASSETS: AudioAsset[] = Object.values(SFX);

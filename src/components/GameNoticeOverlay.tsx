@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { EventBus, EVENTS, type NoticePayload } from '../game/EventBus';
 import { useCanvasBounds } from './useCanvasBounds';
+import { noticeDuration, type HudNotice } from './useSettingsTip';
+import { useTr } from '../i18n';
+import './GameNoticeOverlay.css';
 
 interface GameNoticeOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
@@ -27,7 +30,8 @@ const TONE_ICON: Record<Tone, ReactNode> = {
 
 export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
   const bounds = useCanvasBounds(canvasParentRef);
-  const [notice, setNotice] = useState<(NoticePayload & { key: number; ms: number }) | null>(null);
+  const t = useTr();
+  const [notice, setNotice] = useState<(HudNotice & { key: number; ms: number }) | null>(null);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -36,9 +40,9 @@ export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
       timerRef.current = null;
       setNotice(null);
     };
-    const show = (payload: NoticePayload) => {
+    const show = (payload: HudNotice) => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      const ms = payload.duration ?? (payload.variant === 'hero' ? 3200 : 2200);
+      const ms = noticeDuration(payload);
       setNotice({ ...payload, key: Date.now(), ms });
       timerRef.current = window.setTimeout(clear, ms);
     };
@@ -60,7 +64,7 @@ export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
 
   return (
     <div
-      className={`ui-layer notice-layer is-${notice.variant ?? 'compact'}`}
+      className={`ui-layer notice-layer is-${notice.variant ?? 'compact'}${notice.placement === 'under-hud' ? ' is-under-hud' : ''}`}
       style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }}
       role="status"
     >
@@ -71,9 +75,9 @@ export function GameNoticeOverlay({ canvasParentRef }: GameNoticeOverlayProps) {
           </svg>
         </span>
         <div className="notice__copy">
-          {notice.eyebrow && <p className="notice__eyebrow">{notice.eyebrow}</p>}
-          <p className="notice__title">{notice.title}</p>
-          {notice.detail && <p className="notice__detail">{notice.detail}</p>}
+          {notice.eyebrow && <p className="notice__eyebrow">{t(notice.eyebrow)}</p>}
+          <p className="notice__title">{t(notice.title)}</p>
+          {notice.detail && <p className="notice__detail">{t(notice.detail)}</p>}
         </div>
       </article>
     </div>

@@ -5,6 +5,7 @@ import { SFX } from '../game/audio/AudioLibrary';
 import { EventBus, EVENTS } from '../game/EventBus';
 import { BrandLogo } from './BrandLogo';
 import { getWaveformHeights } from '../game/audio/Waveform';
+import { useTr } from '../i18n';
 
 const playUiClick = () => AudioManager.playSfx(SFX.uiClick.key);
 
@@ -20,7 +21,9 @@ const WAVE_BAR_COUNT = 44;
 export function RewardModal() {
   const bonusSongUnlocked = useGameStore(state => state.bonusSongUnlocked);
   const playerName = useGameStore(state => state.playerName);
-  const [showModal, setShowModal] = useState(true);
+  const t = useTr();
+  // Opens the moment the track is won; a continued journey that already has it starts closed.
+  const [showModal, setShowModal] = useState(() => !useGameStore.getState().bonusSongUnlocked);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
     const settings = AudioManager.getSettings();
@@ -156,40 +159,40 @@ export function RewardModal() {
 
   if (!showModal) {
     return (
-      <>{audioElement}<button type="button" className="btn btn--ghost reward-reopen" aria-label="Open the Lost Track" onClick={() => { playUiClick(); setShowModal(true); }}>
+      <>{audioElement}<button type="button" className="btn btn--ghost reward-reopen" aria-label={t('Open the Lost Track')} onClick={() => { playUiClick(); setShowModal(true); }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
         </svg>
-        <span className="reward-reopen__label">Lost Track</span>
+        <span className="reward-reopen__label">{t('Lost Track')}</span>
       </button></>
     );
   }
 
   const progress = totalDuration ? (currentTime / totalDuration) * 100 : 0;
-  const playerState = isPlaying ? 'Now playing' : currentTime > 0 ? 'Paused' : 'Ready to play';
+  const playerState = t(isPlaying ? 'Now playing' : currentTime > 0 ? 'Paused' : 'Ready to play');
 
   return (
     <>{audioElement}<div className="reward-screen">
       <article className="reward-card" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="reward-title" tabIndex={-1}>
         <section className="reward-art">
-          <p className="reward-art__eyebrow">Quest complete</p>
+          <p className="reward-art__eyebrow">{t('Quest complete')}</p>
           <div className={`reward-record${isPlaying ? ' is-playing' : ''}`} aria-hidden="true">
             <div className="reward-record__label"><BrandLogo /></div>
           </div>
           <p className="reward-art__credit">
-            <span>Recovered by</span>
-            <strong>{playerName || 'Sound Keeper'}</strong>
+            <span>{t('Recovered by')}</span>
+            <strong>{t(playerName || 'Mr Mario')}</strong>
           </p>
         </section>
 
         <section className="reward-content">
-          <button type="button" className="reward-close" onClick={closeModal} aria-label="Close">
+          <button type="button" className="reward-close" onClick={closeModal} aria-label={t('Close')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
-          <p className="reward-eyebrow">Lost Track recovered</p>
-          <h2 id="reward-title" className="reward-title">Signal restored.</h2>
+          <p className="reward-eyebrow">{t('Lost Track recovered')}</p>
+          <h2 id="reward-title" className="reward-title">{t('Signal restored.')}</h2>
           <p className="reward-text">
-            You broke the Gatekeeper's silence. This track is your reward. Press play and take it with you.
+            {t("You broke the Gatekeeper's silence. This track is your reward. Press play and take it with you.")}
           </p>
 
           <div className="reward-player">
@@ -208,8 +211,8 @@ export function RewardModal() {
                 ))}
               </div>
               <span className="reward-playhead" style={{ left: `${Math.min(100, progress)}%` }} aria-hidden="true" />
-              <input className="reward-seek" type="range" min={0} max={totalDuration || 1} step={0.1} value={Math.min(currentTime, totalDuration)} disabled={!totalDuration} onChange={event => seek(Number(event.target.value))} aria-label="Track position" aria-valuetext={`${formatTime(currentTime)} of ${formatTime(totalDuration)}`} />
-              {waveBars.length === 0 && <small className="reward-wave-status" role="status">{waveError ? 'Waveform unavailable.' : 'Loading waveform…'}</small>}
+              <input className="reward-seek" type="range" min={0} max={totalDuration || 1} step={0.1} value={Math.min(currentTime, totalDuration)} disabled={!totalDuration} onChange={event => seek(Number(event.target.value))} aria-label={t('Track position')} aria-valuetext={t(`${formatTime(currentTime)} of ${formatTime(totalDuration)}`)} />
+              {waveBars.length === 0 && <small className="reward-wave-status" role="status">{t(waveError ? 'Waveform unavailable.' : 'Loading waveform…')}</small>}
             </div>
             <div className="reward-player__times" aria-hidden="true"><span>{formatTime(currentTime)}</span><span>{formatTime(totalDuration)}</span></div>
 
@@ -220,24 +223,24 @@ export function RewardModal() {
                     ? <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
                     : <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />}
                 </svg>
-                {isPlaying ? 'Pause' : 'Play'}
+                {t(isPlaying ? 'Pause' : 'Play')}
               </button>
               <button type="button" className="btn btn--ghost" onClick={downloadTrack}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
-                Save MP3
+                {t('Save MP3')}
               </button>
             </div>
             <label className="reward-volume">
-              <span>Volume</span>
-              <input type="range" min={0} max={100} step={1} value={volume} onChange={event => setVolume(Number(event.target.value))} aria-label="Volume" aria-valuetext={volume === 0 ? 'Muted' : `${volume}%`} />
+              <span>{t('Volume')}</span>
+              <input type="range" min={0} max={100} step={1} value={volume} onChange={event => setVolume(Number(event.target.value))} aria-label={t('Volume')} aria-valuetext={volume === 0 ? t('Muted') : `${volume}%`} />
               <output>{volume}%</output>
             </label>
           </div>
 
-          {audioError && <p className="reward-error" role="alert">The song could not be played. Please try again.</p>}
+          {audioError && <p className="reward-error" role="alert">{t('The song could not be played. Please try again.')}</p>}
 
           <div className="reward-actions">
-            <button type="button" className="btn btn--ghost" onClick={closeModal}>Back to the world</button>
+            <button type="button" className="btn btn--ghost" onClick={closeModal}>{t('Back to the world')}</button>
             <a
               className="btn btn--ghost"
               href="https://chat.whatsapp.com/DbOJG6cX5AuIstZURlWxOt"
@@ -245,7 +248,7 @@ export function RewardModal() {
               rel="noopener noreferrer"
               onClick={playUiClick}
             >
-              Join the WhatsApp community
+              {t('Join the WhatsApp community')}
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9" /></svg>
             </a>
           </div>

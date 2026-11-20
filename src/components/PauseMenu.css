@@ -1,0 +1,85 @@
+/* Pause menu: language choice ----------------------------------------------------
+   Two segments in one track, laid out like the mute switch row above it; the
+   chosen language fills with ember, as the switch does when on. */
+
+/* Wraps the choices under the label on the narrowest phones instead of
+   pushing the menu wider than the screen. */
+.pause-menu__setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-height: 52px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--stroke);
+  color: var(--text);
+  font: 600 14px/1.3 var(--font-body);
+}
+
+.pause-menu__choices {
+  display: flex;
+  flex: none;
+  padding: 3px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: rgba(255, 244, 232, 0.1);
+}
+
+.pause-menu__choice {
+  position: relative;
+  display: block;
+}
+
+/* The real radio covers its segment, so taps, Tab and the arrow keys work as
+   usual; the segment underneath draws its state. */
+.pause-menu__choice input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pause-menu__choice span {
+  display: block;
+  min-width: 72px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font: 600 13px/1.2 var(--font-body);
+  text-align: center;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.pause-menu__choice:hover input:not(:checked) + span { color: var(--text); }
+
+.pause-menu__choice input:checked + span {
+  background: var(--ember);
+  color: var(--on-ember);
+}
+
+.pause-menu__choice input:focus-visible + span {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}
+
+/* Phone held sideways: as compact as the switch row. */
+@container canvas (max-height: 460px) {
+  .pause-menu__setting { min-height: 44px; padding-top: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pause-menu__choice span { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .pause-menu__choice input:checked + span {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}

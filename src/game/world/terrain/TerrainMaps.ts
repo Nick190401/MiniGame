@@ -23,6 +23,8 @@ export interface TerrainRegions {
   junctionRows: [number, number];
   /** Bridge deck rectangle: water continues under all but its end rows, which rest on the banks. */
   bridge: { top: number; bottom: number; left: number; right: number };
+  /** Jetty rectangle: walkable path tiles with water under every row. */
+  jetty?: { top: number; bottom: number; left: number; right: number };
   /** Rows of the Frequency Gate masonry, drawn as sprites instead of rock. */
   gateRows: [number, number];
   /** Columns of the forest belts along the map edges. */
@@ -70,7 +72,7 @@ function distanceInside(grid: number[][], inside: (r: number, c: number) => bool
 
 /** Paints the maps into `target` when given (the editor repaints in place), else a new canvas. */
 export function buildTerrainMaps(grid: number[][], regions: TerrainRegions, target?: HTMLCanvasElement): TerrainMapResult {
-  const { cols, rows, caveStartRow, junctionRows, bridge, gateRows, borderCols } = regions;
+  const { cols, rows, caveStartRow, junctionRows, bridge, jetty, gateRows, borderCols } = regions;
   const cellWidth = cols + TERRAIN_MAP_PAD * 2;
   const cellHeight = rows + TERRAIN_MAP_PAD * 2;
   const canvas = target ?? document.createElement('canvas');
@@ -82,7 +84,8 @@ export function buildTerrainMaps(grid: number[][], regions: TerrainRegions, targ
 
   // The deck's end rows rest on the banks; only the rows between them span the
   // river, so water stays under the deck instead of showing past its ends.
-  const spansRiver = (r: number, c: number) => r > bridge.top && r < bridge.bottom && c >= bridge.left && c <= bridge.right;
+  const spansRiver = (r: number, c: number) => (r > bridge.top && r < bridge.bottom && c >= bridge.left && c <= bridge.right)
+    || (!!jetty && r >= jetty.top && r <= jetty.bottom && c >= jetty.left && c <= jetty.right);
   const isWater = (r: number, c: number) => {
     const t = grid[r]?.[c];
     return t === T.WATER || t === T.CAVE_WATER || (t === T.PATH && spansRiver(r, c));

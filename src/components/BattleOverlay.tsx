@@ -2,15 +2,17 @@ import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { EventBus, EVENTS, type BattleUiPayload } from '../game/EventBus';
 import { useCanvasBounds } from './useCanvasBounds';
 import { PLAYER_BUST_URL, hpLevel, percent } from './vitals';
+import { useTr } from '../i18n';
 
 interface BattleOverlayProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
 }
 
 function HpRow({ hp, maxHp }: { hp: number; maxHp: number }) {
+  const t = useTr();
   return (
     <div className="battle-hp">
-      <span className="battle-hp__label">HP</span>
+      <span className="battle-hp__label">{t('HP')}</span>
       <div className="meter meter--hp" data-level={hpLevel(hp, maxHp)}>
         <i className="meter__fill" style={{ width: percent(hp, maxHp) }} />
       </div>
@@ -21,6 +23,7 @@ function HpRow({ hp, maxHp }: { hp: number; maxHp: number }) {
 
 export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
   const bounds = useCanvasBounds(canvasParentRef);
+  const t = useTr();
   const [battle, setBattle] = useState<BattleUiPayload | null>(null);
 
   useEffect(() => {
@@ -61,11 +64,11 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
   } as CSSProperties;
 
   return (
-    <section className="ui-layer battle-ui" style={style} aria-label="Battle">
+    <section className={`ui-layer battle-ui${battle.fading ? ' is-fading' : ''}`} style={style} aria-label={t('Battle')}>
       <article className="battle-card battle-card--enemy" style={{ '--card-accent': battle.enemy.accent } as CSSProperties}>
         <div className="battle-card__head">
-          <p className="battle-card__name">{battle.enemy.name}</p>
-          {battle.phase && <span className="battle-card__tag">{battle.phase}</span>}
+          <p className="battle-card__name">{t(battle.enemy.name)}</p>
+          {battle.phase && <span className="battle-card__tag">{t(battle.phase)}</span>}
         </div>
         <HpRow hp={battle.enemy.hp} maxHp={battle.enemy.maxHp} />
       </article>
@@ -74,8 +77,8 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
         <span className="avatar" aria-hidden="true"><img src={PLAYER_BUST_URL} alt="" draggable={false} /></span>
         <div className="battle-card__main">
           <div className="battle-card__head">
-            <p className="battle-card__name">{battle.player.name}</p>
-            <span className="battle-card__level">Lv {battle.player.level}</span>
+            <p className="battle-card__name">{t(battle.player.name)}</p>
+            <span className="battle-card__level">{t(`Lv ${battle.player.level}`)}</span>
           </div>
           <HpRow hp={battle.player.hp} maxHp={battle.player.maxHp} />
         </div>
@@ -87,11 +90,11 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
         role="status"
         aria-live="polite"
       >
-        <span className="battle-log__turn"><i aria-hidden="true" />{battle.turnStatus}</span>
-        <p className="battle-log__text">{battle.message}</p>
+        <span className="battle-log__turn"><i aria-hidden="true" />{t(battle.turnStatus)}</span>
+        <p className="battle-log__text">{t(battle.message)}</p>
       </div>
 
-      <div className="battle-moves" role="group" aria-label="Moves">
+      <div className="battle-moves" role="group" aria-label={t('Moves')}>
         {battle.attacks.map((attack, index) => {
           const usable = attack.unlocked && battle.inputEnabled;
           return (
@@ -105,9 +108,9 @@ export function BattleOverlay({ canvasParentRef }: BattleOverlayProps) {
               aria-keyshortcuts={attack.unlocked ? String(attack.key) : undefined}
             >
               <span className="battle-move__copy">
-                <span className="battle-move__name">{attack.name}</span>
+                <span className="battle-move__name">{t(attack.name)}</span>
                 <span className="battle-move__desc">
-                  {attack.unlocked ? attack.description : `Unlocks at level ${attack.unlockLevel}`}
+                  {attack.unlocked ? t(attack.description) : t(`Unlocks at level ${attack.unlockLevel}`)}
                 </span>
               </span>
               <kbd className="keycap battle-move__key" aria-hidden="true">

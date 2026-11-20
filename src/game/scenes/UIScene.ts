@@ -16,6 +16,7 @@ export class UIScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
     useLogicalCamera(this);
     EventBus.on(EVENTS.LEVEL_UP, this.onLevelUp, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
 
   private onLevelUp(newLevel: number): void {
