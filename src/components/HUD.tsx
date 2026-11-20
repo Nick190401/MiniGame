@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { EventBus, EVENTS } from '../game/EventBus';
 import { FRAGMENT_COUNT, useGameStore } from '../store/gameStore';
 import { getXPProgress, getXPForNextLevel, getXPForCurrentLevel, MAX_LEVEL } from '../game/systems/XPSystem';
@@ -9,6 +9,78 @@ import { useTr } from '../i18n';
 
 interface HUDProps {
   canvasParentRef: RefObject<HTMLDivElement | null>;
+}
+
+const HP_GAIN_MS = 500;
+/** The meter keeps its gain styling until the glow is over (`meter-gain-glow` in index.css). */
+const HP_GAIN_GLOW_MS = 900;
+
+interface HpGain {
+  id: number;
+  fromHp: number;
+  /** The fill before and after, in percent of the track: the light crosses the part between. */
+  fromShare: number;
+  toShare: number;
+}
+
+const share = (hp: number, maxHp: number) => (100 * hp) / Math.max(1, maxHp);
+const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+/**
+ * The HP row. A rise plays as one move: the number counts up while the fill
+ * grows, the regained part takes one pass of light and the bar glows once.
+ * A loss, and any change under reduced motion, shows at once as before.
+ */
+function HpStat({ hp, maxHp }: { hp: number; maxHp: number }) {
+  const t = useTr();
+  const [seen, setSeen] = useState({ hp, maxHp });
+  const [gain, setGain] = useState<HpGain | null>(null);
+  const [counted, setCounted] = useState(hp);
+
+  // Compared while rendering, not in an effect: the gain has to reach the DOM in
+  // the same commit as the new width, or the fill has already started its plain move.
+  if (seen.hp !== hp || seen.maxHp !== maxHp) {
+    setSeen({ hp, maxHp });
+    if (hp > seen.hp && !prefersReducedMotion()) {
+      const fromHp = gain ? counted : seen.hp;
+      setCounted(fromHp);
+      setGain({ id: (gain?.id ?? 0) + 1, fromHp, fromShare: share(seen.hp, seen.maxHp), toShare: share(hp, maxHp) });
+    } else {
+      setGain(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!gain) return;
+    const start = performance.now();
+    let frame = requestAnimationFrame(function tick(now: number) {
+      const elapsed = Math.max(0, now - start);
+      const progress = Math.min(1, elapsed / HP_GAIN_MS);
+      setCounted(Math.round(gain.fromHp + (hp - gain.fromHp) * (1 - (1 - progress) ** 3)));
+      if (elapsed < HP_GAIN_GLOW_MS) frame = requestAnimationFrame(tick);
+      else setGain(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [gain, hp]);
+
+  // The colour band follows the number on show, so the bar never turns green while it is still short.
+  const shownHp = gain ? counted : hp;
+
+  return (
+    <div className="hud__stat">
+      <span className="hud__stat-label">{t('HP')}</span>
+      <div
+        className={`meter meter--hp${gain ? ' is-gaining' : ''}`}
+        data-level={hpLevel(shownHp, maxHp)}
+        style={gain ? ({ '--gain-from': gain.fromShare, '--gain-to': gain.toShare } as CSSProperties) : undefined}
+      >
+        <i className="meter__fill" style={{ width: percent(hp, maxHp) }}>
+          {gain && <i key={gain.id} className="meter__gain" aria-hidden="true" />}
+        </i>
+      </div>
+      <span className="hud__stat-value">{shownHp}/{maxHp}</span>
+    </div>
+  );
 }
 
 export function HUD({ canvasParentRef }: HUDProps) {
@@ -83,13 +155,7 @@ export function HUD({ canvasParentRef }: HUDProps) {
               </svg>
             </button>
           </div>
-          <div className="hud__stat">
-            <span className="hud__stat-label">{t('HP')}</span>
-            <div className="meter meter--hp" data-level={hpLevel(hp, maxHp)}>
-              <i className="meter__fill" style={{ width: percent(hp, maxHp) }} />
-            </div>
-            <span className="hud__stat-value">{hp}/{maxHp}</span>
-          </div>
+          <HpStat hp={hp} maxHp={maxHp} />
           <div className="hud__stat">
             <span className="hud__stat-label">{t('XP')}</span>
             <div className="meter meter--xp">

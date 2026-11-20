@@ -30,8 +30,8 @@ import type { TerrainLayer } from '../world/terrain/TerrainLayer';
 import { WorldLighting } from '../world/WorldLighting';
 import { FX } from '../art/fx';
 import { SpriteShadow } from '../art/castShadow';
-import { CHARACTER_HEIGHT } from '../art/characters';
-import { playNpcHeal, type NpcHealHandle } from '../world/NpcHeal';
+import { CHARACTER_HEIGHT, OVERWORLD_CHARACTER_SCALE } from '../art/characters';
+import { playNpcHeal, type NpcHealHandle } from '../world/heal';
 import { FrequencyGate } from '../world/FrequencyGate';
 import { isStreamGroupReady } from '../assets/AssetStream';
 import { createInteractLabel as buildInteractLabel } from '../world/InteractLabel';
@@ -42,12 +42,18 @@ import type { InteriorScene } from './InteriorScene';
 import { tr } from '../../i18n';
 
 const TILE = 16;
+/** The hero and the NPCs out here, from the feet to the top of the head. */
+const FIGURE_HEIGHT = CHARACTER_HEIGHT * OVERWORLD_CHARACTER_SCALE;
+/** The hero's contact shadow, sized to his figure. */
+const SHADOW_WIDTH = 16 * OVERWORLD_CHARACTER_SCALE;
+const SHADOW_HEIGHT = 5.6 * OVERWORLD_CHARACTER_SCALE;
+const SHADOW_OFFSET = OVERWORLD_CHARACTER_SCALE;
 const NPC_DIALOG_COOLDOWN_MS = 1200;
 const SIGN_READ_DISTANCE = 28;
-/** A signpost is shorter than a person: its key cap floats just above the board. */
-const SIGN_LABEL_LIFT = 15;
+/** A signpost is shorter than a person: its key cap floats just above the board, clear of the head of a hero reading it. */
+const SIGN_LABEL_LIFT = FIGURE_HEIGHT - 12;
 /** A door's key cap floats over it, above the hero's head. */
-const DOOR_LABEL_LIFT = 23;
+const DOOR_LABEL_LIFT = FIGURE_HEIGHT - 4;
 /** The nearest room's painting starts downloading this close to its door. */
 const DOOR_PREFETCH_DISTANCE = 96;
 const DOOR_FADE_OUT_MS = 220;
@@ -376,7 +382,7 @@ export class WorldScene extends Phaser.Scene {
     // Spawn player
     this.spawnX = mapResult.spawnX;
     this.spawnY = mapResult.spawnY;
-    this.player = new Player(this, this.spawnX, this.spawnY);
+    this.player = new Player(this, this.spawnX, this.spawnY, OVERWORLD_CHARACTER_SCALE);
 
     this.createWorldAtmosphere();
     this.lighting = new WorldLighting(this);
@@ -659,7 +665,7 @@ export class WorldScene extends Phaser.Scene {
   private createWorldAtmosphere(): void {
     const viewW = this.scale.width;
 
-    this.playerShadow = this.add.image(this.player.x, this.player.y + 1, FX.shadow).setDisplaySize(16, 5.6).setAlpha(0.5);
+    this.playerShadow = this.add.image(this.player.x + SHADOW_OFFSET, this.player.y + SHADOW_OFFSET, FX.shadow).setDisplaySize(SHADOW_WIDTH, SHADOW_HEIGHT).setAlpha(0.5);
     this.playerShadow.setDepth(4);
     this.playerCastShadow = new SpriteShadow(this, this.player);
 
@@ -718,8 +724,8 @@ export class WorldScene extends Phaser.Scene {
     this.player.setDepth(5 + this.player.y / 10000);
 
     if (this.playerShadow) {
-      this.playerShadow.setPosition(this.player.x + 1, this.player.y + 1);
-      this.playerShadow.setDisplaySize(this.player.isMoving() ? 17.2 : 16, 5.6);
+      this.playerShadow.setPosition(this.player.x + SHADOW_OFFSET, this.player.y + SHADOW_OFFSET);
+      this.playerShadow.setDisplaySize(this.player.isMoving() ? SHADOW_WIDTH * 1.075 : SHADOW_WIDTH, SHADOW_HEIGHT);
       this.playerShadow.setAlpha(this.player.y >= CAVE_START_ROW * TILE ? 0.62 : 0.5);
     }
     // No sun underground.
@@ -732,14 +738,15 @@ export class WorldScene extends Phaser.Scene {
       const onGrass = this.isPlayerInTallGrass();
       if (!onGrass) {
         // A small puff of dust kicked up by the step.
-        const dust = this.add.image(this.player.x + Phaser.Math.Between(-3, 3), this.player.y + 1, FX.glow)
-          .setDisplaySize(5, 3).setTint(inCave ? 0x8fa8b0 : 0xd8c69a).setAlpha(inCave ? 0.32 : 0.4).setDepth(4.5);
+        const size = OVERWORLD_CHARACTER_SCALE;
+        const dust = this.add.image(this.player.x + Phaser.Math.Between(-3, 3) * size, this.player.y + size, FX.glow)
+          .setDisplaySize(5 * size, 3 * size).setTint(inCave ? 0x8fa8b0 : 0xd8c69a).setAlpha(inCave ? 0.32 : 0.4).setDepth(4.5);
         this.tweens.add({
           targets: dust,
-          x: dust.x + Phaser.Math.Between(-5, 5),
-          y: dust.y - 2,
-          displayWidth: 12,
-          displayHeight: 6,
+          x: dust.x + Phaser.Math.Between(-5, 5) * size,
+          y: dust.y - 2 * size,
+          displayWidth: 12 * size,
+          displayHeight: 6 * size,
           alpha: 0,
           duration: 520,
           ease: 'Quad.easeOut',
@@ -1074,7 +1081,7 @@ export class WorldScene extends Phaser.Scene {
 
   // ── Spawning ──────────────────────────────────────────────────────────────
 
-  private createInteractLabel(x: number, y: number, lift = CHARACTER_HEIGHT): Phaser.GameObjects.Container {
+  private createInteractLabel(x: number, y: number, lift = FIGURE_HEIGHT): Phaser.GameObjects.Container {
     return buildInteractLabel(this, x, y, { lift });
   }
 
@@ -1337,7 +1344,7 @@ export class WorldScene extends Phaser.Scene {
     for (let index = 0; index < 3; index++) {
       const ring = this.add.graphics()
         .setDepth(9)
-        .setPosition(this.npcSprite.x, this.npcSprite.y - 12)
+        .setPosition(this.npcSprite.x, this.npcSprite.y - 12 * OVERWORLD_CHARACTER_SCALE)
         .setScale(0.45)
         .setAlpha(0.8);
       ring.lineStyle(index === 1 ? 2 : 1, index === 2 ? 0xff7a2b : 0x6ea8d8, 0.92);
@@ -2378,14 +2385,14 @@ export class WorldScene extends Phaser.Scene {
     this.tweens.add({
       targets: item,
       x: this.player.x,
-      y: this.player.y - CHARACTER_HEIGHT * 0.6,
+      y: this.player.y - FIGURE_HEIGHT * 0.6,
       scaleX: 1.18 * LOST_TRACK_SCALE,
       scaleY: 1.18 * LOST_TRACK_SCALE,
       angle: item.angle + 720,
       duration: 820,
       ease: 'Cubic.easeInOut',
       onComplete: () => {
-        this.spawnFinalMasterBurst(this.player.x, this.player.y - CHARACTER_HEIGHT * 0.55);
+        this.spawnFinalMasterBurst(this.player.x, this.player.y - FIGURE_HEIGHT * 0.55);
         item.destroy();
       },
     });
@@ -2853,7 +2860,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * The NPC heal (src/game/world/NpcHeal.ts). Its sound starts with it, the
+   * The NPC heal (src/game/world/heal/). Its sound starts with it, the
    * hero is healed on the sound's peak, and the conversation resumes after.
    */
   private playHealingMusic(

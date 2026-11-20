@@ -16,8 +16,9 @@ export const ROOM_WIDTH = 1536 / ART_PX;
 export const ROOM_HEIGHT = 1024 / ART_PX;
 
 /**
- * Indoors the hero is drawn at this multiple of his overworld size: sprite,
- * shadow and body alike (InteriorScene). His body is then about 70 x 44
+ * Indoors the hero is drawn at this multiple of his base size (CHARACTER_HEIGHT;
+ * the overworld has its own OVERWORLD_CHARACTER_SCALE): sprite, shadow and
+ * body alike (InteriorScene). His body is then about 70 x 44
  * painted px with its bottom edge at his feet, so every walkway to a reach
  * zone and to the exit must be at least that wide.
  */

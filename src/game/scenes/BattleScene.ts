@@ -6,6 +6,7 @@ import { ATTACKS, applyDamageVariance } from '../systems/AttackSystem';
 import { BOSS_DEFINITION } from '../entities/Enemy';
 import { BOSS_PHASES } from '../entities/Boss';
 import { createBattleFxTextures } from '../art/battleFx';
+import { BATTLE_HERO_SCALE } from '../art/characters';
 import { BattleFx } from '../battle/BattleFx';
 import { Combatant } from '../battle/Combatant';
 import type { Hit, MoveContext, MoveScript } from '../battle/moves';
@@ -410,8 +411,9 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // ── Player sprite — slides in onto its platform ──────────────────────
-    // Largest of the two: its platform is the nearest thing in the artwork.
-    const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.37, 10);
+    // His platform is the nearest thing in the artwork. The hero's own scale
+    // comes after the headroom clamp, so it holds in every arena shape.
+    const playerTargetH = heightForPlatform(platformAnchors.player.y, figureH * 0.37, 10) * BATTLE_HERO_SCALE;
     this.playerSprite = this.add.sprite(0, 0, PLAYER_BATTLE_TEXTURE).setDepth(5);
     this.plantOnPlatform(this.playerSprite, PLAYER_BATTLE_TEXTURE, platformAnchors.player, playerTargetH);
     const playerArtWidth = this.getContentBounds(PLAYER_BATTLE_TEXTURE).width * this.playerSprite.scaleX;

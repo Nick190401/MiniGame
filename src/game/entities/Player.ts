@@ -1,16 +1,16 @@
 import Phaser from 'phaser';
 import { MobileInput } from '../input/MobileInput';
 import { PLAYER_TEXTURES, WALK_FRAMES, type PlayerDirection } from '../assets/PlayerTextures';
-import { CHARACTER_FRAME, CHARACTER_TEXELS } from '../art/characters';
+import { CHARACTER_FRAME, setCharacterFootprint } from '../art/characters';
 import { TEXEL } from '../render/RenderScale';
 
 const SPEED = 120;
 // One full stride (all eight walk frames) every ~560 ms at walking speed.
 const WALK_FRAME_MS = 70;
 const WORLD_MODEL_SCALE = 1 / TEXEL;
-// Collision footprint in world units, converted to texture space for Arcade.
-const BODY_WIDTH = 9.45 * TEXEL;
-const BODY_HEIGHT = 5.775 * TEXEL;
+// Collision footprint in world units.
+const BODY_WIDTH = 9.45;
+const BODY_HEIGHT = 5.775;
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -26,21 +26,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private currentFrame = 0;
   private moving = false;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  /** `modelScale` draws the figure at that multiple of its base size; the collision footprint stays as it is. */
+  constructor(scene: Phaser.Scene, x: number, y: number, modelScale = 1) {
     super(scene, x, y, PLAYER_TEXTURES.down[0]);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
     this.setDepth(5 + y / 10000);
-    this.setScale(WORLD_MODEL_SCALE);
+    this.setScale(WORLD_MODEL_SCALE * modelScale);
     this.setOrigin(CHARACTER_FRAME.footX / CHARACTER_FRAME.w, CHARACTER_FRAME.footY / CHARACTER_FRAME.h);
 
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(BODY_WIDTH, BODY_HEIGHT);
     // Keep the collision footprint anchored beneath the feet for every pose.
-    body.setOffset(CHARACTER_FRAME.footX * CHARACTER_TEXELS - BODY_WIDTH / 2, CHARACTER_FRAME.footY * CHARACTER_TEXELS - BODY_HEIGHT);
+    setCharacterFootprint(this, BODY_WIDTH, BODY_HEIGHT, modelScale);
     this.applyVisualFrame('down', 0);
-    body.setCollideWorldBounds(true);
+    (this.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(true);
 
     // Keyboard setup
     if (scene.input.keyboard) {

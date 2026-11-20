@@ -1,4 +1,5 @@
 import { BFX } from '../art/battleFx';
+import { BATTLE_HERO_SCALE } from '../art/characters';
 import { DEPTH, ease, lerp, type Point } from './BattleFx';
 import type { Combatant } from './Combatant';
 import { degrees, mixPoint, releaseAura, sideways, unit, type MoveContext, type MoveScript } from './moves';
@@ -14,8 +15,12 @@ import { degrees, mixPoint, releaseAura, sideways, unit, type MoveContext, type 
 
 const WHITE = 0xffffff;
 
-/** Effects are authored for the landscape arena; this keeps them in proportion elsewhere. */
-export const scaleOf = (fighter: Combatant) => Math.max(0.75, Math.min(1.4, fighter.height / 133));
+/**
+ * Effects are authored for the landscape arena; this keeps them in proportion
+ * elsewhere. The hero is the yardstick (every caller passes him): there he
+ * stands 133 px tall before BATTLE_HERO_SCALE, which must not shrink the effects.
+ */
+export const scaleOf = (hero: Combatant) => Math.max(0.75, Math.min(1.4, hero.height / (133 * BATTLE_HERO_SCALE)));
 
 /** The leading fist of the battle stance art. */
 const fist = (hero: Combatant) => hero.at(0.25, 0.64);
@@ -121,7 +126,7 @@ const bassDrop: MoveScript = ctx => {
   fx.animate(140, t => footGlow.setAlpha(0.9 * t));
 
   // Leap.
-  const shadow = fx.image(BFX.glow, feet.x, feet.y + 2, { color: 0x000000, blend: 'normal', alpha: 0, w: hero.width * 1.3, h: 18 * k, depth: DEPTH.behind });
+  const shadow = fx.image(BFX.glow, feet.x, feet.y + 2, { color: 0x000000, blend: 'normal', alpha: 0, w: hero.width * 1.3, h: hero.width * 0.225, depth: DEPTH.behind });
   fx.at(140, () => {
     hero.pose({ sx: 0.93, sy: 1.1, dy: -leap * 0.9 }, 280, 'Cubic.easeOut');
     for (const side of [-1, 1]) {
@@ -132,7 +137,7 @@ const bassDrop: MoveScript = ctx => {
     }
     fx.ring(feet.x, feet.y, { color: WHITE, from: 30 * k, to: 150 * k, life: 300, squash: 0.28, alpha: 0.6 });
     fx.animate(280, t => {
-      shadow.setAlpha(0.38 * (1 - 0.45 * t)).setDisplaySize(hero.width * 1.3 * (1 - 0.4 * t), 18 * k * (1 - 0.4 * t));
+      shadow.setAlpha(0.38 * (1 - 0.45 * t)).setDisplaySize(hero.width * 1.3 * (1 - 0.4 * t), hero.width * 0.225 * (1 - 0.4 * t));
       footGlow.setAlpha(0.9 * (1 - t));
     }, () => footGlow.destroy());
     const embers = fx.trail(feetOf(hero, 4 * k), { colors: [hot, color, deep], size: [5 * k, 1], life: [300, 480], frequency: 20, speed: [10, 40], gravity: 70 });
@@ -171,7 +176,7 @@ const bassDrop: MoveScript = ctx => {
   fx.at(710, () => {
     hero.pose({ sx: 1.18, sy: 0.8 }, 0);
     fx.at(70, () => hero.pose({}, 280, 'Back.easeOut'));
-    shadow.setAlpha(0.42).setDisplaySize(hero.width * 1.5, 20 * k);
+    shadow.setAlpha(0.42).setDisplaySize(hero.width * 1.5, hero.width * 0.25);
     fx.animate(420, t => shadow.setAlpha(0.42 * (1 - t)), () => shadow.destroy());
 
     // The flash sits behind the hero so the figure stays readable in it.
