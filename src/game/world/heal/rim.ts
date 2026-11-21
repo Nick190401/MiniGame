@@ -31,7 +31,7 @@ export function createRim(kit: HealDriver): { frame(t: number): void } {
     : [[0, 150, 0.8, SINE_O], [T.peak, 60, 1, QUAD_O], [T.drop, 300, 0.8, SINE_IO], [3300, 600, 0, SINE_IO]]);
   const cocoonAlpha = new Track(0, calm
     ? [[T.peak, 215, 0.5, SINE_O], [T.drop, 600, 0, SINE_IO]]
-    : [[1350, 85, 0.4, SINE_IO], [T.peak, 50, 0.62, QUAD_O], [T.drop, 60, 0.4, QUAD_O], [1760, 500, 0, SINE_IO]]);
+    : [[1350, 85, 0.4, SINE_IO], [T.peak, 50, 0.62, QUAD_O], [T.fall, 60, 0.4, QUAD_O], [1760, 500, 0, SINE_IO]]);
   const lineOff = 0.9 * heroK;
   const glowOff = 1.9 * heroK;
 

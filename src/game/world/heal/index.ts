@@ -4,7 +4,7 @@ import { HFX, createHealFxTextures } from '../../art/healFx';
 import { RENDER_SCALE, WORLD_ZOOM } from '../../render/RenderScale';
 import { kianOpening } from './kian';
 import {
-  CUBIC_O, EXPO_O, QUAD_I, QUAD_O, SINE_I, SINE_IO, SINE_O, T, Track, WARM, clamp01, createHealKit, lerp, lerpColor,
+  CUBIC_O, EXPO_O, FALL_MS, QUAD_I, QUAD_O, SINE_I, SINE_IO, SINE_O, T, Track, WARM, clamp01, createHealKit, lerp, lerpColor,
   scaleColor,
   type NpcHealHandle, type NpcHealOptions, type Opening,
 } from './kit';
@@ -37,6 +37,7 @@ const SHAKE_MS = 300;
 const STAGED_BY = 180;
 /** The hero is back on the ground. */
 const LANDED = 2230;
+const TURN_BACK = 2480;
 
 export function playNpcHeal(scene: Phaser.Scene, opts: NpcHealOptions): NpcHealHandle {
   createHealFxTextures(scene);
@@ -72,11 +73,12 @@ export function playNpcHeal(scene: Phaser.Scene, opts: NpcHealOptions): NpcHealH
   const wearyTrack = new Track(0, calm ? [[0, 600, 1, SINE_IO], [1435, 400, 0, SINE_IO]] : [[0, 400, 1, SINE_IO], [1435, 265, 0, SINE_IO]]);
   const WEARY_END = calm ? 1900 : 1760;
   // Self-light: gain g, climb h (feet to cap) and evening-out e.
-  const gainTrack = new Track(0, calm ? [[1435, 200, 0.24, SINE_IO], [1700, 500, 0, SINE_I]] : [[1435, 60, 0.32, QUAD_O], [1700, 60, 0.18, QUAD_O], [1760, 440, 0, SINE_I]]);
+  const gainTrack = new Track(0, calm ? [[1435, 200, 0.2, SINE_IO], [1700, 500, 0, SINE_I]] : [[1435, 60, 0.18, QUAD_O], [T.fall, FALL_MS, 0.12, QUAD_O], [1760, 440, 0, SINE_I]]);
   const climbTrack = new Track(calm ? 1 : 0, calm ? [] : [[1435, 265, 1, SINE_IO]]);
   const evenTrack = new Track(calm ? 1 : 0, calm ? [] : [[1700, 200, 1, SINE_IO]]);
-  // Lit through for the loudest moment, then his colours come back. Never filled to white: he and his rim stay readable.
-  const blazeAlpha = new Track(0, calm ? [[1435, 215, 0.3, SINE_O], [1700, 500, 0, SINE_IO]] : [[1435, 40, 0.3, QUAD_O], [1515, 120, 0, QUAD_O]]);
+  // Lit through for the loudest moment, then his colours come back. A touch only: more, and with the light around
+  // him he stands there as a pale ghost. He and his rim stay readable.
+  const blazeAlpha = new Track(0, calm ? [[1435, 215, 0.18, SINE_O], [1700, 500, 0, SINE_IO]] : [[1435, 40, 0.12, QUAD_O], [1485, 110, 0, QUAD_O]]);
   const BLAZE_END = calm ? 2210 : 1640;
   const emberSize = new Track(calm ? 8 : 10, calm ? [] : [[1350, 80, 6, SINE_I], [1435, 160, 16, QUAD_O]]);
   const emberAlpha = new Track(0, calm
@@ -143,7 +145,8 @@ export function playNpcHeal(scene: Phaser.Scene, opts: NpcHealOptions): NpcHealH
   at(1890, () => opts.onNotice());
   at(LANDED, restoreShadow);
   at(2200, () => copy.setVisible(false));
-  at(2350, () => {
+  // He turns back to the healer once he stands again and the number has gone: a turn on its own, not part of the landing.
+  at(TURN_BACK, () => {
     player.faceToward(nX, nY);
     opts.syncHeroShadow();
   });

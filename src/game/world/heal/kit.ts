@@ -18,8 +18,9 @@ import { IS_IOS } from '../../../platform';
  *   already multiplied; multiply your own body-attached offsets and sizes (hands, instrument,
  *   glints on a body) yourself, or use onHero(). onNpc() takes world units. World-sized things
  *   (ground rings, columns, sigils, shock fronts) keep their sizes.
- * - Time: `T` has peak 1435, drop 1700, handBack 2600, dialog 2680 and end 4000. The clock runs to T.end; after
- *   T.handBack nothing may touch hero, healer or camera, and frame() keeps running to T.end.
+ * - Time: `T` has peak 1435, fall 1640, drop 1700, handBack 2600, dialog 2680 and end 4000. The clock runs to T.end;
+ *   after T.handBack nothing may touch hero, healer or camera, and frame() keeps running to T.end. The release's light
+ *   steps down from T.fall (a shot does with `fall`), so it is down when the sound cuts at T.drop.
  *   at() may be called at any moment, also from inside a cue or frame(), for any time up to T.end.
  *   ONSETS lists the sound's measured onsets; level(t) is its loudness 0..1 (HEAL_LEVEL, 50 ms
  *   windows, interpolated): let glow, bar heights or ring thickness breathe with it.
@@ -107,9 +108,12 @@ export const ONSETS = {
 } as const;
 /**
  * The sequence's own times in ms: hero, healer and camera are handed back at handBack; at end (4000) everything
- * is destroyed, so an afterglow has to have faded out by about 3950.
+ * is destroyed, so an afterglow has to have faded out by about 3950. The sound cuts at drop; the light starts its
+ * step down at fall, the 50 to 60 ms the step takes ahead of it, so the cut is seen when it is heard.
  */
-export const T = { peak: 1435, drop: 1700, handBack: 2600, dialog: 2680, end: 4000 } as const;
+export const T = { peak: 1435, fall: 1640, drop: 1700, handBack: 2600, dialog: 2680, end: 4000 } as const;
+/** How long the release's light takes to step down from T.fall. */
+export const FALL_MS = 50;
 
 /** A healer's light: one colour idea, from its saturated depth to its near-white core. */
 export interface Palette {
@@ -209,6 +213,8 @@ interface Shot {
   fadeEase: Ease;
   /** Opening ripples: faded by the 1195 gather and gone at 1350. */
   gather: boolean;
+  /** The share of its light left after the release's step down at T.fall; 1 for none. */
+  fall: number;
   /** Height from, to when it does not follow the width. */
   height?: readonly [number, number];
   x: number;
@@ -298,6 +304,8 @@ export interface ShotOptions {
   ease?: Ease;
   fadeEase?: Ease;
   gather?: boolean;
+  /** A light of the release: it steps down to this share at T.fall, with everything else. */
+  fall?: number;
   /** Starts after this many ms (hidden until then). */
   delay?: number;
   /** Drift over the life in units, eased like the size. */
@@ -452,6 +460,12 @@ export interface HealKit {
   readonly image: (key: string, x: number, y: number, w: number, h: number, color: number, depth: number, blend: Blend) => Phaser.GameObjects.Image;
   /** A short light that starts now, grows and fades on its own, then is destroyed. */
   readonly shot: (key: string, x: number, y: number, o: ShotOptions) => Phaser.GameObjects.Image;
+  /**
+   * A light on the ground, drawn twice: plain in `base` at full strength under the same shape as fainter added light.
+   * Added light alone takes the colour of what lies under it (blue turns lavender on a path); the plain layer
+   * replaces the ground under the line and so holds the hue on any of them.
+   */
+  readonly groundShot: (key: string, x: number, y: number, o: Omit<ShotOptions, 'blend'>, base: number) => void;
   /** A ground ring growing from radius rx0 to rx1. With `gather` it fades with the 1195 gather and is gone at 1350. */
   readonly ring: (x: number, y: number, rx0: number, rx1: number, alpha: number, duration: number, color: number, gather?: boolean) => Phaser.GameObjects.Image;
   /** A glint that pops in place and turns a little (calm: a plain fade). */
@@ -662,10 +676,14 @@ export function createHealKit(scene: Phaser.Scene, opts: NpcHealOptions, staged?
     shots.push({
       image: img, t0: clock + delay, duration: o.duration, size0: o.size[0], size1: o.size[1], grow: o.grow ?? o.duration,
       settle: o.settle ?? 1, aspect, peak: o.alpha, rise, hold: o.hold ?? 0, angle: o.angle ?? 0, spin: o.spin ?? 0,
-      ease: o.ease ?? QUAD_O, fadeEase: o.fadeEase ?? QUAD_O, gather: o.gather ?? false,
+      ease: o.ease ?? QUAD_O, fadeEase: o.fadeEase ?? QUAD_O, gather: o.gather ?? false, fall: o.fall ?? 1,
       height: o.height, x, y, moveX: o.move ? o.move[0] : 0, moveY: o.move ? o.move[1] : 0,
     });
     return img;
+  };
+  const groundShot = (key: string, x: number, y: number, o: Omit<ShotOptions, 'blend'>, base: number) => {
+    shot(key, x, y, { ...o, color: base, blend: 'normal' });
+    shot(key, x, y, { ...o, alpha: 0.6 * o.alpha, blend: 'add' });
   };
   /** A soft light at the hero's chest whenever something arrives. */
   const tick = () => shot(FX.glow, C.x, C.y, calm
@@ -782,6 +800,7 @@ export function createHealKit(scene: Phaser.Scene, opts: NpcHealOptions, staged?
       if (age < sh.rise) alpha *= age / sh.rise;
       else alpha *= 1 - sh.fadeEase(clamp01((age - sh.rise - sh.hold) / Math.max(1, sh.duration - sh.rise - sh.hold)));
       if (sh.gather) alpha *= 1 - QUAD_I(progress(t, 1195, 155));
+      if (sh.fall < 1) alpha *= lerp(1, sh.fall, QUAD_O(progress(t, T.fall, FALL_MS)));
       sh.image.setDisplaySize(size, sh.height ? lerp(sh.height[0], sh.height[1], g) : size * sh.aspect).setAlpha(alpha);
       if (sh.moveX || sh.moveY) sh.image.setPosition(sh.x + sh.moveX * g, sh.y + sh.moveY * g);
       if (sh.spin) sh.image.setAngle(sh.angle + sh.spin * QUAD_O(k));
@@ -810,7 +829,7 @@ export function createHealKit(scene: Phaser.Scene, opts: NpcHealOptions, staged?
     DUSK, GROUND, TROUGH, RIPPLE, BLOOM, ARCS, SELF, CHEST, TICK, INSTR, VIG, AIR, NOTES, LABEL,
     BACK, MID, FRONT, SKY, GLARE,
     onNpc, onHero, headN, headH, headNi, headHi, bodyN, bodyH, clearOfFaces, missesNpc, pathClear, routes, routeLength,
-    own, drop, image, shot, ring, glint, tick, at, heroY, particle, level, rnd,
+    own, drop, image, shot, groundShot, ring, glint, tick, at, heroY, particle, level, rnd,
     get clock() { return clock; },
     set clock(t) { clock = t; },
     get lift() { return currentLift; },

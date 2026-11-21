@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import { FX } from '../../art/fx';
 import { HFX } from '../../art/healFx';
-import { HFX_KRYS, KRYS_BAND_ASPECT, KRYS_MODE_CREST, KRYS_PLATES, KRYS_WAVE_CREST, krysPlateNodes } from '../../art/healFxKrys';
 import {
-  BACK_O, CUBIC_O, EPS, QUAD_I, QUAD_O, SINE_IO, SINE_O, Track, clamp01, lerp, lerpColor, progress, pulse,
+  HFX_KRYS, KRYS_BAND_ASPECT, KRYS_MODE_CREST, KRYS_PLATES, KRYS_STAND_CREST, KRYS_WAVE_CREST, krysPlateNodes,
+} from '../../art/healFxKrys';
+import {
+  CUBIC_O, EPS, EXPO_O, FALL_MS, QUAD_I, QUAD_O, SINE_IO, SINE_O, Track, clamp01, lerp, lerpColor, progress, pulse,
   type Ease, type HealKit, type Opening, type Point,
 } from './kit';
 
@@ -11,6 +13,8 @@ type Img = Phaser.GameObjects.Image;
 
 /** One ring of the standing wave on the column: it stays at its node and breathes against its neighbours. */
 interface Node { img: Img; y: number; w: number; alpha: number; sign: number; t0: number; leave: number }
+/** One ring of the standing wave on the ground: plain blue under the added light, at its node radius. */
+interface Stand { base: Img; lit: Img; r: number; alpha: number; sign: number; t0: number }
 /** Two opposite phases of a ring's fifth mode, cross-faded: the ring shivers in place instead of turning. */
 interface Hum { a: Img; b: Img; t0: number; dur: number; r0: number; r1: number; peak: number; rise: number; hz: number; ease: Ease; fade: Ease; gather: boolean }
 /** The lead crest of a ground wave, kept to find where it crosses the other side's. */
@@ -25,18 +29,23 @@ interface Grain {
 const GROUND_Y = 0.36;
 /** The staff's hum on the ground, against the radii its cues give. */
 const HUM_SCALE = 1.5;
+/** The standing rings leave the sigil's rim (its radius) for nodes this far apart. */
+const STAND_FROM = 62;
+const STAND_FIRST = 82;
+const STAND_STEP = 22;
 
 /**
  * Professor Krys strikes her tuning-fork staff. The ground under her is a resonating plate: light gathers on
  * its nodal lines and re-forms into a richer figure on every strike, her wave trains cross his and light the
- * crossings, and the staff hums into the ground in its own mode. At the peak the column of light carries a
- * standing wave, rings at fixed nodes that breathe against each other, and her trains and his cross far out
- * over the ground. Nothing of hers but the strike's glint is drawn at the height of a face.
+ * crossings, and the staff hums into the ground in its own mode. At the peak everything resonates: fine rings
+ * snap out of the sigil's rim to evenly spaced nodes across the ground and stand there, the column carries the
+ * same standing wave upward, neighbours breathing against each other, and one train of hers runs out across
+ * them. Nothing of hers but the strike's glint is drawn at the height of a face.
  */
 export function krysOpening(kit: HealKit): Opening {
   const {
-    calm, lite, pX, pY, nX, nY, sx, heroK, npcK, forkOffset, labelY, pal, view, headHi, headNi,
-    GROUND, RIPPLE, INSTR, AIR, onNpc, image, shot, tick, at, level, rnd, drop,
+    calm, lite, pX, pY, nX, nY, sx, heroK, npcK, forkOffset, labelY, pal, view, headHi, headNi, T,
+    GROUND, RIPPLE, INSTR, AIR, onNpc, image, shot, groundShot, tick, at, level, rnd, drop,
   } = kit;
   const o = forkOffset.x < 0 ? -1 : 1;
   // Beyond the tines, which are level with her face: far enough out that the strike glint stays off it.
@@ -48,9 +57,7 @@ export function krysOpening(kit: HealKit): Opening {
   const By = nY + 0.5 * npcK;
   const Hx = pX;
   const Hy = pY + 0.5 * heroK;
-  // Added light keeps little of a pale blue over grass: the wide light is pushed to a deeper blue.
   const mid = lerpColor(pal.glow, pal.deep, 0.5);
-  const deep = lerpColor(pal.deep, 0x1838ff, 0.5);
 
   // ── Fork: catch-light and strikes ───────────────────────────────────────
   const shimmer = image(FX.glow, 0, 0, 3, 3, 0xcfe6ff, INSTR, 'screen').setAlpha(0);
@@ -86,11 +93,13 @@ export function krysOpening(kit: HealKit): Opening {
     const rise = calm ? 0.35 * dur : 0.12 * dur;
     // The opening's trains hold until the gather takes them; later ones start fading at once, with the sound.
     const fade = calm || !gather ? SINE_IO : QUAD_I;
+    // Plain blue under the added light: added alone, a blue crest turns lavender where it runs over a path.
     for (let i = 0; i < n; i++) {
-      shot(HFX_KRYS.wave, x, y, {
-        size: [(2 * r0) / KRYS_WAVE_CREST, (2 * r1) / KRYS_WAVE_CREST], aspect: GROUND_Y, alpha: alpha * (1 - 0.3 * i), duration: dur, color: i ? deep : color,
-        depth: RIPPLE, blend: 'screen', rise, ease: CUBIC_O, fadeEase: fade, gather, delay: i * gap,
-      });
+      groundShot(HFX_KRYS.wave, x, y, {
+        size: [(2 * r0) / KRYS_WAVE_CREST, (2 * r1) / KRYS_WAVE_CREST], aspect: GROUND_Y, alpha: 0.85 * alpha * (1 - 0.3 * i), duration: dur,
+        color: i ? mid : color, depth: RIPPLE, rise, ease: CUBIC_O, fadeEase: fade, gather, delay: i * gap,
+        fall: !calm && kit.clock < T.fall ? 0.5 : 1,
+      }, i ? pal.deep : mid);
     }
     waves.push({ x, y, t0: kit.clock, dur, r0, r1, peak: alpha, rise, fade, hero, gather });
   };
@@ -125,6 +134,17 @@ export function krysOpening(kit: HealKit): Opening {
     nd.leave = calm ? 2440 : NODE_LEAVE[Math.min(NODE_LEAVE.length - 1, nodes.length - 1 - i)];
   });
   const NODE_OUT = calm ? 800 : 600;
+
+  // ── The standing wave on the ground: fine rings at evenly spaced nodes around the sigil ──
+  const stands: Stand[] = [];
+  for (let i = 0, n = calm ? 3 : lite ? 4 : 6; i < n; i++) {
+    stands.push({
+      base: image(HFX_KRYS.stand, pX, pY + 1, 1, 1, mid, RIPPLE - EPS, 'normal').setVisible(false),
+      lit: image(HFX_KRYS.stand, pX, pY + 1, 1, 1, lerpColor(pal.core, pal.glow, 0.4), RIPPLE, 'add').setVisible(false),
+      r: STAND_FIRST + STAND_STEP * i, alpha: 1 - 0.12 * i, sign: i % 2 ? -1 : 1, t0: 1435 + (calm ? 110 : 8) * i,
+    });
+  }
+  const STAND_END = calm ? 2750 : 2100;
 
   // ── The plate under her: three figures, simple to rich ──────────────────
   const plates = KRYS_PLATES.map(key => image(key, Bx, By, 1, 1, mid, GROUND + 2 * EPS, 'add').setAlpha(0));
@@ -264,18 +284,24 @@ export function krysOpening(kit: HealKit): Opening {
       shot(HFX_KRYS.wave, Hx, Hy, { size: [200, 16], aspect: GROUND_Y, alpha: 0.7, duration: 155, color: mid, depth: RIPPLE, blend: 'add', rise: 70, ease: QUAD_I, fadeEase: QUAD_I });
       hum(16, 3, 155, 0.7, 12, pal.core, { rise: 90, ease: QUAD_I });
     });
-    // The release: her train and then his run far out over the ground, past the shared flash, and cross there.
+    // The release: the ground's standing rings are drawn per frame; one train of hers runs out across them.
     at(1435, () => {
       strike();
       hum(3, 14, 500, 0.7, 9, pal.core);
-      train(false, 3, 8, 140, 620, 0.85, 90, pal.core, false);
+      train(false, 2, 8, 150, 620, 0.7, 90, pal.core, false);
     });
-    at(1555, () => train(true, 3, 6, 130, 560, 0.7, 90, mid, false));
-    at(1675, () => train(false, 2, 8, 110, 500, 0.45, 90, mid, false));
+    at(1555, () => hum(3, 13, 400, 0.6, 9, pal.core));
     // Afterglow: the staff hums on every chime, and three times a ring leaves it over the ground.
     [1765, 1830, 1970, 2030, 2235, 2360].forEach((time, i) => at(time, () => hum(3, 12, 900, 0.6 * 0.85 ** i, 6, pal.core)));
     [1765, 1970, 2235].forEach((time, i) => at(time, () => train(false, 1, 6, 36, 1100, 0.45 * 0.8 ** i, 0, mid, false)));
   }
+  at(STAND_END, () => {
+    for (const sd of stands) {
+      drop(sd.base);
+      drop(sd.lit);
+    }
+    stands.length = 0;
+  });
   at(3400, () => {
     plates.forEach(drop);
     grains.forEach(g => drop(g.img));
@@ -396,10 +422,33 @@ export function krysOpening(kit: HealKit): Opening {
         } else {
           // Neighbours breathe in opposite phase; all of them swell on the plateau's onsets and halve on the drop.
           w *= 1 + 0.08 * nd.sign * Math.sin((t - 1435) * 0.035) + 0.15 * (pulse(t, 1555, 1, 40, 180) + pulse(t, 1675, 1, 40, 180));
-          a = nd.alpha * QUAD_O(k) * (0.85 + 0.15 * level(t)) * lerp(1, 0.5, QUAD_O(progress(t, 1700, 90))) * (1 - QUAD_I(out));
+          a = nd.alpha * QUAD_O(k) * (0.85 + 0.15 * level(t)) * lerp(1, 0.5, QUAD_O(progress(t, T.fall, FALL_MS))) * (1 - QUAD_I(out));
           y += 10 * (1 - CUBIC_O(k)) - 36 * QUAD_I(out);
         }
         nd.img.setVisible(true).setPosition(pX, y).setDisplaySize(w, w * KRYS_BAND_ASPECT).setAlpha(clamp01(a));
+      }
+
+      // The standing wave on the ground.
+      for (const sd of stands) {
+        if (t < sd.t0) continue;
+        let r: number;
+        let a: number;
+        if (calm) {
+          r = sd.r * lerp(0.94, 1, SINE_O(progress(t, sd.t0, 700)));
+          a = 0.5 * sd.alpha * SINE_IO(progress(t, sd.t0, 400)) * (1 - SINE_IO(progress(t, 1900, 800)));
+        } else {
+          // Out of the sigil's rim to its node, brightest as it arrives; there it breathes against its neighbours,
+          // swells on the plateau's onset, steps down with the release and lets go outward.
+          const out = progress(t, T.fall + 50, 360);
+          r = lerp(STAND_FROM, sd.r, EXPO_O(progress(t, sd.t0, 220))) * (1 + 0.012 * sd.sign * Math.sin((t - 1435) * 0.03)) + 16 * QUAD_I(out);
+          a = sd.alpha * QUAD_O(progress(t, sd.t0, 60)) * lerp(1, 0.7, SINE_IO(progress(t, sd.t0 + 80, 150)))
+            * (0.85 + 0.15 * level(t) + 0.3 * pulse(t, 1555, 1, 40, 150))
+            * lerp(1, 0.35, QUAD_O(progress(t, T.fall, FALL_MS))) * (1 - QUAD_I(out));
+        }
+        const on = a > 0.004;
+        const w = (2 * r) / KRYS_STAND_CREST;
+        sd.base.setVisible(on).setDisplaySize(w, w * GROUND_Y).setAlpha(clamp01(0.8 * a));
+        sd.lit.setVisible(on).setDisplaySize(w, w * GROUND_Y).setAlpha(clamp01(0.75 * a));
       }
 
       // Hums.

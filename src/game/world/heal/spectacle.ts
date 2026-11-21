@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { FX } from '../../art/fx';
 import { HFX } from '../../art/healFx';
 import {
-  BACK_O, CUBIC_O, EXPO_O, ONSETS, QUAD_I, QUAD_O, SINE_I, SINE_IO, SINE_O, Track, around, boxDistance, clamp01, lerp, lerpColor,
-  progress, pulse, scaleColor, smoothstep,
+  BACK_O, CUBIC_O, EXPO_O, FALL_MS, ONSETS, QUAD_I, QUAD_O, SINE_I, SINE_IO, SINE_O, Track, around, boxDistance, clamp01, lerp, lerpColor,
+  progress, pulse,
   type Box, type Ease, type HealDriver, type Key, type Point,
 } from './kit';
 
@@ -11,9 +11,9 @@ import {
  * The light every healer shares, in three acts on the sound's loudness.
  * Gather (0-1350): the world dims to a stage, a sigil of written music turns up
  * under the hero layer by layer and light is drawn in across the ground.
- * Release (1435): a pillar from the ground to beyond the top edge, a shock
- * front on the ground and one through the air, rays and a burst. Afterglow
- * (1700 to T.end): the pillar thins to a thread and rising streaks, the sigil
+ * Release (1435): a pillar from the ground to beyond the top edge, rays and a
+ * burst; the shape that crosses the frame is each healer's own, not drawn here.
+ * Afterglow (1700 to T.end): the pillar thins to a thread and rising streaks, the sigil
  * steps down on the chimes, notes spiral up. Nothing here touches hero, healer
  * or camera, so it runs on past the hand-back.
  */
@@ -30,20 +30,16 @@ const ADD = Phaser.BlendModes.ADD;
 const CUBIC_I: Ease = v => v * v * v;
 const LATE: Ease = v => v ** 5;
 const NOTE_KEYS = [HFX.noteEighth, HFX.notePair, HFX.noteQuarter, HFX.noteSixteenth, HFX.noteHalf];
-/** How long the shock fronts travel, and the last moment anything may still be alight. */
-const SHOCK_MS = 660;
-/** The second crest of the ground front follows the first by this much. */
-const TRAIL_MS = 90;
+/** The last moment anything may still be alight. */
 const DARK = 3940;
-/** Radius of the crest in HFX.halo and HFX.shock, as a share of the texture's size. */
-const HALO_CREST = 0.39;
-const SHOCK_CREST = 0.468;
+/** The dimmer and the floor under the sigil are neutral: tinted, they lie on stone as a rust or olive stain. */
+const SHADE = 0x07090d;
 /** The HP label has faded by then (index.ts). */
 const LABEL_GONE = 2500;
 
 export function createSpectacle(kit: HealDriver): Spectacle {
   const {
-    scene, calm, lite, pX, pY, nX, nY, C, heroK, npcK, view, pal, T, level, rnd, at, own, drop, image, shot, glint,
+    scene, calm, lite, pX, pY, nX, nY, C, heroK, npcK, view, pal, T, level, rnd, at, own, drop, image, shot, groundShot, glint,
     GROUND, RIPPLE, BACK, VIG, SKY, AIR, NOTES, clearOfFaces, headNi,
   } = kit;
   const spawn = kit.coreParticle;
@@ -63,26 +59,28 @@ export function createSpectacle(kit: HealDriver): Spectacle {
   // The dimmer's border is solid: it has to stay outside the view wherever the pair stands in it.
   const stageW = Math.max(view.width * 1.45, 2 * (Math.max(midX - view.left, view.right - midX) + 16));
   const stageH = Math.max(view.height * 1.6, 2 * (Math.max(midY - view.top, view.bottom - midY) + 16));
-  const stage = image(HFX.stage, midX, midY, stageW, stageH, scaleColor(pal.deep, 0.09), VIG, 'normal').setAlpha(0);
+  const stage = image(HFX.stage, midX, midY, stageW, stageH, SHADE, VIG, 'normal').setAlpha(0);
   const stageAlpha = new Track(0, calm
     ? [[0, 1200, 0.56, SINE_IO], [1435, 265, 0.42, SINE_IO], [1935, T.handBack - 1935, 0, SINE_IO]]
     // It gives way to the light over 220 ms: with everything else at the peak, the frame as a whole must not jump.
-    : [[0, 700, 0.56, SINE_IO], [955, 395, 0.74, SINE_I], [1435, 220, 0.6, SINE_IO], [T.drop, 300, 0.4, SINE_O], [2000, T.handBack - 2000, 0, SINE_IO]]);
+    : [[0, 700, 0.56, SINE_IO], [955, 395, 0.74, SINE_I], [1435, 220, 0.6, SINE_IO], [T.fall, 300, 0.4, SINE_O], [2000, T.handBack - 2000, 0, SINE_IO]]);
   const stageTall = new Track(1, calm ? [[1435, 265, 2, SINE_IO]] : [[1350, 85, 1.2, QUAD_I], [1435, 190, 2.6, CUBIC_O]]);
-  const stageWide = new Track(1, [[T.drop, T.handBack - T.drop, 1.5, SINE_I]]);
+  const stageWide = new Track(1, [[T.fall, T.handBack - T.fall, 1.5, SINE_I]]);
 
   // ── Ground: a pool of light, the three sigil layers, comets winding in ──
-  // Added light takes the colour of the ground under it: blue on grass, cream on a path. A dark floor in the
-  // healer's colour under the sigil keeps the light one hue wherever the pair stands.
-  const floor = image(HFX.pool, pX, footY, 290, 290 * SQUASH, scaleColor(pal.deep, 0.22), GROUND - 0.001, 'normal').setAlpha(0);
+  // Added light takes the colour of the ground under it: blue on grass, cream on a path. A dark floor under the
+  // sigil keeps the light one hue wherever the pair stands. It goes while the sigil is still bright: under a
+  // fading sigil it is a dark patch, and one that differs from grass to path.
+  const floor = image(HFX.pool, pX, footY, 290, 290 * SQUASH, SHADE, GROUND - 0.001, 'normal').setAlpha(0);
   const floorAlpha = new Track(0, calm
-    ? [[120, 600, 0.68, SINE_IO], [2000, 1300, 0, SINE_IO]]
-    : [[120, 400, 0.74, SINE_IO], [T.drop, 300, 0.5, SINE_IO], [2400, 650, 0, SINE_IO]]);
-  const pool = image(HFX.pool, pX, footY, 110, 110 * SQUASH, pal.deep, GROUND, 'screen').setAlpha(0);
+    ? [[120, 600, 0.68, SINE_IO], [1900, 900, 0, SINE_IO]]
+    : [[120, 400, 0.66, SINE_IO], [T.fall, 300, 0.45, SINE_IO], [1950, 500, 0, SINE_IO]]);
+  // The underglow starts small and faint and grows with the crescendo: wide and dim, a warm colour is only brown.
+  const pool = image(HFX.pool, pX, footY, 80, 80 * SQUASH, lerpColor(pal.deep, pal.glow, 0.4), GROUND, 'screen').setAlpha(0);
   const poolAlpha = new Track(0, calm
-    ? [[215, 900, 0.3, SINE_IO], [1435, 215, 0.55, SINE_O], [T.drop, 300, 0.36, SINE_IO], [2000, 1400, 0, SINE_IO]]
-    : [[215, 700, 0.3, SINE_IO], [955, 395, 0.55, SINE_I], [1435, 60, 0.75, QUAD_O], [T.drop, 60, 0.4, QUAD_O], [1760, 1650, 0, SINE_IO]]);
-  const poolSize = new Track(110, calm ? [[1435, 265, 170, SINE_IO]] : [[955, 395, 140, SINE_I], [1435, 160, 210, EXPO_O], [T.drop, 600, 170, SINE_IO]]);
+    ? [[215, 900, 0.2, SINE_IO], [1435, 215, 0.55, SINE_O], [T.fall, 300, 0.36, SINE_IO], [2000, 1400, 0, SINE_IO]]
+    : [[215, 700, 0.16, SINE_IO], [955, 395, 0.5, SINE_I], [1435, 60, 0.75, QUAD_O], [T.fall, FALL_MS, 0.4, QUAD_O], [1760, 1650, 0, SINE_IO]]);
+  const poolSize = new Track(80, calm ? [[955, 480, 120, SINE_IO], [1435, 265, 170, SINE_IO]] : [[955, 395, 140, SINE_I], [1435, 160, 210, EXPO_O], [T.fall, 600, 170, SINE_IO]]);
 
   const sigil = (key: string, size: number, t0: number, turn: number, out: number, outFor: number, z: number) => {
     const angle = 360 * rnd();
@@ -101,11 +99,11 @@ export function createSpectacle(kit: HealDriver): Spectacle {
   const steps: Key[] = CHIMES.map((tc, i) => [tc + (calm ? 150 : 50), calm ? 150 : 60, 0.66 * (1 - (i + 1) / (CHIMES.length + 2.5)), SINE_IO]);
   const charge = new Track(0.5, calm
     ? [[955, 480, 0.75, SINE_IO], [1435, 215, 0.9, SINE_O], ...steps]
-    : [[955, 240, 0.68, SINE_IO], [1195, 155, 0.95, QUAD_I], [1435, 50, 1, QUAD_O], [T.drop, 60, 0.66, QUAD_O], ...steps]);
-  const heat = new Track(0.15, [[955, 480, 0.75, SINE_I], [1435, calm ? 215 : 40, 1, QUAD_O], [T.drop, 300, 0.4, SINE_O], [2400, 800, 0.2, SINE_IO]]);
+    : [[955, 240, 0.68, SINE_IO], [1195, 155, 0.95, QUAD_I], [1435, 50, 1, QUAD_O], [T.fall, FALL_MS, 0.66, QUAD_O], ...steps]);
+  const heat = new Track(0.15, [[955, 480, 0.75, SINE_I], [1435, calm ? 215 : 40, 1, QUAD_O], [T.fall, 300, 0.4, SINE_O], [2400, 800, 0.2, SINE_IO]]);
   /** Degrees per second of the outer layer. */
   const spin = new Track(calm ? 7 : 14, calm ? [] : [[595, 360, 26, SINE_IO], [1195, 240, 190, QUAD_I], [1435, 40, 300, QUAD_O], [1475, 520, 40, EXPO_O], [1995, 900, 12, SINE_O]]);
-  const squeeze = new Track(1, calm ? [] : [[1195, 240, 0.9, QUAD_I], [1435, 170, 1.1, EXPO_O], [T.drop, 520, 1.03, SINE_IO]]);
+  const squeeze = new Track(1, calm ? [] : [[1195, 240, 0.9, QUAD_I], [1435, 170, 1.1, EXPO_O], [T.fall, 520, 1.03, SINE_IO]]);
 
   // Each comet twice, like the sigil: plain in the healer's colour under the added light.
   const swirlArt = calm ? [] : [0, 120, 240].flatMap(a => [
@@ -124,25 +122,25 @@ export function createSpectacle(kit: HealDriver): Spectacle {
   // ── Light behind the pair: ground rays, the burst, the aura, the pillar ──
   const fan = image(HFX.rayFan, pX, footY + 2, 150, 90, pal.glow, BACK, 'add').setOrigin(0.5, 0.955).setAlpha(0);
   const fanAlpha = new Track(0, calm
-    ? [[1435, 215, 0.34, SINE_O], [T.drop, 300, 0.2, SINE_IO], [2000, 900, 0, SINE_IO]]
-    : [[1110, 240, 0.34, SINE_I], [1435, 50, 0.6, QUAD_O], [1485, 215, 0.42, SINE_O], [T.drop, 60, 0.14, QUAD_O], [1760, 900, 0, SINE_IO]]);
+    ? [[1435, 215, 0.34, SINE_O], [T.fall, 300, 0.2, SINE_IO], [2000, 900, 0, SINE_IO]]
+    : [[1110, 240, 0.34, SINE_I], [1435, 50, 0.6, QUAD_O], [1485, 215, 0.42, SINE_O], [T.fall, FALL_MS, 0.14, QUAD_O], [1760, 900, 0, SINE_IO]]);
   const fanWidth = new Track(calm ? 260 : 150, calm ? [] : [[1435, 200, 320, EXPO_O], [1635, 900, 290, SINE_IO]]);
   // The burst behind the pair, and long thin rays over the darkened world. Open in the middle: nothing lies on a face.
   const raysBack = image(HFX.raysOpen, C.x, C.y, 130, 130, pal.glow, BACK, 'add').setAlpha(0);
   // Over the darkened world it spans most of the frame, so it comes up slower than the burst behind the pair. Not on the iOS path.
   const raysFar = lite ? undefined : image(HFX.raysOpen, C.x, C.y, 130, 130, pal.core, SKY, 'add').setAlpha(0).setFlipX(true).setAngle(47);
   const raysAlpha = new Track(0, calm
-    ? [[1435, 215, 0.4, SINE_O], [T.drop, 300, 0.24, SINE_IO], [2000, 700, 0, SINE_IO]]
-    : [[1435, 40, 0.9, QUAD_O], [1520, 180, 0.6, SINE_O], [T.drop, 60, 0.14, QUAD_O], [1760, 520, 0, SINE_IO]]);
+    ? [[1435, 215, 0.4, SINE_O], [T.fall, 300, 0.24, SINE_IO], [2000, 700, 0, SINE_IO]]
+    : [[1435, 40, 0.9, QUAD_O], [1520, 180, 0.6, SINE_O], [T.fall, FALL_MS, 0.14, QUAD_O], [1760, 520, 0, SINE_IO]]);
   const farAlpha = new Track(0, calm
-    ? [[1435, 215, 0.17, SINE_O], [T.drop, 300, 0.1, SINE_IO], [2000, 700, 0, SINE_IO]]
-    : [[1435, 100, 0.38, SINE_IO], [1535, 165, 0.25, SINE_O], [T.drop, 60, 0.06, QUAD_O], [1760, 520, 0, SINE_IO]]);
+    ? [[1435, 215, 0.17, SINE_O], [T.fall, 300, 0.1, SINE_IO], [2000, 700, 0, SINE_IO]]
+    : [[1435, 100, 0.38, SINE_IO], [1535, 165, 0.25, SINE_O], [T.fall, FALL_MS, 0.06, QUAD_O], [1760, 520, 0, SINE_IO]]);
   const raysSize = new Track(calm ? 230 : 130, calm ? [] : [[1435, 150, 270, EXPO_O], [1585, 600, 300, SINE_O]]);
   const aura = image(HFX.bloom, C.x, C.y, 30, 30, pal.glow, BACK, 'screen').setAlpha(0);
   const auraAlpha = new Track(0, calm
-    ? [[955, 480, 0.25, SINE_IO], [1435, 215, 0.5, SINE_O], [T.drop, 300, 0.3, SINE_IO], [2000, 800, 0, SINE_IO]]
-    : [[955, 395, 0.5, SINE_I], [1435, 45, 0.7, QUAD_O], [1480, 220, 0.5, SINE_O], [T.drop, 60, 0.18, QUAD_O], [1760, 950, 0, SINE_IO]]);
-  const auraSize = new Track(34, calm ? [[1435, 215, 120, SINE_O]] : [[955, 395, 46, SINE_I], [1435, 120, 140, EXPO_O], [1555, 145, 124, SINE_O], [T.drop, 60, 90, QUAD_O], [1760, 900, 80, SINE_IO]]);
+    ? [[955, 480, 0.25, SINE_IO], [1435, 215, 0.5, SINE_O], [T.fall, 300, 0.3, SINE_IO], [2000, 800, 0, SINE_IO]]
+    : [[955, 395, 0.5, SINE_I], [1435, 45, 0.7, QUAD_O], [1480, 220, 0.5, SINE_O], [T.fall, FALL_MS, 0.18, QUAD_O], [1760, 950, 0, SINE_IO]]);
+  const auraSize = new Track(34, calm ? [[1435, 215, 120, SINE_O]] : [[955, 395, 46, SINE_I], [1435, 120, 140, EXPO_O], [1555, 145, 124, SINE_O], [T.fall, FALL_MS, 90, QUAD_O], [1760, 900, 80, SINE_IO]]);
 
   const colBase = footY + 2;
   // The texture's foot sits at 95.5 % of its height; the top ends well above the frame.
@@ -153,31 +151,26 @@ export function createSpectacle(kit: HealDriver): Spectacle {
   const colGlow = column(34, pal.glow);
   const colCore = column(18, hot);
   const deepWidth = new Track(calm ? 70 : 30, calm
-    ? [[1435, 215, 110, SINE_O], [T.drop, 300, 80, SINE_IO], [2000, 800, 40, SINE_IO]]
-    : [[1435, 70, 144, EXPO_O], [1505, 195, 126, SINE_O], [T.drop, 60, 54, QUAD_O], [1760, 700, 30, SINE_IO]]);
+    ? [[1435, 215, 110, SINE_O], [T.fall, 300, 80, SINE_IO], [2000, 800, 40, SINE_IO]]
+    : [[1435, 70, 144, EXPO_O], [1505, 195, 126, SINE_O], [T.fall, FALL_MS, 54, QUAD_O], [1760, 700, 30, SINE_IO]]);
   const deepAlpha = new Track(0, calm
-    ? [[1435, 215, 0.5, SINE_O], [T.drop, 300, 0.3, SINE_IO], [2000, 800, 0, SINE_IO]]
-    : [[1435, 45, 0.8, QUAD_O], [T.drop, 60, 0.32, QUAD_O], [1760, 700, 0, SINE_IO]]);
+    ? [[1435, 215, 0.5, SINE_O], [T.fall, 300, 0.3, SINE_IO], [2000, 800, 0, SINE_IO]]
+    : [[1435, 45, 0.8, QUAD_O], [T.fall, FALL_MS, 0.32, QUAD_O], [1760, 700, 0, SINE_IO]]);
   const glowWidth = new Track(calm ? 40 : 34, calm
-    ? [[1435, 215, 72, SINE_O], [T.drop, 300, 52, SINE_IO], [2000, 800, 28, SINE_IO]]
-    : [[1435, 70, 98, EXPO_O], [1505, 195, 84, SINE_O], [T.drop, 60, 36, QUAD_O], [1760, 800, 24, SINE_IO]]);
+    ? [[1435, 215, 72, SINE_O], [T.fall, 300, 52, SINE_IO], [2000, 800, 28, SINE_IO]]
+    : [[1435, 70, 98, EXPO_O], [1505, 195, 84, SINE_O], [T.fall, FALL_MS, 36, QUAD_O], [1760, 800, 24, SINE_IO]]);
   const glowAlpha = new Track(0, calm
-    ? [[1435, 215, 0.6, SINE_O], [T.drop, 300, 0.4, SINE_IO], [2000, 800, 0.2, SINE_IO], [2800, 500, 0, SINE_IO]]
-    : [[1350, 60, 0.35, QUAD_O], [1435, 45, 0.95, QUAD_O], [T.drop, 60, 0.42, QUAD_O], [1760, 800, 0.16, SINE_IO], [2590, 600, 0, SINE_IO]]);
+    ? [[1435, 215, 0.6, SINE_O], [T.fall, 300, 0.4, SINE_IO], [2000, 800, 0.2, SINE_IO], [2800, 500, 0, SINE_IO]]
+    : [[1350, 60, 0.35, QUAD_O], [1435, 45, 0.95, QUAD_O], [T.fall, FALL_MS, 0.42, QUAD_O], [1760, 800, 0.16, SINE_IO], [2590, 600, 0, SINE_IO]]);
   // The core is lit first, as a thread that shoots up on the 1350 onset, and is the last light to go.
   // Never narrower than 14: below that the texture's core is a hairline.
   const coreWidth = new Track(18, calm
-    ? [[1435, 215, 24, SINE_O], [T.drop, 300, 18, SINE_IO], [2000, 800, 14, SINE_IO]]
-    : [[1435, 60, 36, EXPO_O], [1495, 205, 28, SINE_O], [T.drop, 60, 17, QUAD_O], [1760, 700, 14, SINE_IO]]);
+    ? [[1435, 215, 24, SINE_O], [T.fall, 300, 18, SINE_IO], [2000, 800, 14, SINE_IO]]
+    : [[1435, 60, 36, EXPO_O], [1495, 205, 28, SINE_O], [T.fall, FALL_MS, 17, QUAD_O], [1760, 700, 14, SINE_IO]]);
   const coreAlpha = new Track(0, calm
-    ? [[1435, 215, 0.75, SINE_O], [T.drop, 300, 0.5, SINE_IO], [2000, 800, 0.34, SINE_IO], [2800, 600, 0, SINE_IO]]
-    : [[1350, 60, 0.6, QUAD_O], [1435, 40, 1, QUAD_O], [T.drop, 60, 0.6, QUAD_O], [1760, 700, 0.38, SINE_IO], [2490, 400, 0.26, SINE_IO], [2890, 460, 0, SINE_IO]]);
+    ? [[1435, 215, 0.75, SINE_O], [T.fall, 300, 0.5, SINE_IO], [2000, 800, 0.34, SINE_IO], [2800, 600, 0, SINE_IO]]
+    : [[1350, 60, 0.6, QUAD_O], [1435, 40, 1, QUAD_O], [T.fall, FALL_MS, 0.6, QUAD_O], [1760, 700, 0.38, SINE_IO], [2490, 400, 0.26, SINE_IO], [2890, 460, 0, SINE_IO]]);
   const columnRise = new Track(calm ? 1 : 0.12, calm ? [] : [[1350, 85, 1, QUAD_O]]);
-
-  // ── The shock front: one crest on the ground, drawn small by the halo and large by the shock texture, and one through the air ──
-  const shockSmall = image(HFX.halo, pX, footY, 20, 20 * SQUASH, hot, RIPPLE, 'add').setAlpha(0);
-  const shockLarge = image(HFX.shock, pX, footY, 150, 150 * SQUASH, hot, RIPPLE, 'add').setAlpha(0);
-  const shockTrail = image(HFX.shock, pX, footY, 150, 150 * SQUASH, pal.glow, RIPPLE, 'add').setAlpha(0);
 
   // ── Particles ───────────────────────────────────────────────────────────
   /** In front of everything where a straight rise passes neither face, else behind the pair. */
@@ -270,7 +263,7 @@ export function createSpectacle(kit: HealDriver): Spectacle {
 
   /** Streaks rising where the pillar stood. */
   const riser = (t: number) => {
-    const spread = lerp(15, 5, progress(t, T.drop, 1400));
+    const spread = lerp(15, 5, progress(t, T.fall, 1400));
     const life = Math.min(calm ? 1100 : 520 + 260 * rnd(), DARK - t);
     if (life < 250) return;
     spawn(HFX.streak, {
@@ -322,11 +315,11 @@ export function createSpectacle(kit: HealDriver): Spectacle {
 
     at(T.peak, () => {
       if (calm) {
-        // One slow ring on the ground where the fast version has its shock front, and a soft swell: both up with the sound's peak.
-        shot(HFX.halo, pX, footY, {
-          size: [60, 300], aspect: SQUASH, alpha: 0.4, duration: 900, rise: 215, color: lerpColor(pal.glow, pal.core, 0.4), depth: RIPPLE, blend: 'add',
+        // One slow ring on the ground and a soft swell, both up with the sound's peak; the healer adds a slow version of its own shape.
+        groundShot(HFX.halo, pX, footY, {
+          size: [60, 300], aspect: SQUASH, alpha: 0.4, duration: 900, rise: 215, color: lerpColor(pal.glow, pal.core, 0.4), depth: RIPPLE,
           ease: SINE_O, fadeEase: SINE_IO,
-        });
+        }, pal.glow);
         shot(HFX.wave, pX, footY, {
           size: [60, 260], aspect: SQUASH, alpha: 0.14, duration: 900, rise: 215, color: pal.glow, depth: GROUND + 0.005, blend: 'add',
           ease: SINE_O, fadeEase: SINE_IO,
@@ -358,32 +351,9 @@ export function createSpectacle(kit: HealDriver): Spectacle {
       note(40);
       note(120);
     });
-    // Sound travels as waves: a front through the air on the peak, and one more with a ground echo on the plateau's
-    // first onset. Nothing new starts on its second, 25 ms before the drop. The wide ones rise over 90 ms (they
-    // cross the whole frame) and are left out on the iOS path, which keeps the ground front and the pillar.
+    // What crosses the frame from here is the healer's own shape (krys.ts, quincy.ts, kian.ts): rings standing on
+    // the ground, grooves turning in the air, a fan of strings. A shared front made the three peaks one picture.
     if (!calm) {
-      const airFront = (alpha: number) => shot(HFX.shock, C.x, C.y, {
-        size: [70 / SHOCK_CREST, 215 / SHOCK_CREST], alpha, duration: 620, rise: 90, color: lerpColor(pal.glow, hot, 0.5), depth: SKY, blend: 'add',
-        ease: CUBIC_O, fadeEase: CUBIC_I,
-      });
-      at(T.peak, () => {
-        airFront(0.7);
-        if (!lite) shot(HFX.wave, C.x, C.y, { size: [200, 620], alpha: 0.12, duration: 620, rise: 90, color: pal.glow, depth: SKY, blend: 'add', ease: CUBIC_O, fadeEase: QUAD_I });
-      });
-      at(ONSETS.plateau[0], () => {
-        if (!lite) airFront(0.4);
-        shot(HFX.halo, pX, footY, {
-          size: [60, 300], aspect: SQUASH, alpha: 0.46, duration: 520, rise: 50, color: hot, depth: RIPPLE, blend: 'add',
-          ease: CUBIC_O, fadeEase: QUAD_I,
-        });
-      });
-    }
-    if (!calm) {
-      at(T.peak + SHOCK_MS + TRAIL_MS, () => {
-        drop(shockSmall);
-        drop(shockLarge);
-        drop(shockTrail);
-      });
       for (const tc of ONSETS.plateau) at(tc, () => note());
     } else {
       at(1930, () => note());
@@ -392,10 +362,10 @@ export function createSpectacle(kit: HealDriver): Spectacle {
 
     CHIMES.forEach((tc, i) => at(tc, () => {
       const fade = 1 - i / (CHIMES.length + 1);
-      shot(HFX.halo, pX, footY, {
+      groundShot(HFX.halo, pX, footY, {
         size: [46, 120 + 16 * i], aspect: SQUASH, alpha: 0.8 * fade, duration: calm ? 760 : 480, rise: calm ? 220 : 50,
-        color: lerpColor(pal.glow, pal.core, 0.4), depth: RIPPLE, blend: 'add', ease: CUBIC_O, fadeEase: QUAD_I,
-      });
+        color: lerpColor(pal.glow, pal.core, 0.4), depth: RIPPLE, ease: CUBIC_O, fadeEase: QUAD_I,
+      }, pal.glow);
       // Not on the second of two chimes that follow each other within 65 ms: those notes would bunch.
       if (calm || i % 2 === 0 || i === 5) note();
       const side = (i % 2 ? -1 : 1) * (kit.horizontal ? kit.sx : 1);
@@ -435,13 +405,16 @@ export function createSpectacle(kit: HealDriver): Spectacle {
     const glowing = Math.min(1, charge.at(t) * (0.8 + 0.2 * lv) + 0.35 * chime);
     const tint = lerpColor(pal.glow, pal.core, clamp01(heat.at(t) + 0.4 * chime));
     const squeezed = squeeze.at(t);
+    // In the afterglow the sigil leans from added light toward plain lines in the healer's colour: fading added
+    // light shows the ground through it, and the circle would look split where grass meets a path.
+    const plain = SINE_IO(progress(t, 2000, 500));
     for (const s of sigils) {
       if (t < s.t0) continue;
       const k = progress(t, s.t0, calm ? 520 : 340);
       const size = lerp(calm ? 0.9 : 0.45, 1, calm ? SINE_O(k) : BACK_O(k)) * squeezed;
-      s.art.setTint(tint);
+      s.art.setTint(tint).setAlpha(lerp(0.76, 0.48, plain));
       s.art.angle += s.turn * turned;
-      s.base.angle = s.art.angle;
+      s.base.setAngle(s.art.angle).setAlpha(lerp(0.42, 0.8, plain));
       s.box.setScale(size, size * SQUASH).setAlpha(glowing * QUAD_O(k) * (1 - SINE_IO(progress(t, s.out, s.outFor))));
     }
     if (swirlBox.active && t >= 595) {
@@ -482,21 +455,7 @@ export function createSpectacle(kit: HealDriver): Spectacle {
       colCore.setDisplaySize(coreWidth.at(t) * (1 + 0.4 * chime), high).setAlpha(Math.min(1, coreA * (0.85 + 0.15 * lv) + (coreA > 0 ? 0.25 * chime : 0)));
     }
 
-    if (!calm && shockLarge.active && t >= T.peak) {
-      const k = clamp01((t - T.peak) / SHOCK_MS);
-      const R = lerp(9, 190, CUBIC_O(k));
-      const swap = smoothstep(52, 78, R);
-      // The drop takes half of the front.
-      const gain = 0.95 * lerp(1, 0.5, progress(t, T.drop, 60));
-      shockSmall.setDisplaySize(R / HALO_CREST, (R / HALO_CREST) * SQUASH).setAlpha(gain * (1 - swap) * QUAD_O(clamp01(k * 12)));
-      shockLarge.setDisplaySize(R / SHOCK_CREST, (R / SHOCK_CREST) * SQUASH).setAlpha(gain * swap * (1 - CUBIC_I(k)));
-      // A fainter crest close behind: together they read as a wave of sound, not as one ring.
-      const k2 = clamp01((t - T.peak - TRAIL_MS) / SHOCK_MS);
-      const R2 = lerp(9, 190, CUBIC_O(k2));
-      shockTrail.setDisplaySize(R2 / SHOCK_CREST, (R2 / SHOCK_CREST) * SQUASH).setAlpha(0.5 * gain * smoothstep(52, 78, R2) * (1 - CUBIC_I(k2)));
-    }
-
-    if (t >= T.drop && t < 3300) {
+    if (t >= T.fall && t < 3300) {
       riserDue += dt * (t < 2500 ? 0.024 : 0.009) * few * (calm ? 0.5 : 1);
       for (; riserDue >= 1; riserDue--) riser(t);
       drifterDue += dt * (t < T.handBack ? 0.014 : 0.008) * few;

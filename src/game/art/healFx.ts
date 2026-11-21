@@ -24,7 +24,6 @@ export const HFX = {
   sigilStaff: 'hfx-sigil-staff',
   sigilWave: 'hfx-sigil-wave',
   sigilFifths: 'hfx-sigil-fifths',
-  shock: 'hfx-shock',
   wave: 'hfx-wave',
   halo: 'hfx-halo',
   swirl: 'hfx-swirl',
@@ -600,42 +599,10 @@ function paintSigilFifths(ctx: Ctx): void {
   circle(ctx, 8.2, 0.8, 0.6);
 }
 
-/**
- * The shock front: one thin bright crest with a short trail behind it, 500
- * texels across. Crisp from about 150 to 330 units wide; shown smaller the
- * crest falls below a texel pair and beads, so start it from HFX.halo or
- * HFX.ring. A canvas gradient, for load time: the one soft falloff in this
- * file without dither. Its trail ends on a square law, which keeps the last
- * few alpha levels to bands of one to three texels.
- */
-function paintShock(scene: Phaser.Scene): void {
-  if (scene.textures.exists(HFX.shock)) return;
-  const size = 500;
-  const crest = 234;
-  const { canvas, ctx } = makeCanvas(size, size);
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  const stop = (r: number) => {
-    const d = r - crest;
-    const a = d >= 0
-      ? 0.92 * gauss(d, 1.05) + 0.08 * Math.max(0, 1 - d / 10) ** 2
-      : 0.66 * gauss(d, 1.3) + 0.34 * Math.max(0, 1 + d / 44) ** 2;
-    g.addColorStop(r / (size / 2), `rgba(255,255,255,${a.toFixed(4)})`);
-  };
-  stop(0);
-  for (let r = crest - 44; r < crest - 6; r += 1) stop(r);
-  for (let r = crest - 6; r < crest + 5; r += 0.25) stop(r);
-  for (let r = crest + 5; r <= crest + 10; r += 1) stop(r);
-  stop(size / 2);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  addStaticCanvas(scene, HFX.shock, canvas);
-}
-
 function paintGround(scene: Phaser.Scene): void {
   lineArt(scene, HFX.sigilStaff, 128, 128, GROUND_DENSITY, 1, paintSigilStaff);
   lineArt(scene, HFX.sigilWave, 84, 84, GROUND_DENSITY, 1, paintSigilWave);
   lineArt(scene, HFX.sigilFifths, 56, 56, GROUND_DENSITY, 1, paintSigilFifths);
-  paintShock(scene);
 
   // A broad swell with a steeper leading edge; any size.
   softTexture(scene, HFX.wave, 120, 120, discAlpha(r => 0.9 * gauss(r - 0.7, r > 0.7 ? 0.07 : 0.18) * step(1, 0.88, r)));

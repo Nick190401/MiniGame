@@ -12,10 +12,8 @@ import type { Ctx } from './paint';
 export const HFX_KIAN = {
   /** Taut string: crisp core over a narrow halo, along u. Display it len x 3.5-7. */
   string: 'hfx-kian-string',
-  /** Long exposure of a string ringing in its 1st, 2nd and 3rd harmonic; see KIAN_WAVE. */
-  wave1: 'hfx-kian-wave-1',
-  wave2: 'hfx-kian-wave-2',
-  wave3: 'hfx-kian-wave-3',
+  /** Long exposure of a string ringing in its first harmonic, one slender bulge with no crossing; see KIAN_WAVE. */
+  wave: 'hfx-kian-wave',
 } as const;
 
 /**
@@ -29,7 +27,7 @@ const SNAPSHOTS: ReadonlyArray<readonly [number, number, number]> = [
   [1, 0.95, 0.34], [-1, 0.95, 0.34], [0.72, 0.5, 0.26], [-0.72, 0.5, 0.26], [0.36, 0.26, 0.22], [-0.36, 0.26, 0.22],
 ];
 
-function ringing(harmonic: number) {
+function ringing() {
   return (ctx: Ctx) => {
     const { w, h, x0, x1, swing } = KIAN_WAVE;
     for (const [phase, alpha, width] of SNAPSHOTS) {
@@ -39,7 +37,7 @@ function ringing(harmonic: number) {
       for (let i = 0; i <= 120; i++) {
         const f = i / 120;
         const x = x0 + (x1 - x0) * f;
-        const y = h / 2 + swing * phase * Math.sin(harmonic * Math.PI * f);
+        const y = h / 2 + swing * phase * Math.sin(Math.PI * f);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -70,7 +68,5 @@ export function createKianHealTextures(scene: Phaser.Scene): void {
   // Twice world density: the long exposures are stretched up to about 3x along a string.
   const density = 2 * Math.min(TEXEL, 4);
   const { w, h } = KIAN_WAVE;
-  lineArt(scene, HFX_KIAN.wave1, w, h, density, 0.5, ringing(1));
-  lineArt(scene, HFX_KIAN.wave2, w, h, density, 0.5, ringing(2));
-  lineArt(scene, HFX_KIAN.wave3, w, h, density, 0.5, ringing(3));
+  lineArt(scene, HFX_KIAN.wave, w, h, density, 0.5, ringing());
 }

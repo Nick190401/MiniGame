@@ -22,10 +22,17 @@ export const HFX_KRYS = {
    * aspect 0.36: thickened toward its top and bottom so the squashed line keeps one width all round.
    */
   wave: 'hfx-krys-wave',
+  /**
+   * A fine ring for the ground, crest at 0.9 of the half-size, for 150 to 450 units at aspect 0.36: thickened
+   * toward its top and bottom like the wave, and with no trail, so several stand side by side as clean lines.
+   */
+  stand: 'hfx-krys-stand',
 } as const;
 
 /** Crest radius of the wave as a share of its half-size. */
 export const KRYS_WAVE_CREST = 0.86;
+/** Crest radius of the standing ring as a share of its half-size. */
+export const KRYS_STAND_CREST = 0.9;
 
 export const KRYS_PLATES = [HFX_KRYS.plateA, HFX_KRYS.plateB, HFX_KRYS.plateC] as const;
 /** Height over width of the band texture. */
@@ -192,5 +199,16 @@ export function createKrysHealTextures(scene: Phaser.Scene): void {
     const d = (rho - KRYS_WAVE_CREST) / Math.sqrt(c * c + (s * s) / 0.1296);
     const trail = d < 0 ? 0.22 * Math.exp(d / 0.035) * step(-0.12, -0.06, d) : 0;
     return Math.min(1, 0.9 * gauss(d, 0.0105) + 0.2 * gauss(d, 0.028) + trail);
+  });
+
+  softTexture(scene, HFX_KRYS.stand, 512, 512, (u, v) => {
+    const x = u * 2 - 1;
+    const y = v * 2 - 1;
+    const rho = Math.hypot(x, y);
+    if (rho < 0.72 || rho > 0.995) return 0;
+    const c = x / rho;
+    const s = y / rho;
+    const d = (rho - KRYS_STAND_CREST) / Math.sqrt(c * c + (s * s) / 0.1296);
+    return Math.min(1, 0.92 * gauss(d, 0.0033) + 0.16 * gauss(d, 0.009));
   });
 }

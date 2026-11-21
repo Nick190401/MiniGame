@@ -1,24 +1,25 @@
 import Phaser from 'phaser';
-import { angDiff, gauss, softTexture, step } from './healFx';
+import { gauss, softTexture, step } from './healFx';
 
 /**
- * Textures only Guard Quincy's heal uses (the record: crescents and grooves). Keys start with 'hfx-quincy-'.
+ * Textures only Guard Quincy's heal uses: the record as light, never as an object (turning rings, grooves,
+ * crescents). Keys start with 'hfx-quincy-'.
  * The painters are exported by ./healFx (alphaTexture, softTexture, discAlpha,
  * lineArt, glyphTexture, gauss, step). healFx imports this file too: the cycle
  * is harmless as long as nothing of healFx is used at module level here.
  */
 export const HFX_QUINCY = {
-  /** The platter of light: rim, three bands of grooves with highlights, label with one mark. Turn it. */
+  /**
+   * The platter, of light only: a rim and four grooves, each a ring with two lights running round it that fade
+   * along the ring behind them. Nothing in the middle. Turn it clockwise.
+   */
   disc: 'hfx-quincy-disc',
-  /** Two static gloss wedges over the grooves; do not turn it. */
-  sheen: 'hfx-quincy-sheen',
-  /** Pieces of a circle, see QUINCY_ARC: thin groove arcs and the thick crescent front. */
+  /** Pieces of a circle, see QUINCY_ARC: a thin groove arc, the thick crescent front and a band of three fine grooves. */
   arc: 'hfx-quincy-arc',
-  arcShort: 'hfx-quincy-arc-short',
   front: 'hfx-quincy-front',
+  groove: 'hfx-quincy-groove',
 } as const;
 
-const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 
 /**
@@ -35,50 +36,38 @@ const arcPiece = (key: string, halfDeg: number, inner = 0.8): ArcPiece => {
 };
 export const QUINCY_ARC = {
   long: arcPiece(HFX_QUINCY.arc, 42),
-  short: arcPiece(HFX_QUINCY.arcShort, 17),
   /** A crescent: thick in the middle with a crisp leading edge, tapering to its tips. */
   front: arcPiece(HFX_QUINCY.front, 34, 0.66),
+  /** Three fine grooves side by side, brightest at the clockwise end: for radii of 45 to 220 units. */
+  groove: arcPiece(HFX_QUINCY.groove, 50, 0.84),
 } as const;
 
 /** Texels per unit of radius of the arc pieces: the crest stays crisp up to a radius of about 60 units. */
 const ARC_DENSITY = 210;
 
-/** Where light catches each band of grooves (radians), so the turn reads. */
-const TRACK_LIGHT: readonly (readonly number[])[] = [[0.3, 0.3 + Math.PI], [1.4, 3.5, 5.6], [-0.8, 2.34]];
-const TRACK_WIDTH = [0.35, 0.28, 0.45];
+/** The platter's rings: radius, where its two lights sit (radians) and its strength. */
+const DISC_RINGS: ReadonlyArray<readonly [radius: number, head: number, level: number]> = [
+  [0.93, 0, 1], [0.79, 1.3, 0.8], [0.64, 2.6, 0.72], [0.49, 3.9, 0.64], [0.34, 5.2, 0.56],
+];
+/** How far round the ring a light's trail runs behind it (radians); the two lights are half a turn apart. */
+const DISC_TRAIL = 2.4;
 
 function discAt(u: number, v: number): number {
   const x = u * 2 - 1;
   const y = v * 2 - 1;
   const r = Math.sqrt(x * x + y * y);
-  if (r >= 0.985) return 0;
-  let a = 0.5 * gauss(r - 0.93, 0.014) + 0.18 * gauss(r - 0.93, 0.045);
-  if (r > 0.33 && r < 0.91) {
-    // About eleven grooves in three bands; broad enough not to shimmer as it turns.
-    const groove = 0.5 + 0.5 * Math.cos(((r - 0.34) / 0.05) * TAU);
-    const gaps = 1 - 0.8 * gauss(r - 0.53, 0.011) - 0.8 * gauss(r - 0.72, 0.011);
-    const band = r < 0.53 ? 0 : r < 0.72 ? 1 : 2;
-    const th = Math.atan2(y, x);
-    let light = 0;
-    for (const c of TRACK_LIGHT[band]) light = Math.max(light, gauss(angDiff(th, c), TRACK_WIDTH[band]));
-    a += (0.2 + 0.38 * groove) * gaps * (0.25 + 0.75 * light) * step(0.33, 0.37, r) * step(0.91, 0.87, r);
-  }
-  if (r < 0.32) {
-    a += 0.4 * step(0.03, 0.06, r) * step(0.3, 0.27, r) + 0.45 * gauss(r - 0.29, 0.012);
-    // One mark on the label, so the turn reads even when the grooves blur.
-    a += 0.55 * gauss(x, 0.025) * step(-0.1, -0.13, y) * step(-0.26, -0.23, y);
+  if (r >= 0.985 || r < 0.24) return 0;
+  const th = Math.atan2(y, x);
+  let a = 0;
+  for (const [radius, head, level] of DISC_RINGS) {
+    const d = r - radius;
+    if (Math.abs(d) > 0.1) continue;
+    // Angle back from the nearest light ahead (clockwise is the way it turns).
+    const back = (((head - th) % Math.PI) + Math.PI) % Math.PI;
+    const light = back < DISC_TRAIL ? (1 - back / DISC_TRAIL) ** 1.5 * step(0, 0.14, back) : 0;
+    a += level * (0.08 + 0.92 * light) * (0.85 * gauss(d, 0.012) + 0.2 * gauss(d, 0.034));
   }
   return Math.min(1, a);
-}
-
-function sheenAt(u: number, v: number): number {
-  const x = u * 2 - 1;
-  const y = v * 2 - 1;
-  const r = Math.sqrt(x * x + y * y);
-  if (r >= 0.95) return 0;
-  const th = Math.atan2(y, x);
-  const wedges = gauss(angDiff(th, -0.87), 0.38) + gauss(angDiff(th, 2.27), 0.38);
-  return 0.6 * wedges * step(0.33, 0.42, r) * step(0.92, 0.84, r) * (0.5 + 0.5 * r);
 }
 
 function paintArc(scene: Phaser.Scene, p: ArcPiece): void {
@@ -110,11 +99,31 @@ function paintFront(scene: Phaser.Scene, p: ArcPiece): void {
   });
 }
 
+/** The band of grooves: fine lines, shown three to four times larger than the other pieces, so denser. */
+function paintGroove(scene: Phaser.Scene, p: ArcPiece): void {
+  const density = 250;
+  softTexture(scene, p.key, Math.round(p.w * density), Math.round(p.h * density), (u, v) => {
+    const x = p.x0 + u * p.w;
+    const y = (v - 0.5) * p.h;
+    const th = Math.atan2(y, x);
+    const along = Math.abs(th) / p.half;
+    if (along >= 1) return 0;
+    const r = Math.sqrt(x * x + y * y);
+    let lines = 0;
+    for (let i = 0; i < 3; i++) {
+      const d = r - (1 - 0.05 * i);
+      lines += (1 - 0.26 * i) * (0.9 * gauss(d, 0.0058) + 0.2 * gauss(d, 0.016));
+    }
+    // From a faint tail to a bright head at the clockwise end, so the turn reads.
+    const lead = 0.5 + (0.5 * th) / p.half;
+    return Math.min(1, lines) * step(1, 0.78, along) * (0.3 + 0.7 * lead ** 1.4);
+  });
+}
+
 /** Called once by createHealFxTextures while the game loads. */
 export function createQuincyHealTextures(scene: Phaser.Scene): void {
   softTexture(scene, HFX_QUINCY.disc, 200, 200, discAt);
-  softTexture(scene, HFX_QUINCY.sheen, 96, 96, sheenAt);
   paintArc(scene, QUINCY_ARC.long);
-  paintArc(scene, QUINCY_ARC.short);
   paintFront(scene, QUINCY_ARC.front);
+  paintGroove(scene, QUINCY_ARC.groove);
 }
